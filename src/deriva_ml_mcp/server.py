@@ -18,6 +18,8 @@ from deriva_ml_mcp.tools import (
     register_vocabulary_tools,
     register_workflow_tools,
     register_feature_tools,
+    register_schema_tools,
+    register_execution_tools,
 )
 
 # Configure logging - NEVER use print() in STDIO MCP servers
@@ -45,6 +47,8 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     register_vocabulary_tools(mcp_server, conn_manager)
     register_workflow_tools(mcp_server, conn_manager)
     register_feature_tools(mcp_server, conn_manager)
+    register_schema_tools(mcp_server, conn_manager)
+    register_execution_tools(mcp_server, conn_manager)
 
 
 # Register all tools

@@ -141,6 +141,34 @@ Add to your `.claude/settings.json`:
 | `delete_feature` | Delete a feature |
 | `list_feature_names` | List all feature names |
 
+### Schema Management
+
+| Tool | Description |
+|------|-------------|
+| `create_table` | Create a new table in the domain schema |
+| `create_asset_table` | Create an asset table for file management |
+| `list_assets` | List all assets in an asset table |
+| `list_tables` | List all tables in the domain schema |
+| `get_table_schema` | Get column and key definitions for a table |
+| `list_asset_types` | List available asset type terms |
+| `add_asset_type` | Add a new asset type to the vocabulary |
+
+### Execution Management
+
+| Tool | Description |
+|------|-------------|
+| `create_execution` | Create a new execution for ML workflows |
+| `start_execution` | Start the active execution |
+| `stop_execution` | Stop and complete the active execution |
+| `update_execution_status` | Update execution status and message |
+| `get_execution_info` | Get details about the active execution |
+| `restore_execution` | Restore a previous execution by RID |
+| `upload_execution_outputs` | Upload all outputs to the catalog |
+| `list_executions` | List recent executions |
+| `create_execution_dataset` | Create a dataset within an execution |
+| `download_execution_dataset` | Download a dataset for processing |
+| `get_execution_working_dir` | Get the working directory path |
+
 ## Usage Examples
 
 Once configured, you can interact with DerivaML through your LLM application:
