@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MCP server for DerivaML - Model Context Protocol interface for Deriva ML workflows"
 readme = "README.md"
 license = { text = "Apache-2.0" }
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 authors = [
     { name = "Deriva ML Team" }
 ]
@@ -15,15 +15,14 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
 dependencies = [
     "mcp>=1.2.0",
-    "deriva-ml>=0.1.0",
+    "deriva-ml @ git+https://github.com/informatics-isi-edu/deriva-ml.git@refactor-dataset",
     "pydantic>=2.0",
 ]
 
@@ -40,6 +39,9 @@ deriva-ml-mcp = "deriva_ml_mcp.server:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/deriva_ml_mcp"]

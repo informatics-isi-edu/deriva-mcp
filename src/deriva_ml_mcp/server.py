@@ -33,7 +33,7 @@ logger = logging.getLogger("deriva-ml-mcp")
 # Initialize FastMCP server
 mcp = FastMCP(
     "deriva-ml",
-    description="MCP server for DerivaML - manage ML workflows, datasets, and features in Deriva catalogs",
+    instructions="MCP server for DerivaML - manage ML workflows, datasets, and features in Deriva catalogs",
 )
 
 # Global connection manager

@@ -37,6 +37,14 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         Creates an execution record that tracks inputs, outputs, and provenance
         for a computational or manual workflow.
 
+        IMPORTANT: After completing your work, you MUST call upload_execution_outputs()
+        to upload any registered assets to the catalog. The execution workflow is:
+        1. create_execution() - Create the execution record
+        2. start_execution() - Mark execution as running
+        3. register_asset_file() - Register files for upload (can be called multiple times)
+        4. stop_execution() - Mark execution as complete
+        5. upload_execution_outputs() - Upload all registered assets to catalog
+
         Args:
             workflow_name: Name of the workflow to execute.
             workflow_type: Type of workflow (must exist in Workflow_Type vocabulary).
@@ -201,7 +209,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         """Get information about the active execution.
 
         Returns details about the currently active execution including
-        status, datasets, and asset paths.
+        status, datasets, registered assets, and whether upload is pending.
 
         Returns:
             JSON object with execution details.
@@ -215,6 +223,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 })
 
             execution = _active_executions[key]
+
+            # Check if there are registered but not yet uploaded assets
+            has_pending_uploads = execution.uploaded_assets is None
+
             return json.dumps({
                 "execution_rid": execution.execution_rid,
                 "workflow_rid": execution.workflow_rid,
@@ -222,6 +234,8 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 "dataset_rids": execution.dataset_rids,
                 "dataset_count": len(execution.datasets),
                 "working_dir": str(execution.working_dir),
+                "upload_pending": has_pending_uploads,
+                "upload_reminder": "Remember to call upload_execution_outputs() when done." if has_pending_uploads else None,
             })
         except Exception as e:
             logger.error(f"Failed to get execution info: {e}")
@@ -259,17 +273,84 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def upload_execution_outputs(clean_folder: bool = True) -> str:
-        """Upload all outputs from the active execution.
+    async def register_asset_file(
+        asset_table: str,
+        file_path: str,
+        asset_types: list[str] | None = None,
+        copy_file: bool = False,
+        rename_file: str | None = None,
+    ) -> str:
+        """Register a file for upload as an execution asset.
 
-        Uploads assets, features, and other results to the catalog
+        Registers a file to be uploaded when upload_execution_outputs() is called.
+        The file will be associated with the specified asset table and types.
+
+        This is the primary way to add output files to an execution. Files are
+        staged locally and uploaded in batch when upload_execution_outputs() is called.
+
+        Args:
+            asset_table: Name of the asset table (e.g., "Image", "Model", "Execution_Metadata").
+            file_path: Path to the file to register. Can be:
+                - An existing file (will be symlinked or copied)
+                - A new path (returned path can be opened for writing)
+            asset_types: Asset type terms from Asset_Type vocabulary.
+                Defaults to the asset_table name if not specified.
+            copy_file: If True, copy the file instead of creating a symlink.
+            rename_file: If provided, rename the file to this name.
+
+        Returns:
+            JSON object with the registered file path and details.
+        """
+        try:
+            key = _get_execution_key()
+            if key not in _active_executions:
+                return json.dumps({
+                    "status": "error",
+                    "message": "No active execution. Use create_execution first.",
+                })
+
+            execution = _active_executions[key]
+            asset_path = execution.asset_file_path(
+                asset_name=asset_table,
+                file_name=file_path,
+                asset_types=asset_types,
+                copy_file=copy_file,
+                rename_file=rename_file,
+            )
+
+            return json.dumps({
+                "status": "registered",
+                "execution_rid": execution.execution_rid,
+                "asset_table": asset_table,
+                "file_path": str(asset_path),
+                "file_name": asset_path.file_name,
+                "asset_types": asset_path.asset_types,
+                "note": "Call upload_execution_outputs() to upload this file to the catalog.",
+            })
+        except Exception as e:
+            logger.error(f"Failed to register asset file: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def upload_execution_outputs(clean_folder: bool = True) -> str:
+        """Upload all registered assets from the active execution to the catalog.
+
+        IMPORTANT: This must be called after you have finished registering assets
+        with register_asset_file(). This uploads all staged files to the catalog
         and records them in the execution's provenance.
+
+        The typical workflow is:
+        1. create_execution() - Create execution record
+        2. start_execution() - Begin tracking
+        3. register_asset_file() - Register output files (repeat as needed)
+        4. stop_execution() - Mark complete
+        5. upload_execution_outputs() - Upload all files to catalog
 
         Args:
             clean_folder: Whether to clean up output folders after upload.
 
         Returns:
-            JSON object with upload summary.
+            JSON object with upload summary including count of assets by type.
         """
         try:
             key = _get_execution_key()
