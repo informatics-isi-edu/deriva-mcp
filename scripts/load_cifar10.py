@@ -24,7 +24,6 @@ import asyncio
 import csv
 import json
 import logging
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -219,6 +218,31 @@ class MCPClient:
     async def upload_execution_outputs(self, clean_folder: bool = True) -> dict[str, Any]:
         return await self.call_tool("upload_execution_outputs", {"clean_folder": clean_folder})
 
+    async def asset_file_path(
+        self,
+        asset_name: str,
+        file_name: str,
+        asset_types: list[str] | None = None,
+        copy_file: bool = False,
+        rename_file: str | None = None,
+    ) -> dict[str, Any]:
+        return await self.call_tool(
+            "asset_file_path",
+            {
+                "asset_name": asset_name,
+                "file_name": file_name,
+                "asset_types": asset_types,
+                "copy_file": copy_file,
+                "rename_file": rename_file,
+            },
+        )
+
+    async def get_chaise_url(self, table_or_rid: str) -> dict[str, Any]:
+        return await self.call_tool("get_chaise_url", {"table_or_rid": table_or_rid})
+
+    async def resolve_rid(self, rid: str) -> dict[str, Any]:
+        return await self.call_tool("resolve_rid", {"rid": rid})
+
 
 @asynccontextmanager
 async def create_mcp_client():
@@ -266,13 +290,38 @@ def download_cifar10(temp_dir: Path) -> Path:
         logger.error(f"Kaggle download failed: {result.stderr}")
         raise RuntimeError(f"Failed to download CIFAR-10: {result.stderr}")
 
-    # Extract the zip file
+    # Extract the outer zip file
     zip_files = list(download_dir.glob("*.zip"))
     if zip_files:
-        logger.info("Extracting dataset...")
+        logger.info("Extracting outer zip archive...")
         for zip_file in zip_files:
             with zipfile.ZipFile(zip_file, "r") as zf:
                 zf.extractall(download_dir)
+
+    # CIFAR-10 from Kaggle uses 7z archives for train/test data
+    # Extract 7z files using the 7z command (must be installed)
+    seven_z_files = list(download_dir.glob("*.7z"))
+    if seven_z_files:
+        logger.info("Extracting 7z archives (train.7z, test.7z)...")
+        for seven_z_file in seven_z_files:
+            # Use 7z command to extract
+            result = subprocess.run(
+                ["7z", "x", str(seven_z_file), f"-o{download_dir}", "-y"],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                # Try with 7za if 7z not found
+                result = subprocess.run(
+                    ["7za", "x", str(seven_z_file), f"-o{download_dir}", "-y"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        f"Failed to extract {seven_z_file.name}. "
+                        "Please install 7-zip: brew install p7zip"
+                    )
 
     return download_dir
 
@@ -422,6 +471,35 @@ async def setup_workflow_type(client: MCPClient) -> None:
         )
 
 
+async def setup_dataset_types(client: MCPClient) -> None:
+    """Ensure required dataset types exist in Dataset_Type vocabulary."""
+    logger.info("Setting up dataset types...")
+
+    # Define the dataset types we need: (term_name, description, synonyms)
+    required_types = [
+        ("Complete", "A complete dataset containing all data", ["complete", "entire"]),
+        ("Training", "A dataset subset used for model training", ["training", "train", "Train"]),
+        ("Testing", "A dataset subset used for model testing/evaluation", ["test", "Test"]),
+        ("Split", "A dataset that contains nested dataset splits", ["split"]),
+    ]
+
+    for type_name, description, synonyms in required_types:
+        try:
+            result = await client.add_term(
+                vocabulary_name="Dataset_Type",
+                term_name=type_name,
+                description=description,
+                synonyms=synonyms,
+            )
+            if result.get("status") == "error" and "already exists" not in result.get("message", "").lower():
+                logger.warning(f"Could not add dataset type {type_name}: {result.get('message')}")
+            else:
+                logger.info(f"  Added dataset type: {type_name}")
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                logger.warning(f"Could not add dataset type {type_name}: {e}")
+
+
 async def create_dataset_hierarchy(client: MCPClient) -> dict[str, str]:
     """Create the dataset hierarchy.
 
@@ -435,36 +513,40 @@ async def create_dataset_hierarchy(client: MCPClient) -> dict[str, str]:
     # Create Complete dataset
     result = await client.create_dataset(
         description="Complete CIFAR-10 dataset with all labeled images",
-        dataset_types=["complete"],
-        version="1.0.0",
+        dataset_types=["Complete"],
     )
+    if result.get("status") == "error":
+        raise RuntimeError(f"Failed to create Complete dataset: {result.get('message')}")
     datasets["complete"] = result["rid"]
     logger.info(f"  Created Complete dataset: {result['rid']}")
 
-    # Create Segmented dataset
+    # Create Segmented dataset (Split type - contains nested Training/Testing)
     result = await client.create_dataset(
         description="CIFAR-10 dataset segmented into training and testing splits",
-        dataset_types=["complete"],
-        version="1.0.0",
+        dataset_types=["Split"],
     )
+    if result.get("status") == "error":
+        raise RuntimeError(f"Failed to create Segmented dataset: {result.get('message')}")
     datasets["segmented"] = result["rid"]
     logger.info(f"  Created Segmented dataset: {result['rid']}")
 
     # Create Training dataset
     result = await client.create_dataset(
         description="CIFAR-10 training set with 50,000 labeled images",
-        dataset_types=["training"],
-        version="1.0.0",
+        dataset_types=["Training"],
     )
+    if result.get("status") == "error":
+        raise RuntimeError(f"Failed to create Training dataset: {result.get('message')}")
     datasets["training"] = result["rid"]
     logger.info(f"  Created Training dataset: {result['rid']}")
 
     # Create Testing dataset
     result = await client.create_dataset(
         description="CIFAR-10 testing set",
-        dataset_types=["testing"],
-        version="1.0.0",
+        dataset_types=["Testing"],
     )
+    if result.get("status") == "error":
+        raise RuntimeError(f"Failed to create Testing dataset: {result.get('message')}")
     datasets["testing"] = result["rid"]
     logger.info(f"  Created Testing dataset: {result['rid']}")
 
@@ -487,6 +569,10 @@ async def load_images(
 ) -> dict[str, Any]:
     """Load images into the catalog using execution system.
 
+    Uses asset_file_path to register each image file for upload with the
+    "Image" asset type, then calls upload_execution_outputs to upload all
+    registered assets to the catalog.
+
     Returns:
         Summary of loaded images
     """
@@ -506,21 +592,6 @@ async def load_images(
         await client.start_execution()
         logger.info("  Execution started")
 
-        # Get working directory
-        working_dir_result = await client.get_execution_working_dir()
-        working_dir = Path(working_dir_result["working_dir"])
-        logger.info(f"  Working directory: {working_dir}")
-
-        # Create asset directory structure
-        # Images go to: <working_dir>/Image/<Width>/<Height>/filename.png
-        image_dir = working_dir / "Image" / "32" / "32"
-        image_dir.mkdir(parents=True, exist_ok=True)
-
-        # Create feature directory
-        feature_dir = working_dir / "Image_Classification"
-        feature_dir.mkdir(parents=True, exist_ok=True)
-        feature_file = feature_dir / "Image_Classification.jsonl"
-
         # Load training labels
         labels = load_train_labels(data_dir)
         logger.info(f"Loaded {len(labels)} training labels")
@@ -529,42 +600,51 @@ async def load_images(
         train_images = []
         all_images = []
 
-        # Process training images
-        logger.info("Processing training images...")
+        # Process training images using asset_file_path
+        logger.info("Registering training images for upload...")
         count = 0
-        with open(feature_file, "w") as f:
-            for img_path, class_name, image_id in iter_images(data_dir, "train", labels):
-                if class_name is None:
-                    continue
+        for img_path, class_name, image_id in iter_images(data_dir, "train", labels):
+            if class_name is None:
+                continue
 
-                # Create unique filename with class prefix for tracking
-                new_filename = f"{class_name}_{image_id}.png"
-                dest_path = image_dir / new_filename
+            # Create unique filename with class prefix for tracking
+            new_filename = f"{class_name}_{image_id}.png"
 
-                # Copy image
-                shutil.copy(img_path, dest_path)
+            # Register file for upload using asset_file_path
+            # This copies the file and registers it with asset_type "Image"
+            await client.asset_file_path(
+                asset_name="Image",
+                file_name=str(img_path),
+                asset_types=["Image"],
+                copy_file=True,
+                rename_file=new_filename,
+            )
 
-                # Write feature value
-                feature_record = {"Filename": new_filename, "Image_Class": class_name}
-                f.write(json.dumps(feature_record) + "\n")
+            train_images.append(new_filename)
+            all_images.append(new_filename)
+            count += 1
 
-                train_images.append(new_filename)
-                all_images.append(new_filename)
-                count += 1
+            if count % 1000 == 0:
+                logger.info(f"  Registered {count} images...")
 
-                if count % 1000 == 0:
-                    logger.info(f"  Processed {count} images...")
+        logger.info(f"  Total training images registered: {count}")
 
-        logger.info(f"  Total training images: {count}")
-
-        # Upload outputs
-        logger.info("Uploading images to catalog...")
-        upload_result = await client.upload_execution_outputs(clean_folder=False)
-        logger.info(f"  Upload result: {upload_result}")
-
-    finally:
+        # Stop execution before upload
         await client.stop_execution()
         logger.info("  Execution stopped")
+
+        # Upload all registered assets to catalog
+        logger.info("Uploading images to catalog...")
+        upload_result = await client.upload_execution_outputs(clean_folder=True)
+        logger.info(f"  Upload result: {upload_result}")
+
+    except Exception as e:
+        # Try to stop execution on error
+        try:
+            await client.stop_execution()
+        except Exception:
+            pass
+        raise e
 
     # Get uploaded image RIDs and assign to datasets
     logger.info("Assigning images to datasets...")
@@ -599,45 +679,114 @@ async def load_images(
 
 async def main_async(args: argparse.Namespace) -> int:
     """Main async entry point."""
-    logger.info(f"Connecting to {args.hostname}, catalog {args.catalog_id}")
-
     async with create_mcp_client() as client:
-        # Connect to catalog
-        conn_result = await client.connect_catalog(
-            hostname=args.hostname,
-            catalog_id=str(args.catalog_id),
-            domain_schema=args.domain_schema,
-        )
+        # Either create a new catalog or connect to existing one
+        if args.create_catalog:
+            logger.info(f"Creating new catalog on {args.hostname} with project name: {args.create_catalog}")
+            create_result = await client.call_tool(
+                "create_catalog",
+                {"hostname": args.hostname, "project_name": args.create_catalog},
+            )
 
-        if conn_result.get("status") == "error":
-            logger.error(f"Connection failed: {conn_result.get('message')}")
-            return 1
+            if create_result.get("status") == "error":
+                logger.error(f"Catalog creation failed: {create_result.get('message')}")
+                return 1
 
-        logger.info(f"Connected to catalog, domain schema: {conn_result.get('domain_schema')}")
+            catalog_id = create_result["catalog_id"]
+            domain_schema = create_result.get("domain_schema")
+
+            # Print catalog ID prominently so user can find it
+            print(f"\n{'='*60}")
+            print(f"  CREATED NEW CATALOG")
+            print(f"  Hostname:    {args.hostname}")
+            print(f"  Catalog ID:  {catalog_id}")
+            print(f"  Schema:      {domain_schema}")
+            print(f"{'='*60}\n")
+
+            logger.info(f"Created catalog {catalog_id}, domain schema: {domain_schema}")
+        else:
+            logger.info(f"Connecting to {args.hostname}, catalog {args.catalog_id}")
+            conn_result = await client.connect_catalog(
+                hostname=args.hostname,
+                catalog_id=str(args.catalog_id),
+                domain_schema=args.domain_schema,
+            )
+
+            if conn_result.get("status") == "error":
+                logger.error(f"Connection failed: {conn_result.get('message')}")
+                return 1
+
+            catalog_id = args.catalog_id
+            domain_schema = conn_result.get("domain_schema")
+            logger.info(f"Connected to catalog, domain schema: {domain_schema}")
 
         # Set up domain model
         logger.info("Setting up domain model...")
-        schema_result = await setup_domain_model(client)
-        logger.info(f"Domain model setup complete")
+        await setup_domain_model(client)
+        logger.info("Domain model setup complete")
 
-        # Create dataset hierarchy
+        # Setup dataset types and create dataset hierarchy
+        await setup_dataset_types(client)
         datasets = await create_dataset_hierarchy(client)
 
-        if args.dry_run:
+        load_result = None
+        if not args.dry_run:
+            # Download CIFAR-10 from Kaggle
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_path = Path(temp_dir)
+                data_dir = download_cifar10(temp_path)
+                logger.info(f"Downloaded CIFAR-10 to: {data_dir}")
+
+                # Load images
+                load_result = await load_images(client, data_dir, datasets, args.batch_size)
+                logger.info(f"Loading complete: {load_result}")
+        else:
             logger.info("Dry run mode - skipping image download and upload")
-            return 0
 
-        # Download CIFAR-10 from Kaggle
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            data_dir = download_cifar10(temp_path)
-            logger.info(f"Downloaded CIFAR-10 to: {data_dir}")
+        # Get Chaise URLs for datasets if requested
+        dataset_urls = {}
+        if args.show_urls:
+            logger.info("Fetching Chaise URLs for datasets...")
+            for name, rid in datasets.items():
+                try:
+                    url_result = await client.get_chaise_url(rid)
+                    dataset_urls[name] = url_result.get("url", "")
+                    logger.info(f"  {name}: {dataset_urls[name]}")
+                except Exception as e:
+                    logger.warning(f"  Failed to get URL for {name}: {e}")
+                    dataset_urls[name] = ""
 
-            # Load images
-            load_result = await load_images(client, data_dir, datasets, args.batch_size)
-            logger.info(f"Loading complete: {load_result}")
+        # Print summary
+        print("\n" + "=" * 60)
+        print("  CIFAR-10 LOADING COMPLETE")
+        print("=" * 60)
+        print(f"  Hostname:      {args.hostname}")
+        print(f"  Catalog ID:    {catalog_id}")
+        print(f"  Schema:        {domain_schema}")
+        print("")
+        print("  Datasets created:")
+        if args.show_urls and dataset_urls:
+            print(f"    - Complete:   {datasets['complete']}")
+            print(f"      URL: {dataset_urls.get('complete', 'N/A')}")
+            print(f"    - Segmented:  {datasets['segmented']}")
+            print(f"      URL: {dataset_urls.get('segmented', 'N/A')}")
+            print(f"    - Training:   {datasets['training']}")
+            print(f"      URL: {dataset_urls.get('training', 'N/A')}")
+            print(f"    - Testing:    {datasets['testing']}")
+            print(f"      URL: {dataset_urls.get('testing', 'N/A')}")
+        else:
+            print(f"    - Complete:   {datasets['complete']}")
+            print(f"    - Segmented:  {datasets['segmented']}")
+            print(f"    - Training:   {datasets['training']}")
+            print(f"    - Testing:    {datasets['testing']}")
+        if load_result:
+            print("")
+            print(f"  Images loaded: {load_result['total_images']}")
+        if not args.show_urls:
+            print("")
+            print("  Tip: Use --show-urls to display Chaise URLs for each dataset")
+        print("=" * 60 + "\n")
 
-    logger.info("CIFAR-10 loading complete!")
     return 0
 
 
@@ -648,21 +797,34 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+    # Create a new catalog and load CIFAR-10
+    python load_cifar10.py --hostname localhost --create-catalog cifar10_demo
+
+    # Load into an existing catalog
     python load_cifar10.py --hostname ml.derivacloud.org --catalog-id 99
-    python load_cifar10.py --hostname example.org --catalog-id 1 --domain-schema my_schema
-    python load_cifar10.py --hostname example.org --catalog-id 1 --dry-run
+
+    # Dry run (create schema/datasets only)
+    python load_cifar10.py --hostname localhost --create-catalog test --dry-run
         """,
     )
     parser.add_argument(
         "--hostname",
         required=True,
-        help="Deriva server hostname (e.g., ml.derivacloud.org)",
+        help="Deriva server hostname (e.g., localhost, ml.derivacloud.org)",
     )
-    parser.add_argument(
+
+    # Mutually exclusive: either create a new catalog or connect to existing
+    catalog_group = parser.add_mutually_exclusive_group(required=True)
+    catalog_group.add_argument(
         "--catalog-id",
-        required=True,
-        help="Catalog ID to connect to",
+        help="Catalog ID to connect to (for existing catalogs)",
     )
+    catalog_group.add_argument(
+        "--create-catalog",
+        metavar="PROJECT_NAME",
+        help="Create a new catalog with this project name",
+    )
+
     parser.add_argument(
         "--domain-schema",
         help="Domain schema name (auto-detected if not provided)",
@@ -677,6 +839,11 @@ Examples:
         "--dry-run",
         action="store_true",
         help="Set up schema and datasets without downloading/uploading images",
+    )
+    parser.add_argument(
+        "--show-urls",
+        action="store_true",
+        help="Show Chaise web interface URLs for datasets in the summary",
     )
     return parser.parse_args()
 

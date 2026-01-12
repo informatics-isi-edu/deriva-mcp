@@ -234,3 +234,76 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         except Exception as e:
             logger.error(f"Failed to list feature names: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def add_feature_value(
+        table_name: str,
+        feature_name: str,
+        target_rid: str,
+        value: str,
+        execution_rid: str | None = None,
+    ) -> str:
+        """Add a feature value to a domain object.
+
+        Associates a feature value (term, asset, or other) with a target record.
+        If an execution is active, it will be used for provenance. Otherwise,
+        provide an execution_rid explicitly.
+
+        Args:
+            table_name: Table the target record belongs to (e.g., "Image").
+            feature_name: Name of the feature (e.g., "Diagnosis").
+            target_rid: RID of the target record to annotate.
+            value: The feature value - either a term name or asset RID.
+            execution_rid: Execution RID for provenance (uses active if not provided).
+
+        Returns:
+            JSON with status, target_rid, feature_name, value.
+
+        Example:
+            add_feature_value("Image", "Diagnosis", "1-ABC", "Normal")
+        """
+        try:
+            from deriva_ml_mcp.tools.execution import _active_executions
+
+            ml = conn_manager.get_active_or_raise()
+
+            # Get execution RID from active execution or parameter
+            exe_rid = execution_rid
+            if not exe_rid:
+                key = f"{ml.host_name}:{ml.catalog_id}"
+                if key in _active_executions:
+                    exe_rid = _active_executions[key].execution_rid
+
+            if not exe_rid:
+                return json.dumps({
+                    "status": "error",
+                    "message": "No active execution. Provide execution_rid or create_execution first.",
+                })
+
+            # Get the feature record class
+            record_class = ml.feature_record_class(table_name, feature_name)
+
+            # Create the feature value record
+            record = record_class(
+                target_rid=target_rid,
+                value=value,
+                execution_rid=exe_rid,
+            )
+
+            # Insert the record
+            feature = ml.lookup_feature(table_name, feature_name)
+            pb = ml.pathBuilder()
+            path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
+            result = list(path.insert([record.to_dict()]))
+
+            return json.dumps({
+                "status": "added",
+                "target_rid": target_rid,
+                "feature_name": feature_name,
+                "value": value,
+                "execution_rid": exe_rid,
+                "rid": result[0].get("RID") if result else None,
+            })
+        except Exception as e:
+            logger.error(f"Failed to add feature value: {e}")
+            return json.dumps({"status": "error", "message": str(e)})

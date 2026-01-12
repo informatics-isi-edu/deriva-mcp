@@ -365,3 +365,229 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         except Exception as e:
             logger.error(f"Failed to add element type: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def add_dataset_child(
+        parent_rid: str,
+        child_rid: str,
+    ) -> str:
+        """Add a dataset as a nested child of another dataset.
+
+        Creates a parent-child relationship between datasets. Common pattern:
+        a "Complete" parent dataset contains "Training" and "Testing" children
+        that partition the same data.
+
+        Args:
+            parent_rid: RID of the parent dataset.
+            child_rid: RID of the child dataset to nest.
+
+        Returns:
+            JSON with status, parent_rid, child_rid.
+
+        Example:
+            add_dataset_child("1-ABC", "1-DEF") -> nests 1-DEF inside 1-ABC
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            parent = ml.lookup_dataset(parent_rid)
+            child = ml.lookup_dataset(child_rid)
+            parent.add_dataset_child(child)
+            return json.dumps({
+                "status": "added",
+                "parent_rid": parent_rid,
+                "child_rid": child_rid,
+            })
+        except Exception as e:
+            logger.error(f"Failed to add dataset child: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def list_dataset_children(dataset_rid: str) -> str:
+        """List all nested child datasets.
+
+        Args:
+            dataset_rid: RID of the parent dataset.
+
+        Returns:
+            JSON array of child dataset RIDs.
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            dataset = ml.lookup_dataset(dataset_rid)
+            children = dataset.list_dataset_children()
+            return json.dumps({
+                "dataset_rid": dataset_rid,
+                "children": children,
+            })
+        except Exception as e:
+            logger.error(f"Failed to list dataset children: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def list_dataset_parents(dataset_rid: str) -> str:
+        """List all parent datasets that contain this dataset as a child.
+
+        Args:
+            dataset_rid: RID of the child dataset.
+
+        Returns:
+            JSON array of parent dataset RIDs.
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            dataset = ml.lookup_dataset(dataset_rid)
+            parents = dataset.list_dataset_parents()
+            return json.dumps({
+                "dataset_rid": dataset_rid,
+                "parents": parents,
+            })
+        except Exception as e:
+            logger.error(f"Failed to list dataset parents: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def download_dataset(
+        dataset_rid: str,
+        version: str | None = None,
+        materialize: bool = True,
+    ) -> str:
+        """Download a dataset as a BDBag for local processing.
+
+        Downloads the dataset to a local directory. Use this for standalone
+        processing outside an execution context. For tracked ML workflows,
+        use download_execution_dataset instead.
+
+        Args:
+            dataset_rid: RID of the dataset to download.
+            version: Specific version (default: current).
+            materialize: Fetch all referenced asset files (default: True).
+
+        Returns:
+            JSON with dataset_rid, version, path (local directory), bag_id.
+        """
+        try:
+            from deriva_ml.dataset.aux_classes import DatasetSpec
+
+            ml = conn_manager.get_active_or_raise()
+            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
+            bag = ml.download_dataset_bag(spec)
+
+            return json.dumps({
+                "status": "downloaded",
+                "dataset_rid": bag.dataset_rid,
+                "version": str(bag.version) if bag.version else None,
+                "path": str(bag.path),
+                "bag_id": id(bag),  # For referencing in subsequent calls
+            })
+        except Exception as e:
+            logger.error(f"Failed to download dataset: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def denormalize_dataset(
+        dataset_rid: str,
+        include_tables: list[str],
+        version: str | None = None,
+        limit: int = 1000,
+    ) -> str:
+        """Denormalize dataset tables into a flat structure for ML.
+
+        Joins related tables together to produce a "wide" view of the data,
+        with columns from multiple tables combined. Column names are prefixed
+        with the source table name (e.g., "Image.Filename", "Subject.RID").
+
+        This is useful for:
+        - Creating training data with all features in one table
+        - Joining images with their labels/diagnoses
+        - Combining subject metadata with associated records
+
+        Args:
+            dataset_rid: RID of the dataset to denormalize.
+            include_tables: List of table names to include in the join.
+            version: Specific version (default: current).
+            limit: Maximum rows to return (default: 1000).
+
+        Returns:
+            JSON with columns list and rows array.
+
+        Example:
+            denormalize_dataset("1-ABC", ["Image", "Diagnosis"])
+            -> {"columns": ["Image.RID", "Image.Filename", "Diagnosis.Name"], "rows": [...]}
+        """
+        try:
+            from deriva_ml.dataset.aux_classes import DatasetSpec
+
+            ml = conn_manager.get_active_or_raise()
+            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=False)
+            bag = ml.download_dataset_bag(spec)
+
+            # Get denormalized data as dict
+            rows = []
+            for i, row in enumerate(bag.denormalize_as_dict(include_tables)):
+                if i >= limit:
+                    break
+                rows.append(dict(row))
+
+            # Get column names from first row
+            columns = list(rows[0].keys()) if rows else []
+
+            return json.dumps({
+                "dataset_rid": dataset_rid,
+                "include_tables": include_tables,
+                "columns": columns,
+                "rows": rows,
+                "count": len(rows),
+                "limit": limit,
+            })
+        except Exception as e:
+            logger.error(f"Failed to denormalize dataset: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def get_dataset_table(
+        dataset_rid: str,
+        table_name: str,
+        version: str | None = None,
+        limit: int = 1000,
+    ) -> str:
+        """Get all records from a specific table in a dataset.
+
+        Returns records from the specified table that are part of this dataset.
+        Useful for accessing raw table data before denormalization.
+
+        Args:
+            dataset_rid: RID of the dataset.
+            table_name: Name of the table to retrieve.
+            version: Specific version (default: current).
+            limit: Maximum records to return (default: 1000).
+
+        Returns:
+            JSON with table name and records array.
+
+        Example:
+            get_dataset_table("1-ABC", "Image") -> all images in dataset
+        """
+        try:
+            from deriva_ml.dataset.aux_classes import DatasetSpec
+
+            ml = conn_manager.get_active_or_raise()
+            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=False)
+            bag = ml.download_dataset_bag(spec)
+
+            # Get table data
+            rows = []
+            for i, row in enumerate(bag.get_table_as_dict(table_name)):
+                if i >= limit:
+                    break
+                rows.append(row)
+
+            return json.dumps({
+                "dataset_rid": dataset_rid,
+                "table": table_name,
+                "records": rows,
+                "count": len(rows),
+                "limit": limit,
+            })
+        except Exception as e:
+            logger.error(f"Failed to get dataset table: {e}")
+            return json.dumps({"status": "error", "message": str(e)})

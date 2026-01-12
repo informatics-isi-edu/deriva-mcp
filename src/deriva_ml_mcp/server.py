@@ -20,6 +20,7 @@ from deriva_ml_mcp.tools import (
     register_feature_tools,
     register_schema_tools,
     register_execution_tools,
+    register_data_tools,
 )
 
 # Configure logging - NEVER use print() in STDIO MCP servers
@@ -49,6 +50,7 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     register_feature_tools(mcp_server, conn_manager)
     register_schema_tools(mcp_server, conn_manager)
     register_execution_tools(mcp_server, conn_manager)
+    register_data_tools(mcp_server, conn_manager)
 
 
 # Register all tools
