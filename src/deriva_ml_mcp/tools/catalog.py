@@ -22,18 +22,18 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         catalog_id: str,
         domain_schema: str | None = None,
     ) -> str:
-        """Connect to a DerivaML catalog.
-
-        Establishes a connection to a Deriva catalog with ML schema support.
-        The connection will be set as the active connection for subsequent operations.
+        """Connect to an existing DerivaML catalog. Must be called before using other tools.
 
         Args:
-            hostname: Hostname of the Deriva server (e.g., 'deriva.example.org')
-            catalog_id: Catalog identifier (either numeric ID or catalog name)
-            domain_schema: Optional domain schema name. If not specified, will auto-detect.
+            hostname: Server hostname (e.g., "dev.eye-ai.org", "www.atlas-d2k.org").
+            catalog_id: Catalog ID number (e.g., "1", "52").
+            domain_schema: Schema name for domain tables. Auto-detected if omitted.
 
         Returns:
-            Connection status message with catalog information.
+            JSON with status, hostname, catalog_id, domain_schema, project_name.
+
+        Example:
+            connect_catalog("dev.eye-ai.org", "52") -> connects to eye-ai catalog
         """
         try:
             ml = conn_manager.connect(hostname, catalog_id, domain_schema)
@@ -53,43 +53,24 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def disconnect_catalog() -> str:
-        """Disconnect from the active DerivaML catalog.
-
-        Closes the connection to the currently active catalog.
-
-        Returns:
-            Disconnection status message.
-        """
+        """Disconnect from the currently active catalog."""
         if conn_manager.disconnect():
             return json.dumps({"status": "disconnected"})
         return json.dumps({"status": "no_active_connection"})
 
     @mcp.tool()
     async def list_connections() -> str:
-        """List all active catalog connections.
-
-        Returns information about all currently connected catalogs,
-        including which one is the active connection.
-
-        Returns:
-            JSON array of connection information.
-        """
+        """List all open catalog connections and show which is active."""
         connections = conn_manager.list_connections()
         return json.dumps(connections)
 
     @mcp.tool()
     async def set_active_catalog(hostname: str, catalog_id: str) -> str:
-        """Set the active catalog connection.
-
-        When multiple catalogs are connected, this sets which one
-        is used for subsequent operations.
+        """Switch the active catalog when multiple catalogs are connected.
 
         Args:
-            hostname: Server hostname of the connection to activate.
-            catalog_id: Catalog identifier of the connection to activate.
-
-        Returns:
-            Status message indicating success or failure.
+            hostname: Server hostname of the catalog to activate.
+            catalog_id: Catalog ID to activate.
         """
         if conn_manager.set_active(hostname, catalog_id):
             return json.dumps({
@@ -103,14 +84,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def get_catalog_info() -> str:
-        """Get information about the active catalog.
-
-        Returns detailed information about the currently connected catalog,
-        including schema names, project info, and available tables.
-
-        Returns:
-            JSON object with catalog information.
-        """
+        """Get details about the active catalog: hostname, schemas, project name."""
         try:
             ml = conn_manager.get_active_or_raise()
             return json.dumps({
@@ -125,14 +99,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def list_users() -> str:
-        """List users with access to the catalog.
-
-        Returns a list of users who have access to the currently
-        connected catalog.
-
-        Returns:
-            JSON array of user information (ID and Full_Name).
-        """
+        """List all users who have access to the active catalog."""
         try:
             ml = conn_manager.get_active_or_raise()
             users = ml.user_list()
@@ -141,21 +108,148 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def get_chaise_url(table_name: str) -> str:
-        """Get the Chaise web interface URL for a table.
-
-        Generates a URL to view/edit the specified table in the
-        Deriva Chaise web interface.
+    async def get_chaise_url(table_or_rid: str) -> str:
+        """Get a web UI URL for viewing a table or specific record in Chaise.
 
         Args:
-            table_name: Name of the table to get the URL for.
+            table_or_rid: Either a table name (e.g., "Image", "Dataset") or
+                a RID (e.g., "1-ABC", "W-XYZ") for a specific record.
 
         Returns:
-            URL string or error message.
+            JSON with url field containing the Chaise web interface URL.
+
+        Examples:
+            get_chaise_url("Image") -> URL to browse all images
+            get_chaise_url("1-ABC") -> URL to view specific record 1-ABC
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            url = ml.chaise_url(table_name)
-            return json.dumps({"url": url})
+            # First try as a table name
+            try:
+                url = ml.chaise_url(table_or_rid)
+                return json.dumps({"url": url, "table_or_rid": table_or_rid})
+            except Exception:
+                # If not a table name, try as a RID
+                result = ml.resolve_rid(table_or_rid)
+                schema_name = result.table.schema.name
+                table_name = result.table.name
+                base_url = f"https://{ml.host_name}/chaise/record/#{ml.catalog_id}"
+                url = f"{base_url}/{schema_name}:{table_name}/RID={result.rid}"
+                return json.dumps({"url": url, "table_or_rid": table_or_rid})
         except Exception as e:
             return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def resolve_rid(rid: str) -> str:
+        """Find which table a RID belongs to and get its Chaise URL.
+
+        Args:
+            rid: Resource Identifier (e.g., "1-ABC", "W-XYZ").
+
+        Returns:
+            JSON with rid, schema, table, and url fields.
+
+        Example:
+            resolve_rid("1-ABC") -> {"schema": "domain", "table": "Image", ...}
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            result = ml.resolve_rid(rid)
+            schema_name = result.table.schema.name
+            table_name = result.table.name
+            base_url = f"https://{ml.host_name}/chaise/record/#{ml.catalog_id}"
+            url = f"{base_url}/{schema_name}:{table_name}/RID={result.rid}"
+            return json.dumps({
+                "rid": rid,
+                "schema": schema_name,
+                "table": table_name,
+                "url": url,
+            })
+        except Exception as e:
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def create_catalog(
+        hostname: str,
+        project_name: str,
+    ) -> str:
+        """Create a new DerivaML catalog with all ML schema tables.
+
+        Creates a fresh catalog with Dataset, Execution, Workflow, Feature, and
+        vocabulary tables. Automatically connects to the new catalog.
+
+        Args:
+            hostname: Server hostname (e.g., "localhost", "deriva.example.org").
+            project_name: Name for the project, becomes the domain schema name.
+
+        Returns:
+            JSON with status, hostname, catalog_id, domain_schema, project_name.
+
+        Example:
+            create_catalog("localhost", "my_ml_project")
+        """
+        try:
+            from deriva.core.ermrest_model import Schema
+            from deriva_ml.schema import create_ml_catalog
+
+            # Create the catalog with deriva-ml schema
+            catalog = create_ml_catalog(hostname, project_name)
+
+            # Create the domain schema (project_name becomes the domain schema)
+            model = catalog.getCatalogModel()
+            model.create_schema(Schema.define(project_name))
+
+            # Connect to the newly created catalog
+            ml = conn_manager.connect(hostname, str(catalog.catalog_id), project_name)
+
+            return json.dumps({
+                "status": "created",
+                "hostname": hostname,
+                "catalog_id": str(catalog.catalog_id),
+                "domain_schema": ml.domain_schema,
+                "project_name": project_name,
+            })
+        except Exception as e:
+            logger.error(f"Failed to create catalog: {e}")
+            return json.dumps({
+                "status": "error",
+                "message": str(e),
+            })
+
+    @mcp.tool()
+    async def delete_catalog(
+        hostname: str,
+        catalog_id: str,
+    ) -> str:
+        """PERMANENTLY DELETE a catalog and all its data. Cannot be undone.
+
+        Args:
+            hostname: Server hostname.
+            catalog_id: ID of the catalog to delete.
+
+        Returns:
+            JSON with deletion status.
+        """
+        try:
+            from deriva.core import DerivaServer
+
+            # Disconnect if this is the active catalog
+            active = conn_manager.get_active()
+            if active and str(active.catalog_id) == str(catalog_id):
+                conn_manager.disconnect()
+
+            # Delete the catalog
+            server = DerivaServer("https", hostname)
+            server.delete(f"/ermrest/catalog/{catalog_id}")
+
+            return json.dumps({
+                "status": "deleted",
+                "hostname": hostname,
+                "catalog_id": catalog_id,
+            })
+        except Exception as e:
+            logger.error(f"Failed to delete catalog: {e}")
+            return json.dumps({
+                "status": "error",
+                "message": str(e),
+            })

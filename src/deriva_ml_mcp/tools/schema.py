@@ -24,26 +24,26 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
     ) -> str:
         """Create a new table in the domain schema.
 
-        Creates a table with the specified columns. Each column dict should have:
-        - name: Column name
-        - type: Column type (text, int4, float8, boolean, date, timestamptz, etc.)
-        - nullok: Whether null values are allowed (optional, defaults to True)
-        - comment: Column description (optional)
-
         Args:
             table_name: Name for the new table.
-            columns: List of column definitions. If None, creates a basic table.
+            columns: Column definitions, each with:
+                - name: Column name (required)
+                - type: One of "text", "int4", "int8", "float4", "float8", "boolean", "date", "timestamptz", "jsonb"
+                - nullok: Allow nulls (default: True)
+                - comment: Column description
             comment: Description of the table's purpose.
 
         Returns:
-            JSON object with created table details.
+            JSON with status, table_name, schema, columns.
+
+        Example:
+            create_table("Subject", [{"name": "Name", "type": "text"}, {"name": "Age", "type": "int4"}])
         """
         try:
             from deriva_ml import TableDefinition, ColumnDefinition, BuiltinTypes
 
             ml = conn_manager.get_active_or_raise()
 
-            # Convert column dicts to ColumnDefinition objects
             col_defs = []
             if columns:
                 type_map = {
@@ -89,27 +89,28 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         referenced_tables: list[str] | None = None,
         comment: str = "",
     ) -> str:
-        """Create a new asset table for storing files/data.
+        """Create a new asset table for file management with automatic URL/checksum tracking.
 
-        Asset tables are special tables for managing files with automatic
-        URL, checksum, and length tracking. They also integrate with
-        the execution system for provenance tracking.
+        Asset tables automatically include: URL, Filename, Length, MD5, Description.
+        They integrate with executions for provenance tracking.
 
         Args:
-            asset_name: Name for the asset table (e.g., "Image", "Model").
+            asset_name: Name for the asset table (e.g., "Image", "Model", "Checkpoint").
             columns: Additional columns beyond standard asset columns.
-            referenced_tables: Tables this asset should reference via foreign keys.
+            referenced_tables: Tables this asset should have foreign keys to.
             comment: Description of the asset table's purpose.
 
         Returns:
-            JSON object with created asset table details.
+            JSON with status, table_name, schema, columns.
+
+        Example:
+            create_asset_table("Image", [{"name": "Width", "type": "int4"}], ["Subject"])
         """
         try:
             from deriva_ml import ColumnDefinition, BuiltinTypes
 
             ml = conn_manager.get_active_or_raise()
 
-            # Convert column dicts to ColumnDefinition objects
             col_defs = []
             if columns:
                 type_map = {
@@ -131,7 +132,6 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                         comment=col.get("comment", ""),
                     ))
 
-            # Convert table names to Table objects
             ref_tables = []
             if referenced_tables:
                 for table_name in referenced_tables:
@@ -155,20 +155,17 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
     @mcp.tool()
     async def list_assets(asset_table: str) -> str:
-        """List all assets in an asset table.
-
-        Returns all assets with their types and metadata.
+        """List all assets in an asset table with their metadata.
 
         Args:
-            asset_table: Name of the asset table to list.
+            asset_table: Name of the asset table (e.g., "Image", "Model").
 
         Returns:
-            JSON array of asset records.
+            JSON array of {RID, Filename, URL, Length, MD5, Asset_Type}.
         """
         try:
             ml = conn_manager.get_active_or_raise()
             assets = ml.list_assets(asset_table)
-            # Simplify for JSON output
             result = []
             for asset in assets:
                 result.append({
@@ -186,13 +183,10 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
     @mcp.tool()
     async def list_tables() -> str:
-        """List all tables in the domain schema.
-
-        Returns information about all user-defined tables
-        in the domain schema.
+        """List all tables in the domain schema with their properties.
 
         Returns:
-            JSON array of table information.
+            JSON array of {name, comment, is_vocabulary, is_asset, column_count}.
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -212,15 +206,16 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
     @mcp.tool()
     async def get_table_schema(table_name: str) -> str:
-        """Get the schema/structure of a table.
-
-        Returns column definitions, keys, and foreign keys for a table.
+        """Get the full schema of a table including all columns and their types.
 
         Args:
             table_name: Name of the table to describe.
 
         Returns:
-            JSON object with table structure details.
+            JSON with name, schema, comment, columns (with type info), is_vocabulary, is_asset.
+
+        Example:
+            get_table_schema("Image") -> shows all Image table columns and types
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -247,13 +242,10 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
     @mcp.tool()
     async def list_asset_types() -> str:
-        """List all asset type terms.
-
-        Returns terms from the Asset_Type vocabulary that can be
-        used to categorize assets.
+        """List available asset types from the Asset_Type vocabulary.
 
         Returns:
-            JSON array of asset type terms.
+            JSON array of {name, description} for each asset type.
         """
         try:
             from deriva_ml import MLVocab
@@ -273,16 +265,17 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
     @mcp.tool()
     async def add_asset_type(type_name: str, description: str) -> str:
-        """Add a new asset type to the vocabulary.
-
-        Creates a term in the Asset_Type vocabulary for categorizing assets.
+        """Add a new asset type to the Asset_Type vocabulary.
 
         Args:
             type_name: Name for the asset type.
-            description: Description of the asset type.
+            description: What this asset type represents.
 
         Returns:
-            JSON object with created term details.
+            JSON with status, name, description, rid.
+
+        Example:
+            add_asset_type("Segmentation Mask", "Binary mask images for segmentation")
         """
         try:
             from deriva_ml import MLVocab

@@ -20,15 +20,13 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
     async def list_vocabularies() -> str:
         """List all controlled vocabulary tables in the catalog.
 
-        Returns a list of vocabulary tables that can be used to
-        store standardized terms.
+        Vocabularies store standardized terms (e.g., Dataset_Type, Asset_Type, Workflow_Type).
 
         Returns:
-            JSON array of vocabulary table names.
+            JSON array of {name, schema, comment} for each vocabulary table.
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            # Get all tables and filter for vocabularies
             vocabs = []
             for schema in [ml.ml_schema, ml.domain_schema]:
                 for table in ml.model.schemas[schema].tables.values():
@@ -45,16 +43,16 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
 
     @mcp.tool()
     async def list_vocabulary_terms(vocabulary_name: str) -> str:
-        """List all terms in a vocabulary table.
-
-        Returns all terms, descriptions, and synonyms from the
-        specified controlled vocabulary.
+        """List all terms in a vocabulary with their descriptions and synonyms.
 
         Args:
-            vocabulary_name: Name of the vocabulary table.
+            vocabulary_name: Name of the vocabulary table (e.g., "Dataset_Type", "Asset_Type").
 
         Returns:
-            JSON array of term objects with name, description, and synonyms.
+            JSON array of {name, description, synonyms, rid} for each term.
+
+        Example:
+            list_vocabulary_terms("Dataset_Type") -> [{"name": "Training", ...}, ...]
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -74,16 +72,17 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
 
     @mcp.tool()
     async def lookup_term(vocabulary_name: str, term_name: str) -> str:
-        """Look up a specific term in a vocabulary.
-
-        Finds a term by its name or any of its synonyms.
+        """Find a term by name or synonym in a vocabulary.
 
         Args:
             vocabulary_name: Name of the vocabulary table.
-            term_name: Name or synonym of the term to find.
+            term_name: Term name or any of its synonyms to search for.
 
         Returns:
-            JSON object with term details or error if not found.
+            JSON with name, description, synonyms, rid if found.
+
+        Example:
+            lookup_term("Dataset_Type", "train") -> finds "Training" if "train" is a synonym
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -107,16 +106,17 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
     ) -> str:
         """Add a new term to a vocabulary.
 
-        Creates a standardized term with description and optional synonyms.
-
         Args:
-            vocabulary_name: Name of the vocabulary table.
-            term_name: Primary name for the term (must be unique in vocabulary).
-            description: Description of the term's meaning.
-            synonyms: Optional alternative names for the term.
+            vocabulary_name: Name of the vocabulary table (e.g., "Dataset_Type").
+            term_name: Primary name for the term (must be unique).
+            description: What this term means.
+            synonyms: Alternative names that can also match this term.
 
         Returns:
-            JSON object with created term details.
+            JSON with status, name, description, synonyms, rid.
+
+        Example:
+            add_term("Dataset_Type", "Validation", "Held-out data for validation", ["val", "valid"])
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -135,7 +135,6 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 "rid": term.rid,
             })
         except Exception as e:
-            # Check if term already exists
             if "already exists" in str(e):
                 try:
                     existing = ml.lookup_term(vocabulary_name, term_name)
@@ -156,18 +155,18 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         comment: str = "",
         schema: str | None = None,
     ) -> str:
-        """Create a new controlled vocabulary table.
-
-        Creates a table for storing standardized terms with their
-        descriptions and synonyms.
+        """Create a new vocabulary table for storing controlled terms.
 
         Args:
             vocabulary_name: Name for the new vocabulary table.
             comment: Description of the vocabulary's purpose.
-            schema: Schema to create the table in (defaults to domain schema).
+            schema: Schema to create in (default: domain schema).
 
         Returns:
-            JSON object with created vocabulary details.
+            JSON with status, name, schema, comment.
+
+        Example:
+            create_vocabulary("Quality_Level", "Image quality ratings")
         """
         try:
             ml = conn_manager.get_active_or_raise()

@@ -32,28 +32,26 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         dataset_rids: list[str] | None = None,
         asset_rids: list[str] | None = None,
     ) -> str:
-        """Create a new execution for running ML workflows.
+        """Create a new execution to track an ML workflow run.
 
-        Creates an execution record that tracks inputs, outputs, and provenance
-        for a computational or manual workflow.
-
-        IMPORTANT: After completing your work, you MUST call upload_execution_outputs()
-        to upload any registered assets to the catalog. The execution workflow is:
-        1. create_execution() - Create the execution record
-        2. start_execution() - Mark execution as running
-        3. asset_file_path() - Register files for upload (can be called multiple times)
-        4. stop_execution() - Mark execution as complete
-        5. upload_execution_outputs() - Upload all registered assets to catalog
+        WORKFLOW: After creating, follow this sequence:
+        1. start_execution() - Begin timing
+        2. asset_file_path() - Register output files (repeat as needed)
+        3. stop_execution() - End timing
+        4. upload_execution_outputs() - REQUIRED: Upload files to catalog
 
         Args:
-            workflow_name: Name of the workflow to execute.
-            workflow_type: Type of workflow (must exist in Workflow_Type vocabulary).
-            description: Description of what this execution does.
-            dataset_rids: Optional list of dataset RIDs to use as inputs.
-            asset_rids: Optional list of asset RIDs to use as inputs.
+            workflow_name: Name for this workflow (e.g., "ResNet Training Run 1").
+            workflow_type: Type from Workflow_Type vocabulary (e.g., "Training").
+            description: What this execution does.
+            dataset_rids: Input dataset RIDs to track as provenance.
+            asset_rids: Input asset RIDs to track as provenance.
 
         Returns:
-            JSON object with execution RID and details.
+            JSON with execution_rid, workflow_rid, dataset_count, asset_count.
+
+        Example:
+            create_execution("CIFAR Training", "Training", "Train on CIFAR-10", ["1-ABC"])
         """
         try:
             from deriva_ml.execution.execution_configuration import ExecutionConfiguration
@@ -61,20 +59,17 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
             ml = conn_manager.get_active_or_raise()
 
-            # Create workflow
             workflow = ml.create_workflow(
                 name=workflow_name,
                 workflow_type=workflow_type,
                 description=description,
             )
 
-            # Build dataset specs
             datasets = []
             if dataset_rids:
                 for rid in dataset_rids:
                     datasets.append(DatasetSpec(rid=rid))
 
-            # Create configuration
             config = ExecutionConfiguration(
                 workflow=workflow,
                 description=description,
@@ -82,10 +77,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 assets=asset_rids or [],
             )
 
-            # Create execution
             execution = ml.create_execution(config)
-
-            # Store for later use
             key = _get_execution_key()
             _active_executions[key] = execution
 
@@ -103,14 +95,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def start_execution() -> str:
-        """Start the active execution.
-
-        Marks the execution as running and begins tracking time.
-        Must have created an execution first with create_execution.
-
-        Returns:
-            JSON object with execution status.
-        """
+        """Start timing the active execution. Call after create_execution()."""
         try:
             key = _get_execution_key()
             if key not in _active_executions:
@@ -132,13 +117,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def stop_execution() -> str:
-        """Stop the active execution.
-
-        Marks the execution as completed and records duration.
-
-        Returns:
-            JSON object with execution status and duration.
-        """
+        """Stop timing and mark execution complete. Call before upload_execution_outputs()."""
         try:
             key = _get_execution_key()
             if key not in _active_executions:
@@ -160,16 +139,14 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def update_execution_status(status: str, message: str) -> str:
-        """Update the status of the active execution.
-
-        Records a status update for tracking progress.
+        """Update the execution status with a progress message.
 
         Args:
-            status: Status value (pending, running, completed, failed).
-            message: Description of current state or progress.
+            status: One of "pending", "running", "completed", "failed".
+            message: Progress message or error description.
 
         Returns:
-            JSON object confirming the update.
+            JSON with execution_rid, new_status, message.
         """
         try:
             from deriva_ml.core.definitions import Status
@@ -206,13 +183,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def get_execution_info() -> str:
-        """Get information about the active execution.
-
-        Returns details about the currently active execution including
-        status, datasets, registered assets, and whether upload is pending.
+        """Get details about the active execution including upload status.
 
         Returns:
-            JSON object with execution details.
+            JSON with execution_rid, status, working_dir, upload_pending flag.
         """
         try:
             key = _get_execution_key()
@@ -223,8 +197,6 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 })
 
             execution = _active_executions[key]
-
-            # Check if there are registered but not yet uploaded assets
             has_pending_uploads = execution.uploaded_assets is None
 
             return json.dumps({
@@ -235,7 +207,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 "dataset_count": len(execution.datasets),
                 "working_dir": str(execution.working_dir),
                 "upload_pending": has_pending_uploads,
-                "upload_reminder": "Remember to call upload_execution_outputs() when done." if has_pending_uploads else None,
+                "upload_reminder": "Call upload_execution_outputs() when done." if has_pending_uploads else None,
             })
         except Exception as e:
             logger.error(f"Failed to get execution info: {e}")
@@ -243,22 +215,18 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def restore_execution(execution_rid: str) -> str:
-        """Restore a previous execution.
-
-        Reloads an existing execution by its RID, restoring the execution
-        context and downloaded datasets.
+        """Restore a previous execution to continue working with it.
 
         Args:
-            execution_rid: RID of the execution to restore.
+            execution_rid: RID of the execution to restore (e.g., "1-ABC").
 
         Returns:
-            JSON object with restored execution details.
+            JSON with execution_rid, workflow_rid, dataset_count.
         """
         try:
             ml = conn_manager.get_active_or_raise()
             execution = ml.restore_execution(execution_rid)
 
-            # Store for later use
             key = _get_execution_key()
             _active_executions[key] = execution
 
@@ -280,26 +248,22 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         copy_file: bool = False,
         rename_file: str | None = None,
     ) -> str:
-        """Register a file for upload as an execution asset.
+        """Register a file for upload as an execution output.
 
-        Registers a file to be uploaded when upload_execution_outputs() is called.
-        The file will be associated with the specified asset table and types.
-
-        This is the primary way to add output files to an execution. Files are
-        staged locally and uploaded in batch when upload_execution_outputs() is called.
+        Files are staged locally and uploaded when upload_execution_outputs() is called.
 
         Args:
-            asset_name: Name of the asset table (e.g., "Image", "Model", "Execution_Metadata").
-            file_name: Path to the file to register. Can be:
-                - An existing file (will be symlinked or copied)
-                - A new path (returned path can be opened for writing)
-            asset_types: Asset type terms from Asset_Type vocabulary.
-                Defaults to the asset_name if not specified.
-            copy_file: If True, copy the file instead of creating a symlink.
-            rename_file: If provided, rename the file to this name.
+            asset_name: Asset table name (e.g., "Image", "Model", "Execution_Metadata").
+            file_name: Path to existing file OR new filename to create.
+            asset_types: Asset type terms (defaults to asset_name).
+            copy_file: True to copy file, False to symlink (default).
+            rename_file: New filename if renaming.
 
         Returns:
-            JSON object with the registered file path and details.
+            JSON with file_path to use and reminder to call upload_execution_outputs().
+
+        Example:
+            asset_file_path("Model", "/tmp/model.pt") -> registers model for upload
         """
         try:
             key = _get_execution_key()
@@ -325,7 +289,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 "file_path": str(asset_path),
                 "file_name": asset_path.file_name,
                 "asset_types": asset_path.asset_types,
-                "note": "Call upload_execution_outputs() to upload this file to the catalog.",
+                "note": "Call upload_execution_outputs() to upload.",
             })
         except Exception as e:
             logger.error(f"Failed to register asset file: {e}")
@@ -333,24 +297,18 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def upload_execution_outputs(clean_folder: bool = True) -> str:
-        """Upload all registered assets from the active execution to the catalog.
+        """Upload all registered assets to the catalog. MUST be called to complete execution.
 
-        IMPORTANT: This must be called after you have finished registering assets
-        with asset_file_path(). This uploads all staged files to the catalog
-        and records them in the execution's provenance.
-
-        The typical workflow is:
-        1. create_execution() - Create execution record
-        2. start_execution() - Begin tracking
-        3. asset_file_path() - Register output files (repeat as needed)
-        4. stop_execution() - Mark complete
-        5. upload_execution_outputs() - Upload all files to catalog
+        This uploads files registered with asset_file_path() and records provenance.
 
         Args:
-            clean_folder: Whether to clean up output folders after upload.
+            clean_folder: Remove local staging folders after upload (default: True).
 
         Returns:
-            JSON object with upload summary including count of assets by type.
+            JSON with assets_uploaded counts by type.
+
+        Example:
+            upload_execution_outputs() -> {"assets_uploaded": {"Model": 1, "Image": 10}}
         """
         try:
             key = _get_execution_key()
@@ -363,7 +321,6 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             execution = _active_executions[key]
             results = execution.upload_execution_outputs(clean_folder=clean_folder)
 
-            # Summarize results
             summary = {}
             for asset_type, paths in results.items():
                 summary[asset_type] = len(paths)
@@ -381,14 +338,11 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
     async def list_executions(limit: int = 50) -> str:
         """List recent executions in the catalog.
 
-        Returns information about recent executions including their
-        status, workflow, and timing.
-
         Args:
-            limit: Maximum number of executions to return.
+            limit: Max number to return (default: 50).
 
         Returns:
-            JSON array of execution records.
+            JSON array of {rid, workflow, status, description, duration}.
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -416,17 +370,16 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         description: str = "",
         dataset_types: list[str] | None = None,
     ) -> str:
-        """Create a new dataset within the active execution.
+        """Create a dataset that is output from the active execution.
 
-        Creates a dataset that is associated with the current execution
-        for provenance tracking.
+        The dataset will be linked to this execution for provenance.
 
         Args:
-            description: Description of the dataset.
-            dataset_types: Dataset type terms from vocabulary.
+            description: What this dataset contains.
+            dataset_types: Type labels (e.g., ["Training", "Augmented"]).
 
         Returns:
-            JSON object with created dataset details.
+            JSON with dataset_rid, execution_rid.
         """
         try:
             key = _get_execution_key()
@@ -459,18 +412,15 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         version: str | None = None,
         materialize: bool = True,
     ) -> str:
-        """Download a dataset for use in the active execution.
-
-        Downloads and materializes a dataset, making it available
-        for processing in the execution.
+        """Download a dataset as input for the active execution.
 
         Args:
             dataset_rid: RID of the dataset to download.
-            version: Specific version to download (optional).
-            materialize: Whether to fetch all referenced files.
+            version: Specific version (default: current).
+            materialize: Fetch all referenced files (default: True).
 
         Returns:
-            JSON object with download details and local path.
+            JSON with dataset_rid, version, path (local directory).
         """
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec
@@ -498,13 +448,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def get_execution_working_dir() -> str:
-        """Get the working directory for the active execution.
-
-        Returns the path where execution files should be placed
-        for upload.
+        """Get the local working directory path for the active execution.
 
         Returns:
-            JSON object with working directory path.
+            JSON with working_dir path.
         """
         try:
             key = _get_execution_key()

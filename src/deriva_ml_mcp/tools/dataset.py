@@ -18,16 +18,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def list_datasets(include_deleted: bool = False) -> str:
-        """List all datasets in the catalog.
-
-        Returns a list of all datasets, including their RIDs, descriptions,
-        types, and current versions.
+        """List all datasets in the catalog with their RIDs, types, and versions.
 
         Args:
-            include_deleted: If True, include deleted datasets in the list.
+            include_deleted: Set True to include soft-deleted datasets.
 
         Returns:
-            JSON array of dataset information.
+            JSON array of {rid, description, dataset_types, current_version}.
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -38,7 +35,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     "rid": ds.dataset_rid,
                     "description": ds.description,
                     "dataset_types": ds.dataset_types,
-                    "current_version": ds.current_version,
+                    "current_version": str(ds.current_version) if ds.current_version else None,
                 })
             return json.dumps(result)
         except Exception as e:
@@ -47,16 +44,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def get_dataset(dataset_rid: str) -> str:
-        """Get detailed information about a specific dataset.
-
-        Retrieves full details about a dataset including its members,
-        version history, and nested datasets.
+        """Get full details about a dataset including its children and parents.
 
         Args:
-            dataset_rid: Resource Identifier of the dataset.
+            dataset_rid: The RID of the dataset (e.g., "1-ABC").
 
         Returns:
-            JSON object with dataset details.
+            JSON with rid, description, dataset_types, current_version, children, parents.
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -65,7 +59,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "rid": dataset.dataset_rid,
                 "description": dataset.description,
                 "dataset_types": dataset.dataset_types,
-                "current_version": dataset.current_version,
+                "current_version": str(dataset.current_version) if dataset.current_version else None,
                 "children": dataset.list_dataset_children(),
                 "parents": dataset.list_dataset_parents(),
             })
@@ -79,17 +73,18 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         dataset_types: list[str] | None = None,
         version: str | None = None,
     ) -> str:
-        """Create a new dataset in the catalog.
-
-        Creates an empty dataset that can then have members added to it.
+        """Create a new empty dataset. Use add_dataset_members to populate it.
 
         Args:
-            description: Description of the dataset's purpose.
-            dataset_types: List of dataset type terms from the Dataset_Type vocabulary.
-            version: Optional initial version (defaults to '0.1.0').
+            description: Human-readable description of the dataset's purpose.
+            dataset_types: Type labels from Dataset_Type vocabulary (e.g., ["Training", "Image"]).
+            version: Initial version string (default: "0.1.0").
 
         Returns:
-            JSON object with the created dataset's RID and details.
+            JSON with status, rid, description, dataset_types, version.
+
+        Example:
+            create_dataset("Training images for model v2", ["Training", "Image"])
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -98,12 +93,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 dataset_types=dataset_types or [],
                 version=version,
             )
+            version_str = str(dataset.current_version) if dataset.current_version else None
             return json.dumps({
                 "status": "created",
                 "rid": dataset.dataset_rid,
                 "description": dataset.description,
                 "dataset_types": dataset.dataset_types,
-                "version": dataset.current_version,
+                "version": version_str,
             })
         except Exception as e:
             logger.error(f"Failed to create dataset: {e}")
@@ -111,17 +107,17 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def list_dataset_members(dataset_rid: str, version: str | None = None) -> str:
-        """List all members of a dataset.
-
-        Returns the objects (entities) that are part of this dataset,
-        organized by table type.
+        """List all members (records) in a dataset, grouped by table.
 
         Args:
-            dataset_rid: Resource Identifier of the dataset.
-            version: Optional version to list members for (defaults to current).
+            dataset_rid: The RID of the dataset.
+            version: Specific version to query (default: current version).
 
         Returns:
-            JSON object mapping table names to arrays of member RIDs.
+            JSON object mapping table names to arrays of {RID} objects.
+
+        Example:
+            list_dataset_members("1-ABC") -> {"Image": [{"RID": "2-DEF"}, ...], "Subject": [...]}
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -129,7 +125,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             if version:
                 dataset = dataset.set_version(version)
             members = dataset.list_dataset_members()
-            # Convert to JSON-serializable format
             result = {}
             for table_name, items in members.items():
                 result[table_name] = [{"RID": m["RID"]} for m in items]
@@ -143,16 +138,17 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         dataset_rid: str,
         member_rids: list[str],
     ) -> str:
-        """Add members to a dataset.
-
-        Adds the specified objects to the dataset by their RIDs.
+        """Add records to a dataset by their RIDs. Auto-increments minor version.
 
         Args:
-            dataset_rid: Resource Identifier of the dataset.
-            member_rids: List of RIDs to add to the dataset.
+            dataset_rid: The RID of the dataset to add members to.
+            member_rids: List of RIDs to add (e.g., ["2-ABC", "2-DEF", "2-GHI"]).
 
         Returns:
-            Status message with count of added members.
+            JSON with status, added_count, dataset_rid.
+
+        Example:
+            add_dataset_members("1-ABC", ["2-DEF", "2-GHI"]) -> adds 2 members
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -169,16 +165,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def get_dataset_version_history(dataset_rid: str) -> str:
-        """Get the version history of a dataset.
-
-        Returns the complete version history including timestamps
-        and descriptions for each version.
+        """Get all versions of a dataset with their descriptions and timestamps.
 
         Args:
-            dataset_rid: Resource Identifier of the dataset.
+            dataset_rid: The RID of the dataset.
 
         Returns:
-            JSON array of version history entries.
+            JSON array of {version, description, snapshot} entries.
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -187,7 +180,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             result = []
             for entry in history:
                 result.append({
-                    "version": entry.version,
+                    "version": str(entry.version) if entry.version else None,
                     "description": entry.description,
                     "snapshot": entry.snapshot,
                 })
@@ -202,17 +195,19 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         component: str = "minor",
         description: str = "",
     ) -> str:
-        """Increment the version of a dataset.
-
-        Updates the dataset version using semantic versioning.
+        """Manually increment a dataset's semantic version (major.minor.patch).
 
         Args:
-            dataset_rid: Resource Identifier of the dataset.
-            component: Version component to increment: 'major', 'minor', or 'patch'.
+            dataset_rid: The RID of the dataset.
+            component: Which part to increment: "major", "minor", or "patch".
             description: Description of what changed in this version.
 
         Returns:
-            JSON object with the new version number.
+            JSON with status, new_version, dataset_rid.
+
+        Examples:
+            increment_dataset_version("1-ABC", "major", "Schema change")  -> 2.0.0
+            increment_dataset_version("1-ABC", "patch", "Fixed labels")   -> 1.0.1
         """
         try:
             from deriva_ml.dataset.aux_classes import VersionPart
@@ -220,7 +215,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
 
-            # Map string to enum
             component_map = {
                 "major": VersionPart.major,
                 "minor": VersionPart.minor,
@@ -234,7 +228,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             )
             return json.dumps({
                 "status": "success",
-                "new_version": new_version,
+                "new_version": str(new_version) if new_version else None,
                 "dataset_rid": dataset_rid,
             })
         except Exception as e:
@@ -243,16 +237,14 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def delete_dataset(dataset_rid: str, recurse: bool = False) -> str:
-        """Delete a dataset from the catalog.
-
-        Soft-deletes the dataset (marks as deleted but retains data).
+        """Soft-delete a dataset (marks deleted but keeps data).
 
         Args:
-            dataset_rid: Resource Identifier of the dataset to delete.
-            recurse: If True, also delete nested child datasets.
+            dataset_rid: The RID of the dataset to delete.
+            recurse: If True, also delete all nested child datasets.
 
         Returns:
-            Status message indicating success or failure.
+            JSON with status, dataset_rid, recursive.
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -269,10 +261,9 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def list_dataset_element_types() -> str:
-        """List types of entities that can be added to datasets.
+        """List which table types can be added as dataset members.
 
-        Returns the table types that are configured to be included
-        as elements in datasets.
+        Use add_dataset_element_type to enable additional tables.
 
         Returns:
             JSON array of table names that can be dataset members.
@@ -288,16 +279,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def add_dataset_element_type(table_name: str) -> str:
-        """Add a table type as a valid dataset element.
-
-        Configures the specified table to be includable as an
-        element in datasets.
+        """Enable a table to be included as dataset members.
 
         Args:
-            table_name: Name of the table to enable as a dataset element type.
+            table_name: Name of the table to enable (e.g., "Subject", "Image").
 
         Returns:
-            Status message with the association table name.
+            JSON with status, table_name, association_table.
+
+        Example:
+            add_dataset_element_type("Subject") -> enables Subject records in datasets
         """
         try:
             ml = conn_manager.get_active_or_raise()

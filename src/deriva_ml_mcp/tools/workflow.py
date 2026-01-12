@@ -18,13 +18,10 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
 
     @mcp.tool()
     async def list_workflows() -> str:
-        """List all workflows in the catalog.
-
-        Returns all registered workflow definitions, including their
-        names, types, versions, and descriptions.
+        """List all registered workflows with their types and versions.
 
         Returns:
-            JSON array of workflow objects.
+            JSON array of {rid, name, workflow_type, version, description, url, checksum}.
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -47,15 +44,16 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
 
     @mcp.tool()
     async def lookup_workflow(url_or_checksum: str) -> str:
-        """Look up a workflow by URL or checksum.
-
-        Finds a workflow using either its source URL or code checksum.
+        """Find a workflow by its source URL or code checksum.
 
         Args:
-            url_or_checksum: The URL or checksum to search for.
+            url_or_checksum: Either a URL or MD5 checksum to search for.
 
         Returns:
-            JSON object with workflow RID or null if not found.
+            JSON with found=true/false and rid if found.
+
+        Example:
+            lookup_workflow("https://github.com/org/repo/blob/main/train.py")
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -73,18 +71,18 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
         workflow_type: str,
         description: str = "",
     ) -> str:
-        """Create and register a new workflow.
-
-        Creates a workflow definition and registers it in the catalog.
-        The workflow_type must be a term from the Workflow_Type vocabulary.
+        """Create and register a new workflow definition.
 
         Args:
-            name: Name of the workflow.
-            workflow_type: Type of workflow (must exist in Workflow_Type vocabulary).
-            description: Description of what the workflow does.
+            name: Display name for the workflow.
+            workflow_type: Type from Workflow_Type vocabulary (e.g., "Training", "Inference").
+            description: What this workflow does.
 
         Returns:
-            JSON object with the created workflow's RID and details.
+            JSON with status, rid, name, workflow_type, description.
+
+        Example:
+            create_workflow("ResNet Training", "Training", "Trains ResNet50 on image data")
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -107,13 +105,10 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
 
     @mcp.tool()
     async def list_workflow_types() -> str:
-        """List available workflow types.
-
-        Returns all terms from the Workflow_Type vocabulary that can
-        be used when creating workflows.
+        """List available workflow types from the Workflow_Type vocabulary.
 
         Returns:
-            JSON array of workflow type terms.
+            JSON array of {name, description} for each workflow type.
         """
         try:
             from deriva_ml import MLVocab
@@ -136,16 +131,17 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
         type_name: str,
         description: str,
     ) -> str:
-        """Add a new workflow type to the vocabulary.
-
-        Creates a new term in the Workflow_Type vocabulary.
+        """Add a new workflow type to the Workflow_Type vocabulary.
 
         Args:
             type_name: Name for the new workflow type.
-            description: Description of the workflow type.
+            description: What this type of workflow does.
 
         Returns:
-            JSON object with the created term details.
+            JSON with status, name, description, rid.
+
+        Example:
+            add_workflow_type("Data Augmentation", "Workflows that augment training data")
         """
         try:
             from deriva_ml import MLVocab
