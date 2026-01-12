@@ -53,7 +53,21 @@ Create a GitHub Personal Access Token (PAT) for the GitHub MCP Server:
 
 ## Installation
 
-### Using uv (recommended)
+### Using Docker (Recommended)
+
+Docker provides the simplest setup with no Python environment management:
+
+```bash
+# Pull the image
+docker pull ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest
+
+# Or build locally
+git clone https://github.com/informatics-isi-edu/deriva-ml-mcp.git
+cd deriva-ml-mcp
+docker build -t deriva-ml-mcp .
+```
+
+### Using uv
 
 ```bash
 uv pip install deriva-ml-mcp
@@ -84,9 +98,44 @@ For the complete ML workflow experience, configure both DerivaML and GitHub MCP 
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 - **Linux:** `~/.config/Claude/claude_desktop_config.json`
 
-#### Option 1: GitHub Remote Server (Recommended)
+#### Option 1: Both Servers with Docker (Recommended)
 
-Uses GitHub's hosted MCP server - simplest setup:
+Uses Docker for both MCP servers - most consistent setup:
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/deriva-ml-workspace:/home/mcpuser/workspace",
+        "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+      ]
+    },
+    "github": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_your_token_here"
+      }
+    }
+  }
+}
+```
+
+**Volume mounts explained:**
+- `~/.deriva:/home/mcpuser/.deriva:ro` - Mounts your Deriva credentials (read-only)
+- `~/deriva-ml-workspace:/home/mcpuser/workspace` - Working directory for execution outputs
+
+#### Option 2: Direct Install with GitHub Remote
+
+Uses pip-installed DerivaML MCP with GitHub's hosted server:
 
 ```json
 {
@@ -105,9 +154,9 @@ Uses GitHub's hosted MCP server - simplest setup:
 }
 ```
 
-#### Option 2: GitHub Local Server with Docker
+#### Option 3: From Source (Development)
 
-For more control or enterprise environments:
+For development or customization:
 
 ```json
 {
@@ -136,9 +185,26 @@ For more control or enterprise environments:
 }
 ```
 
-#### Option 3: DerivaML Only (No GitHub)
+#### Option 4: DerivaML Only (No GitHub)
 
 If you don't need GitHub integration:
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+Or with direct install:
 
 ```json
 {
@@ -152,7 +218,38 @@ If you don't need GitHub integration:
 
 ### Claude Code
 
-Add to your project's `.claude/settings.json` or global settings:
+Add to your project's `.mcp.json` file:
+
+**With Docker:**
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/deriva-ml-workspace:/home/mcpuser/workspace",
+        "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+      ]
+    },
+    "github": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+**With direct install:**
 
 ```json
 {
@@ -171,6 +268,15 @@ Add to your project's `.claude/settings.json` or global settings:
 }
 ```
 
+Then enable in `.claude/settings.local.json`:
+
+```json
+{
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": ["deriva-ml", "github"]
+}
+```
+
 ### VS Code with Continue or Cline
 
 Add to your MCP configuration (typically `.vscode/mcp.json`):
@@ -180,7 +286,12 @@ Add to your MCP configuration (typically `.vscode/mcp.json`):
   "mcp": {
     "servers": {
       "deriva-ml": {
-        "command": "deriva-ml-mcp"
+        "command": "docker",
+        "args": [
+          "run", "-i", "--rm",
+          "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+          "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+        ]
       },
       "github": {
         "command": "docker",
