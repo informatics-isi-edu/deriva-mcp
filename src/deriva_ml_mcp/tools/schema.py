@@ -296,3 +296,34 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         except Exception as e:
             logger.error(f"Failed to add asset type: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def get_schema_description(include_system_columns: bool = False) -> str:
+        """Get a complete description of the catalog schema structure.
+
+        Returns the full data model including all tables, columns, foreign keys,
+        and relationships in both the domain and ML schemas. Use this to understand
+        how data is organized before querying or creating new structures.
+
+        Args:
+            include_system_columns: Include RID, RCT, RMT, RCB, RMB columns (default: False).
+
+        Returns:
+            JSON with complete schema structure:
+            - domain_schema: Name of the domain schema
+            - ml_schema: Name of the ML schema (deriva-ml)
+            - schemas: Dict of schema definitions, each containing:
+              - tables: Dict of table definitions with columns, foreign_keys, features
+
+        Example:
+            get_schema_description() -> full catalog structure for understanding data model
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            schema_info = ml.model.get_schema_description(
+                include_system_columns=include_system_columns
+            )
+            return json.dumps(schema_info)
+        except Exception as e:
+            logger.error(f"Failed to get schema description: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
