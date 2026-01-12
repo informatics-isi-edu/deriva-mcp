@@ -1,0 +1,420 @@
+"""MCP Resources for DerivaML.
+
+This module provides resource registration functions that expose
+DerivaML information as MCP resources for LLM applications.
+
+Resources provide read-only access to:
+- Schema documentation and structure
+- Configuration templates for hydra-zen
+- Vocabulary definitions
+- Dataset metadata
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from mcp.server.fastmcp import FastMCP
+
+from deriva_ml_mcp.connection import ConnectionManager
+
+
+def register_resources(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
+    """Register all DerivaML resources with the MCP server."""
+
+    # =========================================================================
+    # Static Resources - Configuration Templates
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://config/deriva-ml-template",
+        name="DerivaML Config Template",
+        description="Hydra-zen configuration template for DerivaML connection",
+        mime_type="text/x-python",
+    )
+    def get_deriva_ml_config_template() -> str:
+        """Return a hydra-zen configuration template for DerivaML."""
+        return '''"""DerivaML Configuration with hydra-zen.
+
+This template shows how to configure DerivaML for different environments.
+"""
+from hydra_zen import builds, store
+from deriva_ml import DerivaMLConfig
+
+# Create a structured config using hydra-zen
+DerivaMLConf = builds(DerivaMLConfig, populate_full_signature=True)
+
+# Store configurations for different environments
+deriva_store = store(group="deriva_ml")
+
+# Development configuration
+deriva_store(DerivaMLConf(
+    hostname="localhost",
+    catalog_id=1,
+    use_minid=False,
+), name="dev")
+
+# Production configuration
+deriva_store(DerivaMLConf(
+    hostname="your-server.org",
+    catalog_id="your-catalog",
+    use_minid=True,
+), name="prod")
+'''
+
+    @mcp.resource(
+        "deriva-ml://config/dataset-spec-template",
+        name="Dataset Spec Config Template",
+        description="Hydra-zen configuration template for dataset specifications",
+        mime_type="text/x-python",
+    )
+    def get_dataset_spec_template() -> str:
+        """Return a hydra-zen configuration template for dataset specs."""
+        return '''"""Dataset Specification Configuration with hydra-zen.
+
+This template shows how to configure dataset collections for experiments.
+"""
+from hydra_zen import store
+from deriva_ml.dataset import DatasetSpecConfig
+
+# Define dataset collections
+training_datasets = [
+    DatasetSpecConfig(rid="XXXX", version="1.0.0", materialize=True),
+    DatasetSpecConfig(rid="YYYY", version="1.0.0", materialize=True),
+]
+
+validation_datasets = [
+    DatasetSpecConfig(rid="ZZZZ", version="1.0.0", materialize=False),
+]
+
+# Store them in hydra-zen store
+datasets_store = store(group="datasets")
+datasets_store(training_datasets, name="training")
+datasets_store(validation_datasets, name="validation")
+'''
+
+    @mcp.resource(
+        "deriva-ml://config/execution-template",
+        name="Execution Config Template",
+        description="Hydra-zen configuration template for ML executions",
+        mime_type="text/x-python",
+    )
+    def get_execution_config_template() -> str:
+        """Return a hydra-zen configuration template for executions."""
+        return '''"""Execution Configuration with hydra-zen.
+
+This template shows how to configure ML executions with datasets and assets.
+"""
+from hydra_zen import builds, instantiate
+from deriva_ml.execution import ExecutionConfiguration, AssetRIDConfig
+from deriva_ml.dataset import DatasetSpecConfig
+
+# Build execution config
+ExecConf = builds(ExecutionConfiguration, populate_full_signature=True)
+
+# Define input assets
+assets = [
+    AssetRIDConfig(rid="MODL", description="Pretrained model weights"),
+    AssetRIDConfig(rid="CNFG", description="Model configuration"),
+]
+
+# Configure execution with datasets and assets
+exec_conf = ExecConf(
+    description="ML training run",
+    datasets=[
+        DatasetSpecConfig(rid="DATA", version="1.0.0", materialize=True),
+    ],
+    assets=[a.rid for a in assets],
+)
+
+# Instantiate to get ExecutionConfiguration
+exec_config = instantiate(exec_conf)
+'''
+
+    @mcp.resource(
+        "deriva-ml://config/model-template",
+        name="Model Config Template",
+        description="Hydra-zen configuration template for ML models with zen_partial",
+        mime_type="text/x-python",
+    )
+    def get_model_config_template() -> str:
+        """Return a hydra-zen configuration template for ML models."""
+        return '''"""Model Configuration with hydra-zen using zen_partial.
+
+This template shows how to configure ML models that integrate with DerivaML.
+The key is using zen_partial=True to create partially configured functions
+that receive the execution context at runtime.
+"""
+from hydra_zen import builds, store
+from deriva_ml.execution import Execution
+from deriva_ml import DerivaML
+
+# Define your model function
+def train_model(
+    learning_rate: float,
+    epochs: int,
+    batch_size: int,
+    ml_instance: DerivaML,
+    execution: Execution | None = None,
+) -> None:
+    """Train model using DerivaML execution context."""
+    # Access datasets and assets through execution
+    for dataset in execution.datasets:
+        bag = execution.download_dataset_bag(dataset)
+        # Process data...
+
+    # Your training code here
+    print(f"Training with lr={learning_rate}, epochs={epochs}")
+
+    # Register output files
+    model_path = execution.asset_file_path("Model", "trained_model.pt")
+    # Save model to model_path...
+
+# Build config with zen_partial=True
+# This creates a callable waiting for ml_instance and execution
+ModelConfig = builds(
+    train_model,
+    learning_rate=1e-3,
+    epochs=10,
+    batch_size=32,
+    populate_full_signature=True,
+    zen_partial=True,  # Key: creates partial function
+)
+
+# Register configurations
+model_store = store(group="model_config")
+model_store(ModelConfig, name="default")
+model_store(ModelConfig, name="fast", epochs=5, learning_rate=1e-2)
+model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
+'''
+
+    # =========================================================================
+    # Dynamic Resources - Catalog Information
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://catalog/schema",
+        name="Catalog Schema",
+        description="Current catalog schema structure in JSON format",
+        mime_type="application/json",
+    )
+    def get_catalog_schema() -> str:
+        """Return the current catalog schema as JSON."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            schema_info = {
+                "hostname": ml.host_name,
+                "catalog_id": str(ml.catalog_id),
+                "domain_schema": ml.domain_schema,
+                "ml_schema": ml.ml_schema,
+                "tables": [],
+            }
+
+            # Get domain schema tables
+            domain = ml.model.schemas.get(ml.domain_schema)
+            if domain:
+                for table in domain.tables.values():
+                    table_info = {
+                        "name": table.name,
+                        "columns": [
+                            {"name": col.name, "type": str(col.type)}
+                            for col in table.columns
+                        ],
+                        "is_vocabulary": hasattr(table, "is_vocabulary") and table.is_vocabulary,
+                    }
+                    schema_info["tables"].append(table_info)
+
+            return json.dumps(schema_info, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/vocabularies",
+        name="Catalog Vocabularies",
+        description="All vocabulary tables and their terms",
+        mime_type="application/json",
+    )
+    def get_catalog_vocabularies() -> str:
+        """Return all vocabulary tables and terms as JSON."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            vocabularies = {}
+            for vocab in ml.list_vocabularies():
+                terms = ml.list_vocabulary(vocab.name)
+                vocabularies[vocab.name] = [
+                    {"name": t.name, "description": t.description}
+                    for t in terms
+                ]
+            return json.dumps(vocabularies, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/datasets",
+        name="Catalog Datasets",
+        description="All datasets in the current catalog",
+        mime_type="application/json",
+    )
+    def get_catalog_datasets() -> str:
+        """Return all datasets as JSON."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            datasets = []
+            for ds in ml.find_datasets():
+                datasets.append({
+                    "rid": ds.dataset_rid,
+                    "description": ds.description,
+                    "types": ds.dataset_types,
+                    "version": str(ds.current_version),
+                })
+            return json.dumps(datasets, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/workflows",
+        name="Catalog Workflows",
+        description="All registered workflows in the catalog",
+        mime_type="application/json",
+    )
+    def get_catalog_workflows() -> str:
+        """Return all workflows as JSON."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            workflows = []
+            for wf in ml.list_workflows():
+                workflows.append({
+                    "rid": wf.get("RID"),
+                    "name": wf.get("Name"),
+                    "url": wf.get("URL"),
+                    "workflow_type": wf.get("Workflow_Type"),
+                    "description": wf.get("Description"),
+                })
+            return json.dumps(workflows, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/features",
+        name="Catalog Features",
+        description="All feature names defined in the catalog",
+        mime_type="application/json",
+    )
+    def get_catalog_features() -> str:
+        """Return all feature names as JSON."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            terms = ml.list_vocabulary("Feature_Name")
+            features = [
+                {"name": t.name, "description": t.description}
+                for t in terms
+            ]
+            return json.dumps(features, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    # =========================================================================
+    # Template Resources - Parameterized by dataset/table
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://dataset/{dataset_rid}",
+        name="Dataset Details",
+        description="Detailed information about a specific dataset",
+        mime_type="application/json",
+    )
+    def get_dataset_details(dataset_rid: str) -> str:
+        """Return detailed information about a dataset."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            ds = ml.lookup_dataset(dataset_rid)
+            members = ds.list_dataset_members()
+            history = ds.dataset_history()
+
+            return json.dumps({
+                "rid": ds.dataset_rid,
+                "description": ds.description,
+                "types": ds.dataset_types,
+                "current_version": str(ds.current_version),
+                "member_counts": {k: len(v) for k, v in members.items()},
+                "version_history": [
+                    {
+                        "version": str(h.dataset_version),
+                        "snapshot": h.snapshot,
+                        "minid": h.minid,
+                    }
+                    for h in history
+                ],
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://table/{table_name}/features",
+        name="Table Features",
+        description="Features defined for a specific table",
+        mime_type="application/json",
+    )
+    def get_table_features(table_name: str) -> str:
+        """Return features for a specific table."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            features = list(ml.find_features(table_name))
+            return json.dumps([
+                {
+                    "name": f.feature_name,
+                    "table": f.target_table,
+                    "value_type": f.value_type,
+                    "terms": f.terms,
+                }
+                for f in features
+            ], indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://vocabulary/{vocab_name}",
+        name="Vocabulary Terms",
+        description="Terms in a specific vocabulary table",
+        mime_type="application/json",
+    )
+    def get_vocabulary_terms(vocab_name: str) -> str:
+        """Return terms for a specific vocabulary."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            terms = ml.list_vocabulary(vocab_name)
+            return json.dumps([
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "synonyms": getattr(t, "synonyms", []),
+                }
+                for t in terms
+            ], indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})

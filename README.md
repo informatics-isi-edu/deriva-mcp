@@ -195,6 +195,59 @@ Using MCP tools, the equivalent workflow is:
 **Important**: You must call `upload_execution_outputs()` after completing your work
 to upload any registered assets to the catalog. This is not automatic.
 
+## Available Resources
+
+MCP resources provide read-only access to catalog information and configuration templates.
+
+### Static Resources - Configuration Templates
+
+These resources provide code templates for configuring DerivaML with hydra-zen:
+
+| Resource URI | Description |
+|--------------|-------------|
+| `deriva-ml://config/deriva-ml-template` | Hydra-zen configuration template for DerivaML connection |
+| `deriva-ml://config/dataset-spec-template` | Configuration template for dataset specifications |
+| `deriva-ml://config/execution-template` | Configuration template for ML executions |
+| `deriva-ml://config/model-template` | Configuration template for ML models with zen_partial |
+
+### Dynamic Resources - Catalog Information
+
+These resources return current catalog state (requires active connection):
+
+| Resource URI | Description |
+|--------------|-------------|
+| `deriva-ml://catalog/schema` | Current catalog schema structure in JSON |
+| `deriva-ml://catalog/vocabularies` | All vocabulary tables and their terms |
+| `deriva-ml://catalog/datasets` | All datasets in the current catalog |
+| `deriva-ml://catalog/workflows` | All registered workflows |
+| `deriva-ml://catalog/features` | All feature names defined in the catalog |
+
+### Template Resources - Parameterized
+
+These resources accept parameters to return specific information:
+
+| Resource URI | Description |
+|--------------|-------------|
+| `deriva-ml://dataset/{dataset_rid}` | Detailed information about a specific dataset |
+| `deriva-ml://table/{table_name}/features` | Features defined for a specific table |
+| `deriva-ml://vocabulary/{vocab_name}` | Terms in a specific vocabulary table |
+
+### Using Resources
+
+Resources are accessed differently than tools - they provide static or semi-static data that can be read without side effects:
+
+```
+User: Show me the DerivaML configuration template
+
+Claude: [Reads deriva-ml://config/deriva-ml-template resource]
+Here's a hydra-zen configuration template for DerivaML...
+
+User: What datasets are in the catalog?
+
+Claude: [Reads deriva-ml://catalog/datasets resource]
+Found the following datasets in your catalog...
+```
+
 ## Usage Examples
 
 Once configured, you can interact with DerivaML through your LLM application:
@@ -226,6 +279,145 @@ DerivaML.globus_login('example.org')
 ```
 
 Or use the Deriva Auth Agent for browser-based authentication.
+
+## Hydra-zen Configuration
+
+DerivaML integrates with [hydra-zen](https://mit-ll-responsible-ai.github.io/hydra-zen/) for configuration management, enabling reproducible ML workflows with structured configuration.
+
+### Basic Configuration
+
+```python
+from hydra_zen import builds, instantiate
+from deriva_ml import DerivaML
+from deriva_ml.core.config import DerivaMLConfig
+
+# Create a structured config using hydra-zen
+DerivaMLConf = builds(DerivaMLConfig, populate_full_signature=True)
+
+# Configure for your environment
+conf = DerivaMLConf(
+    hostname='deriva.example.org',
+    catalog_id='42',
+    domain_schema='my_domain',
+)
+
+# Instantiate to get a DerivaMLConfig object, then create DerivaML
+config = instantiate(conf)
+ml = DerivaML.instantiate(config)
+```
+
+### Working Directory Configuration
+
+DerivaML automatically configures Hydra's output directory based on your `working_dir` setting:
+
+```python
+conf = DerivaMLConf(
+    hostname='deriva.example.org',
+    working_dir='/shared/ml_workspace',  # Custom working directory
+)
+```
+
+Hydra outputs will be organized under: `{working_dir}/{username}/deriva-ml/hydra/{timestamp}/`
+
+### Configuration Composition
+
+Create environment-specific configurations using hydra-zen's store:
+
+```python
+from hydra_zen import store
+
+# Development configuration
+store(DerivaMLConf(
+    hostname='dev.example.org',
+    catalog_id='1',
+), name='dev')
+
+# Production configuration
+store(DerivaMLConf(
+    hostname='prod.example.org',
+    catalog_id='100',
+), name='prod')
+```
+
+### Dataset Specification Configuration
+
+Use `DatasetSpecConfig` for cleaner dataset specifications:
+
+```python
+from deriva_ml.dataset import DatasetSpecConfig
+
+# Create dataset specs (hydra-zen compatible)
+training_data = DatasetSpecConfig(
+    rid="1ABC",
+    version="1.0.0",
+    materialize=True,       # Download asset files
+    description="Training images"
+)
+
+metadata_only = DatasetSpecConfig(
+    rid="2DEF",
+    version="2.0.0",
+    materialize=False,      # Only download table data
+)
+
+# Use in hydra-zen store
+from hydra_zen import store
+datasets_store = store(group="datasets")
+datasets_store([training_data], name="training")
+datasets_store([metadata_only], name="metadata_only")
+```
+
+### Asset Configuration
+
+Use `AssetRIDConfig` for input assets (model weights, config files):
+
+```python
+from deriva_ml.execution import AssetRIDConfig
+
+# Define input assets
+model_weights = AssetRIDConfig(rid="WXYZ", description="Pretrained model")
+config_file = AssetRIDConfig(rid="ABCD", description="Hyperparameters")
+
+# Store asset collections
+assets_store = store(group="assets")
+assets_store([model_weights, config_file], name="default_assets")
+```
+
+### Execution Configuration
+
+Configure ML executions with `ExecutionConfiguration`:
+
+```python
+from hydra_zen import builds, instantiate
+from deriva_ml.execution import ExecutionConfiguration
+from deriva_ml.dataset import DatasetSpecConfig
+
+# Build execution config
+ExecConf = builds(ExecutionConfiguration, populate_full_signature=True)
+
+# Configure execution with datasets and assets
+conf = ExecConf(
+    description="Training run",
+    datasets=[
+        DatasetSpecConfig(rid="1ABC", version="1.0.0", materialize=True),
+    ],
+    assets=["WXYZ", "ABCD"],  # Asset RIDs
+)
+
+exec_config = instantiate(conf)
+```
+
+### Configuration Summary
+
+| Class | Module | Purpose |
+|-------|--------|---------|
+| `DerivaMLConfig` | `deriva_ml.core.config` | Main DerivaML connection config |
+| `DatasetSpecConfig` | `deriva_ml.dataset` | Dataset specification for executions |
+| `AssetRIDConfig` | `deriva_ml.execution` | Input asset specification |
+| `ExecutionConfiguration` | `deriva_ml.execution` | Full execution configuration |
+| `Workflow` | `deriva_ml.execution` | Workflow definition |
+
+See the [DerivaML Hydra-zen Guide](https://github.com/informatics-isi-edu/deriva-ml/blob/main/docs/user-guide/hydra-zen-configuration.md) for complete documentation.
 
 ## Development
 
