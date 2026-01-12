@@ -390,8 +390,9 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             ml = conn_manager.get_active_or_raise()
             parent = ml.lookup_dataset(parent_rid)
-            child = ml.lookup_dataset(child_rid)
-            parent.add_dataset_child(child)
+            # Add child dataset as a member - Dataset is a dataset element type
+            # so adding a dataset RID creates a parent-child relationship
+            parent.add_dataset_members(members=[child_rid])
             return json.dumps({
                 "status": "added",
                 "parent_rid": parent_rid,

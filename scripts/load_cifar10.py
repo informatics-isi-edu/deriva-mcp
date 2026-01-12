@@ -419,24 +419,27 @@ async def setup_domain_model(client: MCPClient) -> dict[str, Any]:
     existing_tables = {t["name"] for t in tables}
 
     # Create Image asset table if needed
+    # Note: We don't add Width/Height columns because all CIFAR-10 images are 32x32.
+    # Adding columns to an asset table creates a directory structure for uploads
+    # that requires those column values, which complicates the upload process.
     if "Image" not in existing_tables:
         logger.info("Creating Image asset table...")
         result = await client.create_asset_table(
             asset_name="Image",
-            columns=[
-                {"name": "Width", "type": "int4", "comment": "Image width in pixels"},
-                {"name": "Height", "type": "int4", "comment": "Image height in pixels"},
-            ],
+            columns=[],  # No extra columns - just standard asset columns
             comment="CIFAR-10 32x32 RGB images",
         )
         results["asset_table"] = result
-
-        # Enable Image as dataset element type
-        logger.info("Enabling Image as dataset element type...")
-        await client.add_dataset_element_type("Image")
     else:
         logger.info("Image asset table already exists")
         results["asset_table"] = {"status": "exists", "table_name": "Image"}
+
+    # Always ensure Image is registered as a dataset element type
+    # (This is idempotent - safe to call even if already registered)
+    logger.info("Enabling Image as dataset element type...")
+    element_types = await client.call_tool("list_dataset_element_types")
+    if "Image" not in element_types:
+        await client.add_dataset_element_type("Image")
 
     # Create Image_Classification feature
     logger.info("Creating Image_Classification feature...")
@@ -520,15 +523,15 @@ async def create_dataset_hierarchy(client: MCPClient) -> dict[str, str]:
     datasets["complete"] = result["rid"]
     logger.info(f"  Created Complete dataset: {result['rid']}")
 
-    # Create Segmented dataset (Split type - contains nested Training/Testing)
+    # Create Split dataset (contains nested Training/Testing)
     result = await client.create_dataset(
-        description="CIFAR-10 dataset segmented into training and testing splits",
+        description="CIFAR-10 dataset split into training and testing subsets",
         dataset_types=["Split"],
     )
     if result.get("status") == "error":
-        raise RuntimeError(f"Failed to create Segmented dataset: {result.get('message')}")
-    datasets["segmented"] = result["rid"]
-    logger.info(f"  Created Segmented dataset: {result['rid']}")
+        raise RuntimeError(f"Failed to create Split dataset: {result.get('message')}")
+    datasets["split"] = result["rid"]
+    logger.info(f"  Created Split dataset: {result['rid']}")
 
     # Create Training dataset
     result = await client.create_dataset(
@@ -550,13 +553,17 @@ async def create_dataset_hierarchy(client: MCPClient) -> dict[str, str]:
     datasets["testing"] = result["rid"]
     logger.info(f"  Created Testing dataset: {result['rid']}")
 
-    # Add Training and Testing as children of Segmented
-    # Note: This adds them as members, which establishes the parent-child relationship
-    await client.add_dataset_members(
-        dataset_rid=datasets["segmented"],
-        member_rids=[datasets["training"], datasets["testing"]],
+    # Add Training and Testing as children of Split
+    # Note: Use add_dataset_child for nested dataset relationships, not add_dataset_members
+    await client.call_tool(
+        "add_dataset_child",
+        {"parent_rid": datasets["split"], "child_rid": datasets["training"]},
     )
-    logger.info("  Linked Training and Testing to Segmented dataset")
+    await client.call_tool(
+        "add_dataset_child",
+        {"parent_rid": datasets["split"], "child_rid": datasets["testing"]},
+    )
+    logger.info("  Linked Training and Testing to Split dataset")
 
     return datasets
 
@@ -566,12 +573,20 @@ async def load_images(
     data_dir: Path,
     datasets: dict[str, str],
     batch_size: int = 500,
+    max_images: int | None = None,
 ) -> dict[str, Any]:
     """Load images into the catalog using execution system.
 
     Uses asset_file_path to register each image file for upload with the
     "Image" asset type, then calls upload_execution_outputs to upload all
     registered assets to the catalog.
+
+    Args:
+        client: MCP client instance
+        data_dir: Path to extracted CIFAR-10 data
+        datasets: Dictionary mapping dataset names to RIDs
+        batch_size: Number of images per batch (for progress logging)
+        max_images: Maximum number of images to upload (None = all images)
 
     Returns:
         Summary of loaded images
@@ -601,11 +616,17 @@ async def load_images(
         all_images = []
 
         # Process training images using asset_file_path
-        logger.info("Registering training images for upload...")
+        limit_msg = f" (max: {max_images})" if max_images else ""
+        logger.info(f"Registering training images for upload...{limit_msg}")
         count = 0
         for img_path, class_name, image_id in iter_images(data_dir, "train", labels):
             if class_name is None:
                 continue
+
+            # Check if we've reached the limit
+            if max_images and count >= max_images:
+                logger.info(f"  Reached limit of {max_images} images")
+                break
 
             # Create unique filename with class prefix for tracking
             new_filename = f"{class_name}_{image_id}.png"
@@ -725,6 +746,17 @@ async def main_async(args: argparse.Namespace) -> int:
         await setup_domain_model(client)
         logger.info("Domain model setup complete")
 
+        # Apply catalog annotations for Chaise web interface
+        logger.info("Applying catalog annotations...")
+        project_name = args.create_catalog if args.create_catalog else domain_schema
+        await client.call_tool(
+            "apply_catalog_annotations",
+            {
+                "navbar_brand_text": f"CIFAR-10 ({project_name})",
+                "head_title": "CIFAR-10 ML Catalog",
+            },
+        )
+
         # Setup dataset types and create dataset hierarchy
         await setup_dataset_types(client)
         datasets = await create_dataset_hierarchy(client)
@@ -738,7 +770,9 @@ async def main_async(args: argparse.Namespace) -> int:
                 logger.info(f"Downloaded CIFAR-10 to: {data_dir}")
 
                 # Load images
-                load_result = await load_images(client, data_dir, datasets, args.batch_size)
+                load_result = await load_images(
+                    client, data_dir, datasets, args.batch_size, max_images=args.test
+                )
                 logger.info(f"Loading complete: {load_result}")
         else:
             logger.info("Dry run mode - skipping image download and upload")
@@ -768,15 +802,15 @@ async def main_async(args: argparse.Namespace) -> int:
         if args.show_urls and dataset_urls:
             print(f"    - Complete:   {datasets['complete']}")
             print(f"      URL: {dataset_urls.get('complete', 'N/A')}")
-            print(f"    - Segmented:  {datasets['segmented']}")
-            print(f"      URL: {dataset_urls.get('segmented', 'N/A')}")
+            print(f"    - Split:      {datasets['split']}")
+            print(f"      URL: {dataset_urls.get('split', 'N/A')}")
             print(f"    - Training:   {datasets['training']}")
             print(f"      URL: {dataset_urls.get('training', 'N/A')}")
             print(f"    - Testing:    {datasets['testing']}")
             print(f"      URL: {dataset_urls.get('testing', 'N/A')}")
         else:
             print(f"    - Complete:   {datasets['complete']}")
-            print(f"    - Segmented:  {datasets['segmented']}")
+            print(f"    - Split:      {datasets['split']}")
             print(f"    - Training:   {datasets['training']}")
             print(f"    - Testing:    {datasets['testing']}")
         if load_result:
@@ -805,6 +839,12 @@ Examples:
 
     # Dry run (create schema/datasets only)
     python load_cifar10.py --hostname localhost --create-catalog test --dry-run
+
+    # Test mode (upload only 10 images)
+    python load_cifar10.py --hostname localhost --create-catalog test --test
+
+    # Test mode with custom limit (upload 100 images)
+    python load_cifar10.py --hostname localhost --create-catalog test --test 100
         """,
     )
     parser.add_argument(
@@ -839,6 +879,15 @@ Examples:
         "--dry-run",
         action="store_true",
         help="Set up schema and datasets without downloading/uploading images",
+    )
+    parser.add_argument(
+        "--test",
+        nargs="?",
+        type=int,
+        const=10,
+        default=None,
+        metavar="N",
+        help="Test mode: upload only N images (default: 10 if flag used without value)",
     )
     parser.add_argument(
         "--show-urls",

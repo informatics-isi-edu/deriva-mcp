@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "uv",
+      "args": ["run", "deriva-ml-mcp"],
+      "cwd": "/Users/carl/Repos/Projects/deriva-ml-mcp"
+    }
+  }
+}
