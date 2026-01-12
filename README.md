@@ -12,32 +12,102 @@ This MCP server provides an interface to DerivaML, enabling AI assistants like C
 - Define and execute ML workflows
 - Create and manage features for ML experiments
 
-## Installation
+For full ML workflow management, this server is designed to work alongside the [GitHub MCP Server](https://github.com/github/github-mcp-server) to enable:
+
+- Storing and versioning hydra-zen configurations in GitHub repositories
+- Managing workflow code and model implementations
+- Collaborative development of ML experiments
+
+## Prerequisites
+
+### Deriva Authentication
+
+DerivaML uses Globus for authentication. Before using the MCP server, you must authenticate with your Deriva server:
 
 ```bash
-# Using uv (recommended)
-uv pip install deriva-ml-mcp
+# Install deriva-ml if not already installed
+pip install deriva-ml
 
-# Or using pip
+# Authenticate with your Deriva server
+python -c "from deriva_ml import DerivaML; DerivaML.globus_login('your-server.org')"
+```
+
+This opens a browser window for Globus authentication. Credentials are cached locally and persist across sessions.
+
+Alternatively, use the **Deriva Auth Agent** for browser-based authentication:
+1. Install the Deriva Auth Agent from [deriva-py](https://github.com/informatics-isi-edu/deriva-py)
+2. Run `deriva-globus-auth-utils login --host your-server.org`
+
+### GitHub Authentication (for configuration management)
+
+Create a GitHub Personal Access Token (PAT) for the GitHub MCP Server:
+
+1. Go to [GitHub Settings > Personal Access Tokens](https://github.com/settings/personal-access-tokens/new)
+2. Create a fine-grained token with these permissions:
+   - **Repository access**: Select repositories containing your ML configurations
+   - **Permissions**:
+     - Contents: Read and write (for pushing configs)
+     - Pull requests: Read and write (optional, for PR workflows)
+     - Issues: Read (optional, for tracking)
+3. Copy the token securely - you'll need it for configuration
+
+## Installation
+
+### Using uv (recommended)
+
+```bash
+uv pip install deriva-ml-mcp
+```
+
+### Using pip
+
+```bash
 pip install deriva-ml-mcp
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/your-org/deriva-ml-mcp.git
+git clone https://github.com/informatics-isi-edu/deriva-ml-mcp.git
 cd deriva-ml-mcp
 uv sync
 ```
 
 ## Configuration
 
-### Claude Desktop
+### Claude Desktop - Full Setup with GitHub Integration
 
-Add the server to your Claude Desktop configuration file:
+For the complete ML workflow experience, configure both DerivaML and GitHub MCP servers together.
 
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+**Configuration file locations:**
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+
+#### Option 1: GitHub Remote Server (Recommended)
+
+Uses GitHub's hosted MCP server - simplest setup:
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "deriva-ml-mcp"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/github-mcp-server"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_your_token_here"
+      }
+    }
+  }
+}
+```
+
+#### Option 2: GitHub Local Server with Docker
+
+For more control or enterprise environments:
 
 ```json
 {
@@ -50,12 +120,25 @@ Add the server to your Claude Desktop configuration file:
         "run",
         "deriva-ml-mcp"
       ]
+    },
+    "github": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_your_token_here"
+      }
     }
   }
 }
 ```
 
-Or if installed globally:
+#### Option 3: DerivaML Only (No GitHub)
+
+If you don't need GitHub integration:
 
 ```json
 {
@@ -69,16 +152,100 @@ Or if installed globally:
 
 ### Claude Code
 
-Add to your `.claude/settings.json`:
+Add to your project's `.claude/settings.json` or global settings:
 
 ```json
 {
   "mcpServers": {
     "deriva-ml": {
       "command": "deriva-ml-mcp"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@anthropic-ai/github-mcp-server"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_your_token_here"
+      }
     }
   }
 }
+```
+
+### VS Code with Continue or Cline
+
+Add to your MCP configuration (typically `.vscode/mcp.json`):
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "deriva-ml": {
+        "command": "deriva-ml-mcp"
+      },
+      "github": {
+        "command": "docker",
+        "args": [
+          "run", "-i", "--rm",
+          "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+          "ghcr.io/github/github-mcp-server"
+        ],
+        "env": {
+          "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_your_token_here"
+        }
+      }
+    }
+  }
+}
+```
+
+### Environment Variables
+
+For security, store tokens in environment variables instead of config files:
+
+```bash
+# Add to ~/.bashrc, ~/.zshrc, or equivalent
+export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_your_token_here"
+```
+
+Then reference in config:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+## Verifying Your Setup
+
+After configuration, verify both servers are working:
+
+```
+User: What MCP servers are available?
+
+Claude: I have access to two MCP servers:
+1. deriva-ml - For managing ML workflows in Deriva catalogs
+2. github - For managing GitHub repositories and configurations
+
+User: Connect to the deriva catalog at example.org with ID 42
+
+Claude: [Uses connect_catalog tool]
+Connected to example.org, catalog 42. The domain schema is 'my_project'.
+
+User: List the hydra-zen configs in the my-ml-project repo
+
+Claude: [Uses GitHub get_file_contents tool]
+Found configuration files in configs/:
+- deriva.py - DerivaML connection settings
+- datasets.py - Dataset specifications
+- model.py - Model hyperparameters
 ```
 
 ## Available Tools
@@ -250,7 +417,7 @@ Found the following datasets in your catalog...
 
 ## Usage Examples
 
-Once configured, you can interact with DerivaML through your LLM application:
+### Basic Catalog Operations
 
 ```
 User: Connect to the deriva catalog at example.org with ID 123
@@ -269,16 +436,25 @@ Found 5 datasets:
 ...
 ```
 
-## Authentication
+### Configuration Workflow with GitHub
 
-The server uses Deriva's credential system. Before using the MCP server, ensure you're authenticated:
-
-```python
-from deriva_ml import DerivaML
-DerivaML.globus_login('example.org')
 ```
+User: Create a new hydra-zen config for training on the cell-images dataset
 
-Or use the Deriva Auth Agent for browser-based authentication.
+Claude: I'll create a configuration file for you.
+[Reads deriva-ml://config/model-template resource for template]
+[Uses GitHub create_or_update_file to save configs/cell_training.py]
+
+Created configs/cell_training.py with:
+- DerivaML connection to example.org
+- Dataset spec for cell-images v2.0.0
+- Model config with learning_rate=1e-3, epochs=50
+
+User: Commit and push that config
+
+Claude: [Uses GitHub create_or_update_file with commit message]
+Committed and pushed to main branch.
+```
 
 ## Hydra-zen Configuration
 
@@ -419,6 +595,44 @@ exec_config = instantiate(conf)
 
 See the [DerivaML Hydra-zen Guide](https://github.com/informatics-isi-edu/deriva-ml/blob/main/docs/user-guide/hydra-zen-configuration.md) for complete documentation.
 
+## Troubleshooting
+
+### Deriva Authentication Issues
+
+**Error: "No credentials found"**
+```bash
+# Re-authenticate with Deriva
+python -c "from deriva_ml import DerivaML; DerivaML.globus_login('your-server.org')"
+```
+
+**Error: "Token expired"**
+```bash
+# Force re-authentication
+python -c "from deriva_ml import DerivaML; DerivaML.globus_login('your-server.org', force=True)"
+```
+
+### GitHub MCP Issues
+
+**Error: "Bad credentials"**
+- Verify your PAT hasn't expired
+- Check the token has required permissions (Contents: Read/Write)
+- Ensure the token is correctly set in your config
+
+**Docker not found**
+- Install Docker Desktop or use the npx method instead
+- On Linux, ensure your user is in the docker group
+
+### MCP Server Connection Issues
+
+**Server not responding**
+1. Check the server is installed: `which deriva-ml-mcp`
+2. Test manually: `deriva-ml-mcp` (should start without errors)
+3. Check Claude Desktop logs for errors
+
+**Multiple server conflicts**
+- Ensure each server has a unique name in the config
+- Restart Claude Desktop after config changes
+
 ## Development
 
 ### Running Tests
@@ -439,6 +653,7 @@ uv run ruff format src/
 - Python 3.10+
 - MCP SDK 1.2.0+
 - DerivaML 0.1.0+
+- Docker (optional, for GitHub MCP local server)
 
 ## License
 
@@ -448,4 +663,5 @@ Apache 2.0
 
 - [DerivaML](https://github.com/informatics-isi-edu/deriva-ml) - Core library for ML workflows on Deriva
 - [Deriva](https://github.com/informatics-isi-edu/deriva-py) - Python SDK for Deriva scientific data management
+- [GitHub MCP Server](https://github.com/github/github-mcp-server) - Official GitHub MCP server
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) - Official Python SDK for Model Context Protocol
