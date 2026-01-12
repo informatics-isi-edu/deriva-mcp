@@ -253,3 +253,69 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "status": "error",
                 "message": str(e),
             })
+
+    @mcp.tool()
+    async def apply_catalog_annotations(
+        navbar_brand_text: str = "ML Data Browser",
+        head_title: str = "Catalog ML",
+    ) -> str:
+        """Apply catalog-level annotations to initialize the Chaise web interface.
+
+        Chaise is Deriva's web-based data browser. This method sets up annotations that
+        control how Chaise displays and organizes the catalog, including the navigation
+        bar and display settings.
+
+        **Navigation Bar Structure**:
+        Creates a navigation bar with organized dropdown menus:
+        - **User Info**: Users, Groups, and RID Lease tables
+        - **Deriva-ML**: Core ML tables (Workflow, Execution, Dataset, Dataset_Version, etc.)
+        - **WWW**: Web content tables (Page, File)
+        - **{Domain Schema}**: All domain-specific tables (excludes vocabularies/associations)
+        - **Vocabulary**: All controlled vocabulary tables from ML and domain schemas
+        - **Assets**: All asset tables from ML and domain schemas
+        - **Catalog Registry**: Link to ermrest registry
+        - **Documentation**: Links to ML docs and instructions
+
+        **Display Settings**:
+        - Underscores in names displayed as spaces
+        - System columns (RID) shown in views
+        - Default landing page set to Dataset table
+        - Faceted search and record deletion enabled
+
+        **Bulk Upload**:
+        Configures drag-and-drop file upload for asset tables.
+
+        **When to call**: After creating the domain schema and all tables. The menus are
+        dynamically built from the current schema structure.
+
+        Args:
+            navbar_brand_text: Text in the navigation bar brand area (default: "ML Data Browser").
+            head_title: Browser tab title (default: "Catalog ML").
+
+        Returns:
+            JSON with status and applied settings.
+
+        Example workflow:
+            1. create_catalog("localhost", "my_project")
+            2. create_vocabulary("Species", "Types of species")
+            3. create_asset("Image", ...)
+            4. apply_catalog_annotations("My ML Project", "ML Catalog")
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            ml.apply_catalog_annotations(
+                navbar_brand_text=navbar_brand_text,
+                head_title=head_title,
+            )
+            return json.dumps({
+                "status": "success",
+                "navbar_brand_text": navbar_brand_text,
+                "head_title": head_title,
+                "message": "Catalog annotations applied. Navigation bar and display settings configured.",
+            })
+        except Exception as e:
+            logger.error(f"Failed to apply catalog annotations: {e}")
+            return json.dumps({
+                "status": "error",
+                "message": str(e),
+            })
