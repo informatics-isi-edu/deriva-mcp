@@ -1,4 +1,69 @@
-"""Execution management tools for DerivaML MCP server."""
+"""Execution management tools for DerivaML MCP server.
+
+Executions track ML workflow runs with full provenance. Key concepts:
+
+**Execution Lifecycle (MCP Tools)**:
+1. **create_execution()**: Create execution with workflow type and input datasets/assets
+2. **start_execution()**: Begin timing the workflow run
+3. **[Do ML work]**: Run your training, inference, or processing pipeline
+4. **asset_file_path()**: Register output files for upload (repeat as needed)
+5. **stop_execution()**: End timing and mark complete
+6. **upload_execution_outputs()**: Upload all registered files to catalog (REQUIRED)
+
+**Python Context Manager** (for direct Python usage):
+```python
+from deriva_ml import DerivaML
+from deriva_ml.execution import ExecutionConfiguration
+
+ml = DerivaML(hostname, catalog_id)
+config = ExecutionConfiguration(
+    workflow=ml.create_workflow("Training", "Training"),
+    datasets=[DatasetSpec(rid="1-ABC")],
+)
+
+# Context manager handles start/stop timing automatically
+with ml.create_execution(config) as exe:
+    # Download input data
+    bag = exe.download_dataset_bag(DatasetSpec(rid="1-ABC"))
+
+    # Do ML work...
+    model = train_model(bag)
+
+    # Register outputs for upload
+    model_path = exe.asset_file_path("Model", "model.pt")
+    torch.save(model, model_path)
+
+# After context exits, call upload separately
+exe.upload_execution_outputs()
+```
+
+**Provenance Tracking**:
+Executions automatically track:
+- **Input datasets**: Which dataset versions were used (reproducibility)
+- **Input assets**: Individual files consumed by the workflow
+- **Output assets**: Files produced, linked to this execution
+- **Output datasets**: New datasets created by this workflow
+- **Timing**: Start/stop times and duration
+- **Status**: Progress updates and error messages
+
+**Workflows**:
+Each execution references a Workflow (from Workflow_Type vocabulary) that
+categorizes what type of work was done: Training, Inference, Preprocessing,
+Evaluation, etc.
+
+**Asset File Paths**:
+Use asset_file_path() to register files for upload. This:
+- Stages files in a local working directory
+- Associates files with asset tables (e.g., "Model", "Image")
+- Applies asset type labels from vocabulary
+- Tracks the execution that produced them
+
+Files are NOT uploaded until upload_execution_outputs() is called.
+
+**Working Directory**:
+Each execution has a temporary working directory for staging files.
+Use get_execution_working_dir() to get the path for writing outputs.
+"""
 
 from __future__ import annotations
 
@@ -32,26 +97,32 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         dataset_rids: list[str] | None = None,
         asset_rids: list[str] | None = None,
     ) -> str:
-        """Create a new execution to track an ML workflow run.
+        """Create a new execution to track an ML workflow run with provenance.
 
-        WORKFLOW: After creating, follow this sequence:
-        1. start_execution() - Begin timing
-        2. asset_file_path() - Register output files (repeat as needed)
-        3. stop_execution() - End timing
-        4. upload_execution_outputs() - REQUIRED: Upload files to catalog
+        This is the first step in the execution lifecycle. Specify input datasets
+        and assets to establish provenance - these will be recorded as inputs to
+        this workflow run.
+
+        LIFECYCLE (follow in order):
+        1. create_execution() - You are here
+        2. start_execution() - Begin timing
+        3. [Run your ML workflow]
+        4. asset_file_path() - Register each output file
+        5. stop_execution() - End timing
+        6. upload_execution_outputs() - Upload files (REQUIRED)
 
         Args:
-            workflow_name: Name for this workflow (e.g., "ResNet Training Run 1").
-            workflow_type: Type from Workflow_Type vocabulary (e.g., "Training").
-            description: What this execution does.
-            dataset_rids: Input dataset RIDs to track as provenance.
-            asset_rids: Input asset RIDs to track as provenance.
+            workflow_name: Descriptive name (e.g., "ResNet50 Training Run 3").
+            workflow_type: Type from Workflow_Type vocabulary (e.g., "Training", "Inference").
+            description: What this execution does and why.
+            dataset_rids: Input dataset RIDs for provenance tracking.
+            asset_rids: Input asset RIDs for provenance tracking.
 
         Returns:
             JSON with execution_rid, workflow_rid, dataset_count, asset_count.
 
         Example:
-            create_execution("CIFAR Training", "Training", "Train on CIFAR-10", ["1-ABC"])
+            create_execution("CIFAR Training", "Training", "Train ResNet on CIFAR-10", ["1-ABC"])
         """
         try:
             from deriva_ml.execution.execution_configuration import ExecutionConfiguration
@@ -95,7 +166,11 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def start_execution() -> str:
-        """Start timing the active execution. Call after create_execution()."""
+        """Start timing the active execution. Call after create_execution().
+
+        Records the start timestamp for duration tracking. The execution
+        status changes to "running".
+        """
         try:
             key = _get_execution_key()
             if key not in _active_executions:
@@ -117,7 +192,11 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def stop_execution() -> str:
-        """Stop timing and mark execution complete. Call before upload_execution_outputs()."""
+        """Stop timing and mark execution complete. Call before upload_execution_outputs().
+
+        Records the stop timestamp and calculates duration. Call this after
+        your ML workflow completes but BEFORE uploading outputs.
+        """
         try:
             key = _get_execution_key()
             if key not in _active_executions:
@@ -248,22 +327,34 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         copy_file: bool = False,
         rename_file: str | None = None,
     ) -> str:
-        """Register a file for upload as an execution output.
+        """Register a file for upload as an execution output asset.
 
-        Files are staged locally and uploaded when upload_execution_outputs() is called.
+        This is the key method for uploading files produced by your workflow.
+        Files are staged in the execution's working directory and uploaded
+        when upload_execution_outputs() is called.
+
+        The file will be:
+        - Associated with the specified asset table (e.g., "Model", "Image")
+        - Tagged with asset types from the Asset_Type vocabulary
+        - Linked to this execution for provenance tracking
 
         Args:
-            asset_name: Asset table name (e.g., "Image", "Model", "Execution_Metadata").
-            file_name: Path to existing file OR new filename to create.
-            asset_types: Asset type terms (defaults to asset_name).
-            copy_file: True to copy file, False to symlink (default).
-            rename_file: New filename if renaming.
+            asset_name: Target asset table (e.g., "Image", "Model", "Execution_Metadata").
+            file_name: Path to existing file to stage, OR filename for new file to create.
+            asset_types: Asset_Type vocabulary terms (defaults to [asset_name]).
+            copy_file: True to copy file, False to symlink (default, saves disk space).
+            rename_file: Optionally rename the file during staging.
 
         Returns:
-            JSON with file_path to use and reminder to call upload_execution_outputs().
+            JSON with file_path (use this path for writing), file_name, asset_types.
 
-        Example:
-            asset_file_path("Model", "/tmp/model.pt") -> registers model for upload
+        Examples:
+            # Register existing model file
+            asset_file_path("Model", "/tmp/trained_model.pt")
+
+            # Get path for new file to write
+            asset_file_path("Execution_Metadata", "metrics.json")
+            # Then write to the returned file_path
         """
         try:
             key = _get_execution_key()
@@ -297,15 +388,20 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def upload_execution_outputs(clean_folder: bool = True) -> str:
-        """Upload all registered assets to the catalog. MUST be called to complete execution.
+        """Upload all registered assets to the catalog. REQUIRED to complete execution.
 
-        This uploads files registered with asset_file_path() and records provenance.
+        This is the final step in the execution lifecycle. Uploads all files
+        registered with asset_file_path() to the catalog's object store and
+        creates asset records with proper provenance linking.
+
+        IMPORTANT: Outputs are NOT persisted until this is called. Always call
+        this method, even if the workflow failed (to record partial results).
 
         Args:
-            clean_folder: Remove local staging folders after upload (default: True).
+            clean_folder: Remove local staging directory after upload (default: True).
 
         Returns:
-            JSON with assets_uploaded counts by type.
+            JSON with assets_uploaded counts by asset table type.
 
         Example:
             upload_execution_outputs() -> {"assets_uploaded": {"Model": 1, "Image": 10}}
@@ -370,9 +466,11 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         description: str = "",
         dataset_types: list[str] | None = None,
     ) -> str:
-        """Create a dataset that is output from the active execution.
+        """Create a new dataset as output from this execution.
 
-        The dataset will be linked to this execution for provenance.
+        Creates a dataset that is linked to this execution for provenance.
+        Use this when your workflow produces a new curated collection of data
+        (e.g., augmented training data, filtered results).
 
         Args:
             description: What this dataset contains.
@@ -412,15 +510,18 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         version: str | None = None,
         materialize: bool = True,
     ) -> str:
-        """Download a dataset as input for the active execution.
+        """Download a dataset bag for use in this execution.
+
+        Downloads a dataset as a BDBag to the execution's working directory.
+        The download is recorded as an input for provenance tracking.
 
         Args:
             dataset_rid: RID of the dataset to download.
-            version: Specific version (default: current).
-            materialize: Fetch all referenced files (default: True).
+            version: Specific version (default: current version).
+            materialize: Fetch all referenced asset files (default: True).
 
         Returns:
-            JSON with dataset_rid, version, path (local directory).
+            JSON with dataset_rid, version, path (local bag directory).
         """
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec

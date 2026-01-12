@@ -1,4 +1,36 @@
-"""Dataset management tools for DerivaML MCP server."""
+"""Dataset management tools for DerivaML MCP server.
+
+Datasets are versioned, reproducible collections of data for ML workflows. Key concepts:
+
+**Dataset Elements**:
+Records from domain tables (e.g., Images, Subjects) that belong to a dataset.
+A table must be registered as a "dataset element type" before its records can be
+added to datasets. Use list_dataset_element_types() and add_dataset_element_type().
+
+**Dataset Types**:
+Controlled vocabulary labels that categorize datasets (e.g., "Training", "Testing",
+"Validation", "Complete"). A dataset can have multiple types. Types help organize
+datasets by their role in ML workflows.
+
+**Nested Datasets**:
+Datasets can contain other datasets as children, creating hierarchies. Common pattern:
+a parent "Complete" dataset contains "Training" and "Testing" child datasets that
+partition the same underlying data. Children share the parent's elements.
+
+**Dataset Versions** (Semantic Versioning):
+Datasets use major.minor.patch versioning for reproducibility:
+- **Patch** (0.0.X): Metadata-only changes (descriptions, corrections)
+- **Minor** (0.X.0): Added or removed elements (auto-incremented by add_dataset_members)
+- **Major** (X.0.0): Schema changes, breaking changes to data structure
+
+Each version captures a catalog snapshot, allowing queries against historical states.
+
+**Dataset Bags (BDBags)**:
+Exported, portable packages containing dataset elements and metadata. Bags can be:
+- Downloaded locally for offline ML training
+- Shared via MINID (Minimal Viable Identifier) for reproducibility
+- Materialized to fetch all referenced asset files
+"""
 
 from __future__ import annotations
 
@@ -18,7 +50,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def list_datasets(include_deleted: bool = False) -> str:
-        """List all datasets in the catalog with their RIDs, types, and versions.
+        """List all datasets in the catalog with their types and current versions.
+
+        Returns datasets with their Dataset_Type labels (e.g., "Training", "Testing")
+        and current semantic version. Use get_dataset() for full details including
+        nested dataset relationships.
 
         Args:
             include_deleted: Set True to include soft-deleted datasets.
@@ -44,7 +80,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def get_dataset(dataset_rid: str) -> str:
-        """Get full details about a dataset including its children and parents.
+        """Get full details about a dataset including nested dataset relationships.
+
+        Returns dataset metadata plus its position in the dataset hierarchy:
+        - children: Nested datasets contained within this dataset
+        - parents: Datasets that contain this dataset as a nested child
 
         Args:
             dataset_rid: The RID of the dataset (e.g., "1-ABC").
@@ -75,6 +115,10 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     ) -> str:
         """Create a new empty dataset. Use add_dataset_members to populate it.
 
+        Datasets start empty - add elements using add_dataset_members() with RIDs
+        from tables registered as dataset element types. Assign Dataset_Type labels
+        to categorize the dataset's role (e.g., "Training", "Testing").
+
         Args:
             description: Human-readable description of the dataset's purpose.
             dataset_types: Type labels from Dataset_Type vocabulary (e.g., ["Training", "Image"]).
@@ -84,7 +128,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             JSON with status, rid, description, dataset_types, version.
 
         Example:
-            create_dataset("Training images for model v2", ["Training", "Image"])
+            create_dataset("Training images for model v2", ["Training"])
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -107,7 +151,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def list_dataset_members(dataset_rid: str, version: str | None = None) -> str:
-        """List all members (records) in a dataset, grouped by table.
+        """List all dataset elements (records) grouped by table type.
+
+        Dataset elements are records from domain tables that have been added to this
+        dataset. Results are grouped by table name. Specify a version to query
+        historical states for reproducibility.
 
         Args:
             dataset_rid: The RID of the dataset.
@@ -138,7 +186,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         dataset_rid: str,
         member_rids: list[str],
     ) -> str:
-        """Add records to a dataset by their RIDs. Auto-increments minor version.
+        """Add records as dataset elements. Auto-increments minor version.
+
+        Records must be from tables registered as dataset element types
+        (see list_dataset_element_types). Adding members automatically increments
+        the dataset's minor version for change tracking.
 
         Args:
             dataset_rid: The RID of the dataset to add members to.
@@ -148,7 +200,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             JSON with status, added_count, dataset_rid.
 
         Example:
-            add_dataset_members("1-ABC", ["2-DEF", "2-GHI"]) -> adds 2 members
+            add_dataset_members("1-ABC", ["2-DEF", "2-GHI"]) -> adds 2 Image records
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -165,7 +217,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def get_dataset_version_history(dataset_rid: str) -> str:
-        """Get all versions of a dataset with their descriptions and timestamps.
+        """Get all versions of a dataset for reproducibility tracking.
+
+        Returns the complete version history with semantic versions (major.minor.patch),
+        descriptions of changes, and catalog snapshots. Each snapshot allows querying
+        the exact state of data at that version.
 
         Args:
             dataset_rid: The RID of the dataset.
@@ -237,7 +293,10 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def delete_dataset(dataset_rid: str, recurse: bool = False) -> str:
-        """Soft-delete a dataset (marks deleted but keeps data).
+        """Soft-delete a dataset (marks deleted but preserves data).
+
+        Soft deletion hides the dataset from normal queries but keeps all data intact.
+        For nested datasets, use recurse=True to also delete child datasets.
 
         Args:
             dataset_rid: The RID of the dataset to delete.
@@ -261,12 +320,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def list_dataset_element_types() -> str:
-        """List which table types can be added as dataset members.
+        """List which tables are registered as dataset element types.
 
-        Use add_dataset_element_type to enable additional tables.
+        Only records from registered element types can be added to datasets.
+        Use add_dataset_element_type() to register additional domain tables.
 
         Returns:
-            JSON array of table names that can be dataset members.
+            JSON array of table names that can contain dataset elements.
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -279,16 +339,20 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def add_dataset_element_type(table_name: str) -> str:
-        """Enable a table to be included as dataset members.
+        """Register a domain table as a dataset element type.
+
+        After registration, records from this table can be added to datasets
+        using add_dataset_members(). Creates an association table to link
+        records to datasets.
 
         Args:
-            table_name: Name of the table to enable (e.g., "Subject", "Image").
+            table_name: Name of the domain table to register (e.g., "Subject", "Image").
 
         Returns:
             JSON with status, table_name, association_table.
 
         Example:
-            add_dataset_element_type("Subject") -> enables Subject records in datasets
+            add_dataset_element_type("Subject") -> enables Subject records as dataset elements
         """
         try:
             ml = conn_manager.get_active_or_raise()
