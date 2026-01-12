@@ -41,7 +41,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         to upload any registered assets to the catalog. The execution workflow is:
         1. create_execution() - Create the execution record
         2. start_execution() - Mark execution as running
-        3. register_asset_file() - Register files for upload (can be called multiple times)
+        3. asset_file_path() - Register files for upload (can be called multiple times)
         4. stop_execution() - Mark execution as complete
         5. upload_execution_outputs() - Upload all registered assets to catalog
 
@@ -273,9 +273,9 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def register_asset_file(
-        asset_table: str,
-        file_path: str,
+    async def asset_file_path(
+        asset_name: str,
+        file_name: str,
         asset_types: list[str] | None = None,
         copy_file: bool = False,
         rename_file: str | None = None,
@@ -289,12 +289,12 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         staged locally and uploaded in batch when upload_execution_outputs() is called.
 
         Args:
-            asset_table: Name of the asset table (e.g., "Image", "Model", "Execution_Metadata").
-            file_path: Path to the file to register. Can be:
+            asset_name: Name of the asset table (e.g., "Image", "Model", "Execution_Metadata").
+            file_name: Path to the file to register. Can be:
                 - An existing file (will be symlinked or copied)
                 - A new path (returned path can be opened for writing)
             asset_types: Asset type terms from Asset_Type vocabulary.
-                Defaults to the asset_table name if not specified.
+                Defaults to the asset_name if not specified.
             copy_file: If True, copy the file instead of creating a symlink.
             rename_file: If provided, rename the file to this name.
 
@@ -311,8 +311,8 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
             execution = _active_executions[key]
             asset_path = execution.asset_file_path(
-                asset_name=asset_table,
-                file_name=file_path,
+                asset_name=asset_name,
+                file_name=file_name,
                 asset_types=asset_types,
                 copy_file=copy_file,
                 rename_file=rename_file,
@@ -321,7 +321,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             return json.dumps({
                 "status": "registered",
                 "execution_rid": execution.execution_rid,
-                "asset_table": asset_table,
+                "asset_name": asset_name,
                 "file_path": str(asset_path),
                 "file_name": asset_path.file_name,
                 "asset_types": asset_path.asset_types,
@@ -336,13 +336,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         """Upload all registered assets from the active execution to the catalog.
 
         IMPORTANT: This must be called after you have finished registering assets
-        with register_asset_file(). This uploads all staged files to the catalog
+        with asset_file_path(). This uploads all staged files to the catalog
         and records them in the execution's provenance.
 
         The typical workflow is:
         1. create_execution() - Create execution record
         2. start_execution() - Begin tracking
-        3. register_asset_file() - Register output files (repeat as needed)
+        3. asset_file_path() - Register output files (repeat as needed)
         4. stop_execution() - Mark complete
         5. upload_execution_outputs() - Upload all files to catalog
 

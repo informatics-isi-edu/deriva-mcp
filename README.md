@@ -163,7 +163,7 @@ Add to your `.claude/settings.json`:
 | `update_execution_status` | Update execution status and message |
 | `get_execution_info` | Get details about the active execution |
 | `restore_execution` | Restore a previous execution by RID |
-| `register_asset_file` | Register a file for upload as an execution output |
+| `asset_file_path` | Register a file for upload as an execution output |
 | `upload_execution_outputs` | Upload all registered outputs to the catalog |
 | `list_executions` | List recent executions |
 | `create_execution_dataset` | Create a dataset within an execution |
@@ -172,11 +172,23 @@ Add to your `.claude/settings.json`:
 
 #### Execution Workflow
 
-The typical execution workflow is:
+The typical execution workflow using the context manager:
+
+```python
+with execution.execute() as exe:
+    # Do your work here
+    exe.asset_file_path(asset_name="Image", file_name="output.png")
+    # ... more processing ...
+
+# After context exits, upload outputs
+execution.upload_execution_outputs()
+```
+
+Using MCP tools, the equivalent workflow is:
 
 1. `create_execution()` - Create the execution record with workflow info
 2. `start_execution()` - Mark execution as running, begin timing
-3. `register_asset_file()` - Register output files (repeat as needed)
+3. `asset_file_path()` - Register output files (repeat as needed)
 4. `stop_execution()` - Mark execution as complete
 5. `upload_execution_outputs()` - **Required**: Upload all registered files to catalog
 

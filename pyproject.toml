@@ -32,6 +32,10 @@ dev = [
     "pytest-asyncio>=0.21",
     "ruff>=0.1.0",
 ]
+scripts = [
+    "kaggle>=1.5.0",
+    "tqdm>=4.0",
+]
 
 [project.scripts]
 deriva-ml-mcp = "deriva_ml_mcp.server:main"
