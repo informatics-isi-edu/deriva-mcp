@@ -140,7 +140,15 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         Features enable ML data engineering by linking labels, scores, or derived assets
         to domain objects. The feature definition specifies what types of values are valid.
 
-        Feature types:
+        **What this creates**:
+        1. A new association table in the domain schema to store feature values
+        2. A dynamically generated Pydantic model class for creating validated feature instances
+
+        The Pydantic model class (accessible via `feature_record_class()` in Python) provides
+        type-safe construction of feature records with automatic validation against the
+        feature's definition.
+
+        **Feature types**:
         - **Term-based**: Values come from controlled vocabularies (e.g., diagnosis labels)
         - **Asset-based**: Values reference asset files (e.g., segmentation masks)
         - **Mixed**: Can reference both terms and assets
