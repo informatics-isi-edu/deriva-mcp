@@ -21,12 +21,6 @@ uv run pytest
 # Lint and format
 uv run ruff check src/
 uv run ruff format src/
-
-# Build Docker image
-docker build -t deriva-ml-mcp .
-
-# Test Docker image
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' | docker run -i --rm deriva-ml-mcp
 ```
 
 ## Architecture
@@ -93,20 +87,79 @@ def register_*_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 | `deriva-ml://dataset/{rid}` | Template | Specific dataset details |
 | `deriva-ml://vocabulary/{name}` | Template | Specific vocabulary terms |
 
-## Docker Packaging
+## Installation
 
-The Dockerfile uses a multi-stage build:
-1. **Builder stage**: Installs uv and dependencies into /opt/venv
-2. **Runtime stage**: Copies venv, creates non-root user, sets entrypoint
+> **Full installation guide:** See [README.md](README.md) for complete installation options including GitHub MCP integration.
 
-Volume mounts required at runtime:
-- `~/.deriva:/home/mcpuser/.deriva:ro` - Deriva credentials (read-only)
-- Optional: `~/workspace:/home/mcpuser/workspace` - For execution outputs
+Choose **one** of the following options to run the MCP server.
 
-## Testing with Claude
+### Claude Desktop vs Claude Code
 
-### Claude Desktop Configuration
+| Feature | Claude Desktop | Claude Code |
+|---------|---------------|-------------|
+| **What it is** | GUI app for chatting with Claude | CLI tool for coding with Claude in your terminal |
+| **Config location** | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) | `.mcp.json` in project root, or `~/.claude/settings.json` globally |
+| **Use case** | General conversations, document analysis | Software development, code editing |
+| **MCP scope** | Global (all conversations) | Per-project or global |
 
+### Option 1: Docker (Recommended)
+
+Uses the published Docker image. No local setup required.
+
+<!-- copy-button -->
+**For Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/deriva-ml-workspace:/home/mcpuser/workspace",
+        "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+<!-- copy-button -->
+**For Claude Code** (`.mcp.json` in project root):
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/deriva-ml-workspace:/home/mcpuser/workspace",
+        "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**Volume mounts:**
+- `~/.deriva:/home/mcpuser/.deriva:ro` - Deriva credentials (required)
+- `~/deriva-ml-workspace:/home/mcpuser/workspace` - For execution outputs (optional)
+
+**Note:** If using the workspace volume, create the directory first:
+```bash
+mkdir -p ~/deriva-ml-workspace
+```
+If the directory doesn't exist, Docker creates it as root, causing permission issues.
+
+If you already have a DerivaML `working_dir` configured locally, you can mount that instead to share outputs between local and Docker runs.
+
+### Option 2: From Source (Development)
+
+Run directly using `uv`. Use this when developing or modifying the MCP server.
+
+<!-- copy-button -->
+**For Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
@@ -118,9 +171,8 @@ Volume mounts required at runtime:
 }
 ```
 
-### Claude Code Configuration
-
-Add to `.mcp.json`:
+<!-- copy-button -->
+**For Claude Code** (`.mcp.json` in project root):
 ```json
 {
   "mcpServers": {
@@ -132,6 +184,22 @@ Add to `.mcp.json`:
   }
 }
 ```
+
+### Docker Build (for development)
+
+Build and test locally:
+
+```bash
+# Build the image
+docker build -t deriva-ml-mcp .
+
+# Test the image
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' | docker run -i --rm deriva-ml-mcp
+```
+
+The Dockerfile uses a multi-stage build:
+1. **Builder stage**: Installs uv and dependencies into /opt/venv
+2. **Runtime stage**: Copies venv, creates non-root user, sets entrypoint
 
 ## Adding New Tools
 

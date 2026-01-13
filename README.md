@@ -133,6 +133,20 @@ Uses Docker for both MCP servers - most consistent setup:
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Mounts your Deriva credentials (read-only)
 - `~/deriva-ml-workspace:/home/mcpuser/workspace` - Working directory for execution outputs
 
+**Note:** Create the workspace directory before first use:
+```bash
+mkdir -p ~/deriva-ml-workspace
+```
+If the directory doesn't exist, Docker creates it as root, causing permission issues.
+
+**Workspace directory considerations:**
+- If you already use DerivaML locally with a `working_dir` setting, you can mount that same directory to share execution outputs between local and Docker runs
+- The container writes to `/home/mcpuser/workspace`, so mount your preferred host directory there
+- Example using an existing DerivaML working directory:
+  ```
+  "-v", "${HOME}/my-existing-deriva-workdir:/home/mcpuser/workspace"
+  ```
+
 #### Option 2: Direct Install with GitHub Remote
 
 Uses pip-installed DerivaML MCP with GitHub's hosted server:
