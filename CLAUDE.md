@@ -116,7 +116,7 @@ Uses the published Docker image. No local setup required.
       "args": [
         "run", "-i", "--rm",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-        "-v", "${HOME}/deriva-ml-workspace:/home/mcpuser/workspace",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
     }
@@ -134,7 +134,7 @@ Uses the published Docker image. No local setup required.
       "args": [
         "run", "-i", "--rm",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-        "-v", "${HOME}/deriva-ml-workspace:/home/mcpuser/workspace",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
     }
@@ -144,11 +144,11 @@ Uses the published Docker image. No local setup required.
 
 **Volume mounts:**
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Deriva credentials (required)
-- `~/deriva-ml-workspace:/home/mcpuser/workspace` - For execution outputs (optional)
+- `~/.deriva/deriva-ml:/home/mcpuser/workspace` - For execution outputs (optional)
 
 **Note:** If using the workspace volume, create the directory first:
 ```bash
-mkdir -p ~/deriva-ml-workspace
+mkdir -p ~/.deriva/deriva-ml
 ```
 If the directory doesn't exist, Docker creates it as root, causing permission issues.
 

@@ -110,7 +110,7 @@ Uses Docker for both MCP servers - most consistent setup:
       "args": [
         "run", "-i", "--rm",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-        "-v", "${HOME}/deriva-ml-workspace:/home/mcpuser/workspace",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
     },
@@ -131,11 +131,11 @@ Uses Docker for both MCP servers - most consistent setup:
 
 **Volume mounts explained:**
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Mounts your Deriva credentials (read-only)
-- `~/deriva-ml-workspace:/home/mcpuser/workspace` - Working directory for execution outputs
+- `~/.deriva/deriva-ml:/home/mcpuser/workspace` - Working directory for execution outputs
 
 **Note:** Create the workspace directory before first use:
 ```bash
-mkdir -p ~/deriva-ml-workspace
+mkdir -p ~/.deriva/deriva-ml
 ```
 If the directory doesn't exist, Docker creates it as root, causing permission issues.
 
@@ -244,7 +244,7 @@ Add to your project's `.mcp.json` file:
       "args": [
         "run", "-i", "--rm",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-        "-v", "${HOME}/deriva-ml-workspace:/home/mcpuser/workspace",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
     },
