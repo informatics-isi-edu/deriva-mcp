@@ -394,6 +394,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         registered with asset_file_path() to the catalog's object store and
         creates asset records with proper provenance linking.
 
+        IMPORTANT: When using the Python context manager, this must be called AFTER
+        exiting the `with` block (see example below). The context manager handles
+        start/stop timing, while upload is a separate step.
+
         IMPORTANT: Outputs are NOT persisted until this is called. Always call
         this method, even if the workflow failed (to record partial results).
 
@@ -403,8 +407,28 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         Returns:
             JSON with assets_uploaded counts by asset table type.
 
-        Example:
-            upload_execution_outputs() -> {"assets_uploaded": {"Model": 1, "Image": 10}}
+        Example (MCP tool sequence):
+            1. create_execution("Training", "Training", ...)
+            2. start_execution()
+            3. [Do ML work, call asset_file_path() to register outputs]
+            4. stop_execution()
+            5. upload_execution_outputs()  <- Call this LAST
+
+        Example (Python context manager):
+            ```python
+            with ml.create_execution(config) as exe:
+                # Do work inside context manager
+                path = exe.asset_file_path("Model", "model.pt")
+                # Write to path...
+
+            # Upload AFTER exiting context manager
+            exe.upload_execution_outputs()
+            ```
+
+        Note:
+            For progress monitoring during uploads, use the Python API directly with
+            a progress_callback parameter. See UploadProgress and UploadCallback in
+            deriva_ml for details.
         """
         try:
             key = _get_execution_key()
