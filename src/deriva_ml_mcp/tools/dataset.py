@@ -2,6 +2,12 @@
 
 Datasets are versioned, reproducible collections of data for ML workflows. Key concepts:
 
+**Creating Datasets**:
+Datasets must be created through an execution for provenance tracking. Use
+create_execution_dataset() from the execution tools to create new datasets.
+This ensures all datasets have proper provenance linking to the workflow that
+created them.
+
 **Dataset Elements**:
 Records from domain tables (e.g., Images, Subjects) that belong to a dataset.
 A table must be registered as a "dataset element type" before its records can be
@@ -105,48 +111,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to get dataset {dataset_rid}: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def create_dataset(
-        description: str = "",
-        dataset_types: list[str] | None = None,
-        version: str | None = None,
-    ) -> str:
-        """Create a new empty dataset. Use add_dataset_members to populate it.
-
-        Datasets start empty - add elements using add_dataset_members() with RIDs
-        from tables registered as dataset element types. Assign Dataset_Type labels
-        to categorize the dataset's role (e.g., "Training", "Testing").
-
-        Args:
-            description: Human-readable description of the dataset's purpose.
-            dataset_types: Type labels from Dataset_Type vocabulary (e.g., ["Training", "Image"]).
-            version: Initial version string (default: "0.1.0").
-
-        Returns:
-            JSON with status, rid, description, dataset_types, version.
-
-        Example:
-            create_dataset("Training images for model v2", ["Training"])
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            dataset = ml.create_dataset(
-                description=description,
-                dataset_types=dataset_types or [],
-                version=version,
-            )
-            version_str = str(dataset.current_version) if dataset.current_version else None
-            return json.dumps({
-                "status": "created",
-                "rid": dataset.dataset_rid,
-                "description": dataset.description,
-                "dataset_types": dataset.dataset_types,
-                "version": version_str,
-            })
-        except Exception as e:
-            logger.error(f"Failed to create dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
