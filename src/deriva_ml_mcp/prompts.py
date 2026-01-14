@@ -42,9 +42,57 @@ with full provenance tracking in DerivaML.
 - Connected to a DerivaML catalog (use `connect_catalog` if not connected)
 - Input dataset(s) available (use `list_datasets` to find them)
 
-## Step 1: Create the Execution
+## Python API: Using the Context Manager (Recommended)
 
-Create an execution to track your workflow run:
+The recommended way to run executions in Python is using the context manager,
+which automatically handles start/stop timing:
+
+```python
+from deriva_ml import DerivaML
+from deriva_ml.execution import ExecutionConfiguration, Workflow
+
+# Connect to catalog
+ml = DerivaML(hostname="example.org", catalog_id="1")
+
+# Configure the execution
+config = ExecutionConfiguration(
+    workflow=Workflow(
+        name="ResNet Training Run 1",
+        workflow_type="Training",
+        description="Train ResNet50 on CIFAR-10"
+    ),
+    datasets=["1-ABC"],  # Input dataset RIDs
+    assets=["2-XYZ"],    # Optional: input asset RIDs
+)
+
+# Use context manager - automatically starts/stops timing
+with ml.create_execution(config) as exe:
+    # Download input data
+    exe.download_execution_dataset("1-ABC")
+
+    # Run your ML code here...
+
+    # Register output files
+    model_path = exe.asset_file_path("Model", "model.pt")
+    # Write model to model_path...
+
+    metrics_path = exe.asset_file_path("Execution_Metadata", "metrics.json")
+    # Write metrics to metrics_path...
+
+# IMPORTANT: Upload AFTER exiting the context manager
+exe.upload_execution_outputs()
+```
+
+**Key points:**
+- The `with` block automatically calls `start_execution()` on entry
+- The `with` block automatically calls `stop_execution()` on exit
+- You MUST call `upload_execution_outputs()` AFTER the `with` block
+
+## MCP Tools: Step-by-Step Approach
+
+When using MCP tools directly (not Python API), follow these steps:
+
+### Step 1: Create the Execution
 
 ```
 create_execution(
@@ -58,17 +106,13 @@ create_execution(
 
 Use `list_workflow_types()` to see available workflow types.
 
-## Step 2: Start Timing
-
-Begin the execution timer:
+### Step 2: Start Timing
 
 ```
 start_execution()
 ```
 
-## Step 3: Do Your ML Work
-
-This is where you run your actual ML pipeline:
+### Step 3: Do Your ML Work
 
 - **Download input data**: Use `download_execution_dataset(dataset_rid)` to get data
 - **Process/train/infer**: Run your ML code
@@ -82,19 +126,13 @@ asset_file_path(
 )
 ```
 
-The returned path is where to write/read the file.
-
-## Step 4: Stop Timing
-
-When your workflow completes:
+### Step 4: Stop Timing
 
 ```
 stop_execution()
 ```
 
-## Step 5: Upload Outputs (REQUIRED)
-
-Upload all registered files to the catalog:
+### Step 5: Upload Outputs (REQUIRED)
 
 ```
 upload_execution_outputs()
@@ -102,7 +140,7 @@ upload_execution_outputs()
 
 **Important**: Files are NOT persisted until this is called!
 
-## Example: Training Workflow
+## Example: MCP Tool Workflow
 
 ```
 # 1. Create execution
@@ -135,6 +173,7 @@ upload_execution_outputs()
 - Use `update_execution_status(status, message)` for progress updates
 - Use `restore_execution(rid)` to resume a previous execution
 - Use `list_executions()` to see past workflow runs
+- In Python, always prefer the context manager over manual start/stop
 """
 
     @mcp.prompt(
@@ -489,8 +528,23 @@ Add labels within an execution context for provenance:
 
 ### Simple Labels (Single Value)
 
+**Python API (recommended):**
+```python
+config = ExecutionConfiguration(
+    workflow=Workflow(name="Labeling Run", workflow_type="Annotation", description="Manual image labeling")
+)
+
+with ml.create_execution(config) as exe:
+    exe.add_feature_value("Image", "Diagnosis", "<image-rid>", "Normal")
+    exe.add_feature_value("Image", "Diagnosis", "<image-rid-2>", "Abnormal")
+
+# Upload AFTER exiting context manager
+exe.upload_execution_outputs()
 ```
-# First, create and start an execution
+
+**MCP Tools:**
+```
+# Create and start execution
 create_execution("Labeling Run", "Annotation", "Manual image labeling")
 start_execution()
 
@@ -530,6 +584,36 @@ list_feature_values("Image", "Diagnosis")
 
 ## Complete Example: Image Classification Labels
 
+**Python API (recommended):**
+```python
+# 1. Create vocabulary
+ml.create_vocabulary("Image_Class", "Image classification categories")
+ml.add_term("Image_Class", "Cat", "Image contains a cat")
+ml.add_term("Image_Class", "Dog", "Image contains a dog")
+ml.add_term("Image_Class", "Other", "Other content")
+
+# 2. Create feature
+ml.create_feature("Image", "Classification", "Image class label", terms=["Image_Class"])
+
+# 3. Label images within execution context
+config = ExecutionConfiguration(
+    workflow=Workflow(name="Manual Labeling", workflow_type="Annotation", description="Label training images")
+)
+
+with ml.create_execution(config) as exe:
+    # Add labels (typically in a loop over images)
+    exe.add_feature_value("Image", "Classification", "1-ABC", "Cat")
+    exe.add_feature_value("Image", "Classification", "1-DEF", "Dog")
+    exe.add_feature_value("Image", "Classification", "1-GHI", "Cat")
+
+# Upload AFTER exiting context manager
+exe.upload_execution_outputs()
+
+# 4. Query for training
+ml.list_feature_values("Image", "Classification")
+```
+
+**MCP Tools:**
 ```
 # 1. Create vocabulary
 create_vocabulary("Image_Class", "Image classification categories")
@@ -591,8 +675,28 @@ Key concepts:
 
 ## Step 1: Create Dataset via Execution
 
-Datasets must be created through an execution for provenance:
+Datasets must be created through an execution for provenance.
 
+**Python API (recommended):**
+```python
+config = ExecutionConfiguration(
+    workflow=Workflow(name="Create Training Set", workflow_type="Preprocessing", description="Curate training data")
+)
+
+with ml.create_execution(config) as exe:
+    # Create the dataset
+    dataset = exe.create_execution_dataset(
+        description="Training images for model v2",
+        dataset_types=["Training"]
+    )
+    dataset_rid = dataset.rid
+    # ... add members inside context ...
+
+# Upload AFTER exiting context manager
+exe.upload_execution_outputs()
+```
+
+**MCP Tools:**
 ```
 # Start an execution for dataset creation
 create_execution("Create Training Set", "Preprocessing", "Curate training data")
@@ -637,6 +741,13 @@ Adding members automatically increments the minor version.
 
 ## Step 4: Complete the Execution
 
+**Python API:** The context manager handles stop automatically. Call upload after:
+```python
+# After exiting the `with` block:
+exe.upload_execution_outputs()
+```
+
+**MCP Tools:**
 ```
 stop_execution()
 upload_execution_outputs()
@@ -661,6 +772,30 @@ list_dataset_types()
 
 Create training/testing splits as child datasets:
 
+**Python API (recommended):**
+```python
+config = ExecutionConfiguration(
+    workflow=Workflow(name="Create Train/Test Split", workflow_type="Preprocessing", description="Split data")
+)
+
+with ml.create_execution(config) as exe:
+    # Create training subset
+    training_ds = exe.create_execution_dataset("Training subset (80%)", ["Training"])
+    # Add training members...
+
+    # Create testing subset
+    testing_ds = exe.create_execution_dataset("Testing subset (20%)", ["Testing"])
+    # Add testing members...
+
+# Upload AFTER exiting context manager
+exe.upload_execution_outputs()
+
+# Link as nested datasets
+ml.add_dataset_child("<parent-rid>", training_ds.rid)
+ml.add_dataset_child("<parent-rid>", testing_ds.rid)
+```
+
+**MCP Tools:**
 ```
 # Create parent "Complete" dataset first (via execution)
 # Then create children
@@ -698,6 +833,43 @@ list_dataset_members("<dataset-rid>", version="1.0.0")
 
 ## Complete Example: Create Train/Test Split
 
+**Python API (recommended):**
+```python
+config = ExecutionConfiguration(
+    workflow=Workflow(name="Dataset Curation", workflow_type="Preprocessing", description="Create ML datasets")
+)
+
+with ml.create_execution(config) as exe:
+    # Ensure element types registered
+    ml.add_dataset_element_type("Image")
+
+    # Create main dataset
+    complete_ds = exe.create_execution_dataset("Complete Image Set", ["Complete"])
+
+    # Add all images
+    ml.add_dataset_members(complete_ds.rid, ["2-D01", "2-D02", "2-D03", ..., "2-D100"])
+
+    # Create training split
+    training_ds = exe.create_execution_dataset("Training Set (80%)", ["Training"])
+    ml.add_dataset_members(training_ds.rid, ["2-D01", "2-D02", ..., "2-D80"])
+
+    # Create test split
+    testing_ds = exe.create_execution_dataset("Test Set (20%)", ["Testing"])
+    ml.add_dataset_members(testing_ds.rid, ["2-D81", ..., "2-D100"])
+
+# Upload AFTER exiting context manager
+exe.upload_execution_outputs()
+
+# Link as children
+ml.add_dataset_child(complete_ds.rid, training_ds.rid)
+ml.add_dataset_child(complete_ds.rid, testing_ds.rid)
+
+# Verify
+ml.get_dataset(complete_ds.rid)  # Shows children
+ml.list_dataset_children(complete_ds.rid)
+```
+
+**MCP Tools:**
 ```
 # 1. Start execution
 create_execution("Dataset Curation", "Preprocessing", "Create ML datasets")
