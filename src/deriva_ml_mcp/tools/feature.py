@@ -77,12 +77,30 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         - The Execution that produced this value (provenance)
         - The feature value(s) - vocabulary terms, numeric values, or asset references
 
+        **Understanding feature fields:**
+        When adding feature values with `add_feature_value`, you need to provide values
+        for the feature's fields. This tool shows you:
+        - `target_column`: The column name for the target record RID (required)
+        - `term_columns`: Columns that accept vocabulary term names
+        - `asset_columns`: Columns that accept asset RIDs
+        - `value_columns`: Columns that accept direct values (numbers, strings)
+
+        For example, if a "Diagnosis" feature has term_columns=["Diagnosis_Type"],
+        you would call add_feature_value with values={"Diagnosis_Type": "Normal"}.
+
         Args:
             table_name: Name of the table the feature is attached to.
             feature_name: Name of the feature.
 
         Returns:
-            JSON with feature_name, target_table, feature_table, columns.
+            JSON with feature structure including:
+            - feature_name: Name of the feature
+            - target_table: Table the feature is attached to
+            - target_column: Column name for the target record RID
+            - term_columns: Columns accepting vocabulary terms (with their vocabulary table)
+            - asset_columns: Columns accepting asset RIDs (with their asset table)
+            - value_columns: Columns accepting direct values (with their type)
+            - required_fields: Fields that must be provided (non-nullable)
 
         Example:
             lookup_feature("Image", "Diagnosis") -> shows Diagnosis feature structure
@@ -90,11 +108,51 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             ml = conn_manager.get_active_or_raise()
             feature = ml.lookup_feature(table_name, feature_name)
+
+            # Get column details for better documentation
+            term_cols = {}
+            for col in feature.term_columns:
+                # Find the FK to get the vocabulary table name
+                for fk in feature.feature_table.foreign_keys:
+                    if col in fk.foreign_key_columns:
+                        term_cols[col.name] = {
+                            "vocabulary_table": fk.pk_table.name,
+                            "required": not col.nullok,
+                        }
+                        break
+
+            asset_cols = {}
+            for col in feature.asset_columns:
+                for fk in feature.feature_table.foreign_keys:
+                    if col in fk.foreign_key_columns:
+                        asset_cols[col.name] = {
+                            "asset_table": fk.pk_table.name,
+                            "required": not col.nullok,
+                        }
+                        break
+
+            value_cols = {}
+            for col in feature.value_columns:
+                value_cols[col.name] = {
+                    "type": col.type.typename,
+                    "required": not col.nullok,
+                }
+
+            # Determine required fields
+            required_fields = [feature.target_table.name]  # Target is always required
+            required_fields.extend([c for c, info in term_cols.items() if info["required"]])
+            required_fields.extend([c for c, info in asset_cols.items() if info["required"]])
+            required_fields.extend([c for c, info in value_cols.items() if info["required"]])
+
             return json.dumps({
                 "feature_name": feature.feature_name,
                 "target_table": feature.target_table.name,
+                "target_column": feature.target_table.name,
                 "feature_table": feature.feature_table.name,
-                "columns": [c.name for c in feature.feature_table.columns],
+                "term_columns": term_cols,
+                "asset_columns": asset_cols,
+                "value_columns": value_cols,
+                "required_fields": required_fields,
             })
         except Exception as e:
             logger.error(f"Failed to lookup feature: {e}")
@@ -257,6 +315,13 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         If an execution is active, it will be used for provenance. Otherwise,
         provide an execution_rid explicitly.
 
+        **For simple features** (single term or asset column):
+        Use this tool with a single `value` string.
+
+        **For complex features** (multiple columns):
+        Use `add_feature_value_record` instead, which accepts a dictionary of
+        field values. Use `lookup_feature` first to see what fields are available.
+
         Args:
             table_name: Table the target record belongs to (e.g., "Image").
             feature_name: Name of the feature (e.g., "Diagnosis").
@@ -288,30 +353,138 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     "message": "No active execution. Provide execution_rid or create_execution first.",
                 })
 
-            # Get the feature record class
-            record_class = ml.feature_record_class(table_name, feature_name)
+            # Look up the feature to get its structure
+            feature = ml.lookup_feature(table_name, feature_name)
 
-            # Create the feature value record
-            record = record_class(
-                target_rid=target_rid,
-                value=value,
-                execution_rid=exe_rid,
-            )
+            # Determine which column gets the value
+            # Priority: term columns, then asset columns, then value columns
+            value_column = None
+            if feature.term_columns:
+                value_column = next(iter(feature.term_columns)).name
+            elif feature.asset_columns:
+                value_column = next(iter(feature.asset_columns)).name
+            elif feature.value_columns:
+                value_column = next(iter(feature.value_columns)).name
+
+            if not value_column:
+                return json.dumps({
+                    "status": "error",
+                    "message": f"Feature '{feature_name}' has no value columns. Use add_feature_value_record for complex features.",
+                })
+
+            # Build the record dict
+            record_dict = {
+                feature.target_table.name: target_rid,
+                "Feature_Name": feature_name,
+                "Execution": exe_rid,
+                value_column: value,
+            }
 
             # Insert the record
-            feature = ml.lookup_feature(table_name, feature_name)
             pb = ml.pathBuilder()
             path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
-            result = list(path.insert([record.to_dict()]))
+            result = list(path.insert([record_dict]))
 
             return json.dumps({
                 "status": "added",
                 "target_rid": target_rid,
                 "feature_name": feature_name,
-                "value": value,
+                value_column: value,
                 "execution_rid": exe_rid,
                 "rid": result[0].get("RID") if result else None,
             })
         except Exception as e:
             logger.error(f"Failed to add feature value: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def add_feature_value_record(
+        table_name: str,
+        feature_name: str,
+        target_rid: str,
+        values: dict[str, str | int | float],
+        execution_rid: str | None = None,
+    ) -> str:
+        """Add a feature value with multiple fields to a domain object.
+
+        For features with multiple columns (e.g., a diagnosis with confidence score),
+        use this tool to provide values for each field. Use `lookup_feature` first
+        to see the available fields and their types.
+
+        **Feature columns are dynamically generated** based on the feature definition:
+        - `term_columns`: Accept vocabulary term names (strings)
+        - `asset_columns`: Accept asset RIDs (strings)
+        - `value_columns`: Accept direct values (strings, numbers)
+
+        The feature's dynamically generated Pydantic class (accessible via
+        `feature_record_class()` in Python) validates all values automatically.
+
+        Args:
+            table_name: Table the target record belongs to (e.g., "Image").
+            feature_name: Name of the feature (e.g., "Diagnosis").
+            target_rid: RID of the target record to annotate.
+            values: Dictionary mapping column names to values. Use `lookup_feature`
+                to see available columns and their types.
+            execution_rid: Execution RID for provenance (uses active if not provided).
+
+        Returns:
+            JSON with status, target_rid, feature_name, values, rid.
+
+        Example:
+            # First check the feature structure:
+            lookup_feature("Image", "Diagnosis")
+            # -> {"term_columns": {"Diagnosis_Type": {...}}, "value_columns": {"confidence": {"type": "float4"}}}
+
+            # Then add a value with all fields:
+            add_feature_value_record(
+                "Image", "Diagnosis", "1-ABC",
+                {"Diagnosis_Type": "Normal", "confidence": 0.95}
+            )
+        """
+        try:
+            from deriva_ml_mcp.tools.execution import _active_executions
+
+            ml = conn_manager.get_active_or_raise()
+
+            # Get execution RID from active execution or parameter
+            exe_rid = execution_rid
+            if not exe_rid:
+                key = f"{ml.host_name}:{ml.catalog_id}"
+                if key in _active_executions:
+                    exe_rid = _active_executions[key].execution_rid
+
+            if not exe_rid:
+                return json.dumps({
+                    "status": "error",
+                    "message": "No active execution. Provide execution_rid or create_execution first.",
+                })
+
+            # Look up the feature
+            feature = ml.lookup_feature(table_name, feature_name)
+
+            # Build the record dict with required fields
+            record_dict = {
+                feature.target_table.name: target_rid,
+                "Feature_Name": feature_name,
+                "Execution": exe_rid,
+            }
+
+            # Add user-provided values
+            record_dict.update(values)
+
+            # Insert the record
+            pb = ml.pathBuilder()
+            path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
+            result = list(path.insert([record_dict]))
+
+            return json.dumps({
+                "status": "added",
+                "target_rid": target_rid,
+                "feature_name": feature_name,
+                "values": values,
+                "execution_rid": exe_rid,
+                "rid": result[0].get("RID") if result else None,
+            })
+        except Exception as e:
+            logger.error(f"Failed to add feature value record: {e}")
             return json.dumps({"status": "error", "message": str(e)})
