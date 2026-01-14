@@ -1260,3 +1260,247 @@ get_chaise_url("Image")
 - Context `*` provides defaults; specific contexts override
 - Always call `apply_annotations()` after making changes
 """
+
+    @mcp.prompt(
+        name="derivaml-coding-guidelines",
+        description="Recommended workflow and coding standards for DerivaML projects",
+    )
+    def derivaml_coding_guidelines_prompt() -> str:
+        """Coding guidelines for DerivaML projects."""
+        return """# DerivaML Coding Guidelines and Best Practices
+
+These guidelines ensure DerivaML projects are robust, reproducible, and well-tracked.
+Follow these standards when building ML workflows with DerivaML.
+
+## Project Configuration
+
+### Repository Setup
+- Each model should live in its own repository following the DerivaML template
+- Use **uv** to manage all dependencies
+- The `uv.lock` file **MUST** be committed to enable reproducible environments
+
+### Environment Management
+```bash
+# Install dependencies
+uv sync
+
+# Rebuild environment from lock file
+uv sync --frozen
+```
+
+## Git Workflow
+
+### Branch Strategy
+- **SHOULD** work in Git branches and create pull requests, even for solo projects
+- Rebase your branch regularly to stay current with main
+
+### Commit Requirements
+- **MUST** commit all code changes before running ML workflows
+- This maximizes DerivaML's ability to track the exact code used to produce results
+- No change is too small to properly track in GitHub and DerivaML
+
+### Example Workflow
+```bash
+# 1. Create feature branch
+git checkout -b feature/model-improvement
+
+# 2. Make changes and commit
+git add .
+git commit -m "Update learning rate scheduler"
+
+# 3. Bump version before running
+uv run bump-version patch
+
+# 4. Run your ML workflow (code is now trackable)
+uv run python deriva_run.py
+
+# 5. Create PR when ready
+git push -u origin feature/model-improvement
+```
+
+## Coding Standards
+
+### Documentation
+- **SHOULD** use Google docstring format for all code
+- Reference: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html
+
+```python
+def train_model(data: Dataset, epochs: int) -> Model:
+    \"\"\"Train a model on the provided dataset.
+
+    Args:
+        data: The training dataset containing images and labels.
+        epochs: Number of training epochs.
+
+    Returns:
+        The trained model with optimized weights.
+
+    Raises:
+        ValueError: If epochs is less than 1.
+    \"\"\"
+```
+
+### Type Hints
+- **SHOULD** use type hints wherever possible
+
+```python
+def process_batch(
+    images: list[np.ndarray],
+    labels: list[int],
+    batch_size: int = 32,
+) -> tuple[np.ndarray, np.ndarray]:
+    ...
+```
+
+## Versioning and Releases
+
+### Semantic Versioning
+DerivaML uses semantic versioning (major.minor.patch):
+- **Major**: Breaking changes to model architecture or data format
+- **Minor**: New features or significant improvements
+- **Patch**: Bug fixes and small tweaks
+
+### Version Management
+```bash
+# Create version tag before running
+uv run bump-version major|minor|patch
+
+# Check current version
+uv run python -m setuptools_scm
+```
+
+### Version Workflow
+1. Make code changes
+2. Commit changes
+3. Bump version (`uv run bump-version patch`)
+4. Push tags (`git push --tags`)
+5. Run ML workflow
+
+## Notebook Guidelines
+
+### Output Management
+- **MUST NOT** commit notebooks with output cells
+- Install and enable `nbstripout` to automatically strip outputs
+
+```bash
+# Install nbstripout
+uv add nbstripout --dev
+uv run nbstripout --install
+```
+
+### Notebook Focus
+- Notebooks **SHOULD** focus on a single task (analysis, visualization)
+- Prefer Python scripts for model training workflows
+
+### Execution Requirements
+- **MUST** ensure notebooks can run start-to-finish without intervention
+- Test your notebook completely before uploading to DerivaML
+
+### Running Notebooks with DerivaML
+```bash
+uv run deriva-ml-run-notebook notebooks/analysis.ipynb \\
+    --host <HOST> \\
+    --catalog <CATALOG_ID> \\
+    --kernel <repository-name>
+```
+
+This uploads the executed notebook to the catalog with full provenance.
+
+## Executions and Experiments
+
+### Hydra-Zen Configuration
+- **MUST** always run code from hydra-zen configuration files
+- **SHOULD** commit code before running
+
+### Debugging with Dry Run
+During development, use `dry_run` to test without creating records:
+
+```python
+# In your config or command line
+python deriva_run.py dry_run=True
+
+# Or programmatically
+execution = ml.create_execution(config, dry_run=True)
+```
+
+Dry run behavior:
+- Downloads input datasets
+- Does NOT create Execution records
+- Does NOT upload results
+
+### Production Workflow
+1. Debug with `dry_run=True`
+2. Remove `dry_run` when ready
+3. Bump version (`uv run bump-version patch`)
+4. Run full execution
+
+## Data Management
+
+### Data Storage
+- **SHOULD NOT** commit data files to Git
+- Store all data in DerivaML catalogs instead
+
+```python
+# Good: Reference data by RID
+datasets = [DatasetSpecConfig(rid="1-ABC", version="1.0.0")]
+
+# Bad: Don't check in data files
+# data/training_images/  # Never commit this
+```
+
+### Dataset Versioning
+Pin dataset versions for reproducibility:
+
+```python
+# Always specify version for production runs
+DatasetSpecConfig(rid="1-ABC", version="1.0.0")
+
+# Latest version OK for development
+DatasetSpecConfig(rid="1-ABC")  # Gets latest
+```
+
+## Extensibility
+
+### Domain-Specific Extensions
+DerivaML is designed for extension via inheritance:
+
+```python
+from deriva_ml import DerivaML
+
+class MedicalImagingML(DerivaML):
+    \"\"\"Domain-specific ML class for medical imaging.\"\"\"
+
+    def load_dicom_dataset(self, dataset_rid: str) -> DicomDataset:
+        \"\"\"Load DICOM images from a dataset.\"\"\"
+        ...
+
+    def compute_image_metrics(self, images: list[Image]) -> dict:
+        \"\"\"Compute domain-specific image quality metrics.\"\"\"
+        ...
+```
+
+Instantiate your domain class in scripts and notebooks for specialized functionality.
+
+## Summary Checklist
+
+Before running an ML workflow:
+- [ ] Code changes committed to Git
+- [ ] Version bumped (`uv run bump-version`)
+- [ ] `uv.lock` committed
+- [ ] Notebooks stripped of outputs
+- [ ] Configuration files use hydra-zen
+- [ ] Dataset versions pinned for production
+- [ ] No data files in repository
+- [ ] Docstrings and type hints present
+
+## Quick Reference
+
+| Task | Command |
+|------|---------|
+| Install deps | `uv sync` |
+| Bump version | `uv run bump-version patch` |
+| Check version | `uv run python -m setuptools_scm` |
+| Run notebook | `uv run deriva-ml-run-notebook <notebook> --host <HOST> --catalog <ID>` |
+| Test config | `python deriva_run.py dry_run=True` |
+| Run experiment | `python deriva_run.py +experiment=<name>` |
+"""
