@@ -2767,3 +2767,269 @@ ml.create_asset_table("MyAsset", [
 - `get_table_schema()` - View existing structure
 - `apply_annotations()` - Apply UI customizations
 """
+
+    @mcp.resource(
+        "deriva-ml://docs/chaise-annotations",
+        name="Chaise Annotation Reference",
+        description="Reference for UI customization annotations in Deriva/Chaise",
+        mime_type="text/markdown",
+    )
+    def get_chaise_annotations_docs() -> str:
+        """Return documentation for Chaise UI annotations."""
+        return """# Chaise Annotation Reference
+
+Annotations customize how data is displayed in Chaise, Deriva's web interface.
+They don't affect the data itself, only its presentation.
+
+## Annotation Overview
+
+| Annotation | Applies To | Purpose |
+|------------|-----------|---------|
+| `display` | All elements | Names, tooltips, formatting |
+| `visible-columns` | Tables | Column order and visibility |
+| `visible-foreign-keys` | Tables | Related table visibility |
+| `table-display` | Tables | Row ordering, markdown patterns |
+| `column-display` | Columns | Column-specific display |
+| `key-display` | Keys | Key presentation |
+| `foreign-key` | Foreign Keys | FK names and filtering |
+| `asset` | Columns | File/asset handling |
+| `export` | Tables | Export templates |
+| `citation` | Tables | Citation formatting |
+
+## Annotation Tag Format
+
+Annotation keys follow URI format:
+- `tag:misd.isi.edu,2015:display`
+- `tag:isrd.isi.edu,2016:visible-columns`
+
+The date indicates when the annotation was defined.
+
+## Display Contexts
+
+Many annotations are context-sensitive:
+
+| Context | Where Used |
+|---------|-----------|
+| `*` | Default for all contexts |
+| `compact` | Table listings, search results |
+| `detailed` | Single record view |
+| `entry` | Create/edit forms |
+| `entry/create` | Create form only |
+| `entry/edit` | Edit form only |
+| `filter` | Facet panel |
+| `compact/brief` | Inline references |
+| `compact/select` | Foreign key selection |
+
+## Common Annotations
+
+### Display (`tag:misd.isi.edu,2015:display`)
+
+Controls names and formatting:
+
+```json
+{
+  "name": "Friendly Name",
+  "markdown_name": "**Bold Name**",
+  "comment": "Tooltip text",
+  "name_style": {
+    "underline_space": true,
+    "title_case": true
+  },
+  "show_null": {
+    "*": true,
+    "detailed": false
+  }
+}
+```
+
+**Key options:**
+- `name`: Override element name
+- `markdown_name`: Markdown-formatted name
+- `comment`: Tooltip/description
+- `name_style.underline_space`: Convert `_` to spaces
+- `name_style.title_case`: Capitalize words
+- `show_null`: How to display NULL values
+
+### Visible Columns (`tag:isrd.isi.edu,2016:visible-columns`)
+
+Controls which columns appear and in what order:
+
+```json
+{
+  "compact": ["RID", "Name", "Description"],
+  "detailed": ["RID", "Name", "Description", "Created"],
+  "entry": ["Name", "Description"],
+  "filter": {
+    "and": [
+      {"source": "Name"},
+      {"source": "Status", "choices": ["Active"]}
+    ]
+  }
+}
+```
+
+**Column directives can be:**
+- Column name: `"Name"`
+- Foreign key: `["Schema", "FK_Name"]`
+- Path with source: `{"source": [{"outbound": ["S", "FK"]}, "column"]}`
+
+### Visible Foreign Keys (`tag:isrd.isi.edu,2016:visible-foreign-keys`)
+
+Controls related tables shown on record page:
+
+```json
+{
+  "detailed": [
+    ["Schema", "Image_Subject_fkey"],
+    ["Schema", "Diagnosis_Subject_fkey"]
+  ]
+}
+```
+
+Only inbound foreign keys (tables referencing this one) apply.
+
+### Table Display (`tag:isrd.isi.edu,2016:table-display`)
+
+Controls table-level presentation:
+
+```json
+{
+  "row_order": [
+    {"column": "RCT", "descending": true}
+  ],
+  "page_size": 25,
+  "row_markdown_pattern": "{{{Name}}} ({{{RID}}})"
+}
+```
+
+**Key options:**
+- `row_order`: Default sort order
+- `page_size`: Results per page
+- `row_markdown_pattern`: Custom row display
+
+### Column Display (`tag:isrd.isi.edu,2016:column-display`)
+
+Column-specific display options:
+
+```json
+{
+  "*": {
+    "markdown_pattern": "[{{{_self}}}](https://example.com/{{{_self}}})"
+  },
+  "compact": {
+    "markdown_pattern": "{{{_self}}}"
+  }
+}
+```
+
+Use `{{{_self}}}` for raw value, `{{{$self}}}` for formatted value.
+
+### Foreign Key (`tag:isrd.isi.edu,2016:foreign-key`)
+
+Customize foreign key display:
+
+```json
+{
+  "from_name": "Images",
+  "to_name": "Subject",
+  "to_comment": "The subject this image belongs to",
+  "domain_filter": {
+    "ermrest_path_pattern": "Status=Active"
+  }
+}
+```
+
+### Asset (`tag:isrd.isi.edu,2017:asset`)
+
+Mark a column as containing file assets:
+
+```json
+{
+  "url_pattern": "/hatrac/data/{{{MD5}}}/{{{Filename}}}",
+  "filename_column": "Filename",
+  "byte_count_column": "Length",
+  "md5_column": "MD5",
+  "browser_upload": true
+}
+```
+
+### Export (`tag:isrd.isi.edu,2019:export`)
+
+Define export templates:
+
+```json
+{
+  "templates": [
+    {
+      "displayname": "BDBag",
+      "type": "BAG",
+      "outputs": [
+        {
+          "source": {"api": "entity"},
+          "destination": {"name": "data", "type": "csv"}
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Pattern Expansion
+
+Many annotations support Handlebars/Mustache templates:
+
+```
+{{{column_name}}}           - Column value
+{{{$fkey_schema_fkey_name}}} - Foreign key value
+{{{_date}}}                 - Current date
+{{{_timestamp}}}            - Current timestamp
+{{{#if column}}}...{{{/if}}} - Conditional
+{{{#each array}}}...{{{/each}}} - Loop
+```
+
+## Applying Annotations
+
+### Via DerivaML MCP
+
+```
+apply_catalog_annotations("My Catalog", "ML Browser")
+```
+
+This sets up navigation, display settings, and bulk upload.
+
+### Via deriva-workbench
+
+The DERIVA Workbench provides a graphical editor for annotations:
+1. Connect to catalog
+2. Browse schema tree
+3. Double-click annotation to edit
+4. Click Update to save
+
+### Via Python API
+
+```python
+from deriva.core import ErmrestCatalog
+import deriva.core.ermrest_model as em
+
+catalog = ErmrestCatalog('https', 'example.org', '1')
+model = catalog.getCatalogModel()
+
+table = model.table('schema', 'table')
+table.annotations[em.tag.display] = {"name": "Friendly Name"}
+model.apply()
+```
+
+## Tips
+
+1. **Use `*` context** as default, override specific contexts
+2. **Test in Chaise** after applying annotations
+3. **Use workbench** for complex visual editing
+4. **Export before changes** using dump/restore for backup
+5. **Check inheritance** - annotations cascade from catalog → schema → table
+
+## Related Resources
+
+- `deriva-ml://docs/ermrest-model-management` - Schema management
+- Deriva Workbench - GUI annotation editor
+- Chaise documentation: https://docs.derivacloud.org/
+"""

@@ -2931,3 +2931,309 @@ get_table_schema("<table>")  # See column names
 - Use pagination with `limit` and `offset`
 - Consider using `count_table()` first
 """
+
+    @mcp.prompt(
+        name="customize-chaise-ui",
+        description="Guide for customizing the Chaise web interface using annotations",
+    )
+    def customize_chaise_ui_prompt() -> str:
+        """Guide for customizing Chaise UI with annotations."""
+        return """# Customizing the Chaise Web Interface
+
+This guide covers how to customize the Chaise web UI for your DerivaML catalog
+using annotations. Annotations control display names, column visibility,
+sorting, and more.
+
+## Prerequisites
+- Connected to a DerivaML catalog
+- Understanding of your schema structure (`list_tables()`, `get_table_schema()`)
+
+## Quick Start: Apply Default Annotations
+
+DerivaML provides a convenience method for common customizations:
+
+```
+apply_catalog_annotations(
+    navbar_brand_text="My ML Project",
+    head_title="ML Catalog"
+)
+```
+
+This configures:
+- Navigation bar with organized menus
+- Display settings (underscores as spaces)
+- Default landing page
+- Bulk upload configuration
+
+## Step 1: Understand Display Contexts
+
+Annotations are context-sensitive. Common contexts:
+
+| Context | Where Used | Example |
+|---------|-----------|---------|
+| `compact` | Table listings | Search results |
+| `detailed` | Record page | Single record view |
+| `entry` | Forms | Create/edit forms |
+| `filter` | Facet panel | Search filters |
+| `*` | Default | Applies everywhere |
+
+## Step 2: Customize Display Names
+
+Make table and column names more readable:
+
+### Table Display Names
+Set via the `display` annotation on the table:
+```json
+{
+  "tag:misd.isi.edu,2015:display": {
+    "name": "Medical Images",
+    "comment": "Collection of medical imaging data"
+  }
+}
+```
+
+### Column Display Names
+Set via the `display` annotation on the column:
+```json
+{
+  "tag:misd.isi.edu,2015:display": {
+    "name": "File Name",
+    "comment": "Original filename of the uploaded image"
+  }
+}
+```
+
+### Automatic Name Styling
+Apply to catalog or schema for all nested elements:
+```json
+{
+  "tag:misd.isi.edu,2015:display": {
+    "name_style": {
+      "underline_space": true,
+      "title_case": true
+    }
+  }
+}
+```
+This converts `image_file_name` to "Image File Name".
+
+## Step 3: Configure Visible Columns
+
+Control which columns appear in different contexts:
+
+```json
+{
+  "tag:isrd.isi.edu,2016:visible-columns": {
+    "compact": ["RID", "Name", "Status", "RCT"],
+    "detailed": ["RID", "Name", "Description", "Status", "Subject", "RCT", "RMT"],
+    "entry": ["Name", "Description", "Status", "Subject"]
+  }
+}
+```
+
+**Tips:**
+- `compact`: Keep it short (4-6 columns) for listings
+- `detailed`: Show all relevant columns
+- `entry`: Only editable columns (exclude system columns)
+
+## Step 4: Configure Facets (Search Filters)
+
+Add facets to the filter panel:
+
+```json
+{
+  "tag:isrd.isi.edu,2016:visible-columns": {
+    "filter": {
+      "and": [
+        {"source": "Status", "open": true},
+        {"source": "Subject", "entity": true},
+        {"source": "RCT", "ux_mode": "ranges"}
+      ]
+    }
+  }
+}
+```
+
+**Facet options:**
+- `open`: Expanded by default
+- `entity`: Show as linked entity (for foreign keys)
+- `ux_mode`: `choices` (checklist), `ranges` (slider), `check_presence`
+- `choices`: Pre-selected values
+- `markdown_name`: Custom facet title
+
+## Step 5: Configure Related Tables
+
+Control which related tables appear on the record page:
+
+```json
+{
+  "tag:isrd.isi.edu,2016:visible-foreign-keys": {
+    "detailed": [
+      ["schema", "Image_Subject_fkey"],
+      ["schema", "Diagnosis_Image_fkey"]
+    ]
+  }
+}
+```
+
+This shows tables that reference the current record.
+
+## Step 6: Configure Table Display
+
+Set default sorting and row display:
+
+```json
+{
+  "tag:isrd.isi.edu,2016:table-display": {
+    "row_order": [
+      {"column": "RCT", "descending": true}
+    ],
+    "page_size": 25
+  }
+}
+```
+
+## Step 7: Configure Asset Columns
+
+Mark columns that contain file URLs:
+
+```json
+{
+  "tag:isrd.isi.edu,2017:asset": {
+    "url_pattern": "/hatrac/data/{{{MD5}}}/{{{Filename}}}",
+    "filename_column": "Filename",
+    "byte_count_column": "Length",
+    "md5_column": "MD5",
+    "browser_upload": true
+  }
+}
+```
+
+This enables:
+- Download links
+- File previews (for images)
+- Drag-and-drop upload
+
+## Common Customization Patterns
+
+### Hide System Columns in Entry Forms
+```json
+{
+  "tag:isrd.isi.edu,2016:visible-columns": {
+    "entry": ["Name", "Description", "Value"]
+  }
+}
+```
+Excludes RID, RCT, RMT, RCB, RMB from forms.
+
+### Show Friendly NULL Display
+```json
+{
+  "tag:misd.isi.edu,2015:display": {
+    "show_null": {
+      "*": "N/A",
+      "entry": ""
+    }
+  }
+}
+```
+
+### Custom Column Formatting
+```json
+{
+  "tag:isrd.isi.edu,2016:column-display": {
+    "*": {
+      "markdown_pattern": "**{{{_self}}}**"
+    }
+  }
+}
+```
+
+### Foreign Key Display Name
+```json
+{
+  "tag:isrd.isi.edu,2016:foreign-key": {
+    "to_name": "Subject",
+    "from_name": "Images"
+  }
+}
+```
+
+## Applying Annotations
+
+### Option 1: Via DerivaML (Recommended for ML projects)
+
+The `apply_catalog_annotations()` tool sets up sensible defaults:
+```
+apply_catalog_annotations("My Project", "Project Catalog")
+```
+
+### Option 2: Via DERIVA Workbench (GUI)
+
+1. Launch `deriva-workbench`
+2. Connect to your catalog
+3. Browse to the table/column
+4. Right-click annotations → Add
+5. Edit using graphical or JSON editor
+6. Click Update to save
+
+### Option 3: Via Python API
+
+```python
+from deriva.core import ErmrestCatalog
+import deriva.core.ermrest_model as em
+
+catalog = ErmrestCatalog('https', 'example.org', '1')
+model = catalog.getCatalogModel()
+
+# Set table annotation
+table = model.table('domain', 'Image')
+table.annotations[em.tag.visible_columns] = {
+    "compact": ["RID", "Name", "Subject"],
+    "detailed": "*"
+}
+
+# Apply changes
+model.apply()
+```
+
+## Verification
+
+After applying annotations:
+
+1. **Get Chaise URL**: `get_chaise_url("Image")`
+2. **Open in browser** to verify changes
+3. **Test different contexts**: listings, record page, forms
+
+## Troubleshooting
+
+### Changes not appearing
+- Clear browser cache
+- Verify annotation was applied (check in workbench)
+- Check for typos in annotation keys
+
+### Column not showing
+- Check `visible-columns` annotation
+- Verify column exists in table
+- Check context (compact vs detailed)
+
+### Facet not working
+- Verify source column exists
+- Check facet configuration syntax
+- Try simpler configuration first
+
+## Best Practices
+
+1. **Start with defaults**: Use `apply_catalog_annotations()` first
+2. **Customize incrementally**: Change one thing at a time
+3. **Test in Chaise**: Verify each change visually
+4. **Document changes**: Keep notes on customizations
+5. **Use workbench**: For complex visual editing
+6. **Backup annotations**: Use dump/restore in workbench
+
+## Related Resources
+
+- `deriva-ml://docs/chaise-annotations` - Annotation reference
+- `deriva-ml://docs/ermrest-model-management` - Schema management
+- DERIVA Workbench - GUI annotation editor
+"""
