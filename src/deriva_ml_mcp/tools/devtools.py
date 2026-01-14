@@ -417,3 +417,294 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                 "status": "error",
                 "error": f"Failed to list kernels: {e}"
             })
+
+    # =========================================================================
+    # Notebook Execution Tools
+    # =========================================================================
+
+    @mcp.tool()
+    def inspect_notebook(notebook_path: str) -> str:
+        """Inspect a Jupyter notebook to see its available parameters.
+
+        Uses papermill to extract parameter cell information from a notebook.
+        This shows what parameters can be injected when running the notebook.
+
+        Args:
+            notebook_path: Path to the notebook file (.ipynb).
+
+        Returns:
+            JSON with list of parameters, their types, and default values.
+
+        Example:
+            inspect_notebook("notebooks/train_model.ipynb")
+            # Returns: {"parameters": [{"name": "learning_rate", "type": "float", "default": 0.001}, ...]}
+        """
+        try:
+            import papermill as pm
+        except ImportError:
+            return json.dumps({
+                "status": "error",
+                "error": "papermill not installed. Run: uv add papermill"
+            })
+
+        notebook_file = Path(notebook_path)
+        if not notebook_file.exists():
+            return json.dumps({
+                "status": "error",
+                "error": f"Notebook file not found: {notebook_path}"
+            })
+
+        if notebook_file.suffix != ".ipynb":
+            return json.dumps({
+                "status": "error",
+                "error": f"File must be a .ipynb notebook: {notebook_path}"
+            })
+
+        try:
+            params = pm.inspect_notebook(notebook_file)
+            parameters = []
+            for name, info in params.items():
+                parameters.append({
+                    "name": name,
+                    "type": info.get("inferred_type_name", "unknown"),
+                    "default": info.get("default"),
+                    "help": info.get("help", ""),
+                })
+
+            return json.dumps({
+                "status": "success",
+                "notebook": str(notebook_file),
+                "parameters": parameters,
+                "count": len(parameters)
+            })
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "error": f"Failed to inspect notebook: {e}"
+            })
+
+    @mcp.tool()
+    def run_notebook(
+        notebook_path: str,
+        hostname: str,
+        catalog_id: str,
+        parameters: dict | None = None,
+        kernel: str | None = None,
+        log_output: bool = False,
+    ) -> str:
+        """Run a Jupyter notebook with DerivaML execution tracking.
+
+        Executes a notebook using papermill while automatically tracking the
+        execution in a Deriva catalog. The notebook is expected to use DerivaML's
+        execution context to record its workflow.
+
+        **What it does:**
+        1. Sets environment variables for workflow provenance (URL, checksum, path)
+        2. Executes the notebook with papermill, injecting parameters
+        3. Converts executed notebook to Markdown format
+        4. Uploads both outputs as execution assets to the catalog
+
+        **Requirements:**
+        - papermill, nbformat, nbconvert must be installed
+        - The notebook should create a DerivaML execution during its run
+        - nbstripout should be configured for clean notebook version control
+
+        Args:
+            notebook_path: Path to the notebook file (.ipynb).
+            hostname: Deriva server hostname (e.g., "www.example.org").
+            catalog_id: Catalog ID or number.
+            parameters: Dictionary of parameters to inject into the notebook.
+            kernel: Jupyter kernel name. If not provided, auto-detects from venv.
+            log_output: If True, stream notebook cell outputs during execution.
+
+        Returns:
+            JSON with execution status, execution_rid, and output paths.
+
+        Example:
+            run_notebook(
+                "notebooks/train_model.ipynb",
+                "deriva.example.org",
+                "42",
+                parameters={"learning_rate": 0.001, "epochs": 100},
+                kernel="my-ml-project"
+            )
+        """
+        try:
+            import papermill as pm
+            import nbformat
+            from nbconvert import MarkdownExporter
+        except ImportError as e:
+            return json.dumps({
+                "status": "error",
+                "error": f"Required package not installed: {e}. Run: uv add papermill nbformat nbconvert"
+            })
+
+        try:
+            from deriva_ml import DerivaML, ExecAssetType, MLAsset
+            from deriva_ml.execution import Execution, ExecutionConfiguration, Workflow
+        except ImportError:
+            return json.dumps({
+                "status": "error",
+                "error": "deriva_ml not installed properly"
+            })
+
+        import tempfile
+
+        notebook_file = Path(notebook_path).resolve()
+        if not notebook_file.exists():
+            return json.dumps({
+                "status": "error",
+                "error": f"Notebook file not found: {notebook_path}"
+            })
+
+        if notebook_file.suffix != ".ipynb":
+            return json.dumps({
+                "status": "error",
+                "error": f"File must be a .ipynb notebook: {notebook_path}"
+            })
+
+        # Check nbstripout status
+        try:
+            Workflow._check_nbstrip_status()
+        except Exception as e:
+            return json.dumps({
+                "status": "warning",
+                "warning": f"nbstripout check: {e}",
+                "message": "Continuing anyway..."
+            })
+
+        # Build parameters dict
+        params = parameters or {}
+        params["host"] = hostname
+        params["catalog"] = catalog_id
+
+        # Auto-detect kernel if not provided
+        if kernel is None:
+            kernel = _find_kernel_for_venv()
+
+        # Get workflow provenance info
+        try:
+            url, checksum = Workflow.get_url_and_checksum(notebook_file)
+        except Exception:
+            url = ""
+            checksum = ""
+
+        os.environ["DERIVA_ML_WORKFLOW_URL"] = url
+        os.environ["DERIVA_ML_WORKFLOW_CHECKSUM"] = checksum
+        os.environ["DERIVA_ML_NOTEBOOK_PATH"] = notebook_file.as_posix()
+
+        try:
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                notebook_output = Path(tmpdirname) / notebook_file.name
+                execution_rid_path = Path(tmpdirname) / "execution_rid.json"
+                os.environ["DERIVA_ML_SAVE_EXECUTION_RID"] = execution_rid_path.as_posix()
+
+                # Execute the notebook
+                pm.execute_notebook(
+                    input_path=notebook_file,
+                    output_path=notebook_output,
+                    parameters=params,
+                    kernel_name=kernel,
+                    log_output=log_output,
+                )
+
+                # Read execution metadata
+                if not execution_rid_path.exists():
+                    return json.dumps({
+                        "status": "error",
+                        "error": "Notebook did not save execution metadata. Ensure notebook creates a DerivaML execution."
+                    })
+
+                with execution_rid_path.open("r") as f:
+                    execution_config = json.load(f)
+
+                execution_rid = execution_config["execution_rid"]
+                exec_hostname = execution_config["hostname"]
+                exec_catalog_id = execution_config["catalog_id"]
+
+                # Create DerivaML instance
+                ml_instance = DerivaML(
+                    hostname=exec_hostname,
+                    catalog_id=exec_catalog_id,
+                    working_dir=tmpdirname
+                )
+                workflow_rid = ml_instance.retrieve_rid(execution_rid)["Workflow"]
+
+                # Restore execution context
+                execution = Execution(
+                    configuration=ExecutionConfiguration(workflow=workflow_rid),
+                    ml_object=ml_instance,
+                    reload=execution_rid,
+                )
+
+                # Convert to Markdown
+                notebook_output_md = notebook_output.with_suffix(".md")
+                with notebook_output.open() as f:
+                    nb = nbformat.read(f, as_version=4)
+                exporter = MarkdownExporter()
+                body, _ = exporter.from_notebook_node(nb)
+                with notebook_output_md.open("w") as f:
+                    f.write(body)
+
+                # Register outputs
+                execution.asset_file_path(
+                    asset_name=MLAsset.execution_asset,
+                    file_name=notebook_output,
+                    asset_types=ExecAssetType.notebook_output,
+                )
+                execution.asset_file_path(
+                    asset_name=MLAsset.execution_asset,
+                    file_name=notebook_output_md,
+                    asset_types=ExecAssetType.notebook_output,
+                )
+
+                # Upload outputs
+                execution.upload_execution_outputs()
+
+                # Get citation
+                citation = ml_instance.cite(execution_rid)
+
+                return json.dumps({
+                    "status": "success",
+                    "execution_rid": execution_rid,
+                    "workflow_rid": workflow_rid,
+                    "hostname": exec_hostname,
+                    "catalog_id": exec_catalog_id,
+                    "notebook_output": str(notebook_output),
+                    "citation": citation,
+                    "message": f"Notebook executed successfully. Execution RID: {execution_rid}"
+                })
+
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "error": f"Notebook execution failed: {e}"
+            })
+
+
+def _find_kernel_for_venv() -> str | None:
+    """Find a Jupyter kernel that matches the current virtual environment."""
+    try:
+        from jupyter_client.kernelspec import KernelSpecManager
+    except ImportError:
+        return None
+
+    venv = os.environ.get("VIRTUAL_ENV")
+    if not venv:
+        return None
+
+    venv_path = Path(venv).resolve()
+    try:
+        ksm = KernelSpecManager()
+        for name, spec in ksm.get_all_specs().items():
+            kernel_json = spec.get("spec", {})
+            argv = kernel_json.get("argv", [])
+            for arg in argv:
+                try:
+                    if Path(arg).resolve() == venv_path.joinpath("bin", "python").resolve():
+                        return name
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return None

@@ -1934,3 +1934,355 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
                 }
             ]
         }, indent=2)
+
+    # =========================================================================
+    # Development Tools Documentation Resources
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://docs/bump-version",
+        name="Bump Version Documentation",
+        description="Documentation for semantic versioning with bump-version",
+        mime_type="text/markdown",
+    )
+    def get_bump_version_docs() -> str:
+        """Return documentation for the bump-version tool."""
+        return """# Bump Version Tool
+
+A command-line tool for managing semantic version tags in a git repository.
+
+## Semantic Versioning
+
+This tool follows semantic versioning (semver) conventions:
+
+| Bump Type | Description | Example |
+|-----------|-------------|---------|
+| **major** | Incompatible API changes | 1.0.0 → 2.0.0 |
+| **minor** | New backward-compatible functionality | 1.0.0 → 1.1.0 |
+| **patch** | Backward-compatible bug fixes | 1.0.0 → 1.0.1 |
+
+## How It Works
+
+1. If no semver tag exists, creates an initial tag (default: v0.1.0)
+2. If a tag exists, uses bump-my-version to increment the specified component
+3. Pushes the new tag and any commits to the remote repository
+
+## Dynamic Versioning with setuptools_scm
+
+DerivaML uses **setuptools_scm** to derive package versions dynamically from git tags:
+
+- **At a tag**: Version is clean (e.g., `1.2.3`)
+- **After a tag**: Version includes distance and commit hash (e.g., `1.2.3.post2+g1234abc`)
+- **Dirty working tree**: Adds `.dirty` suffix
+
+## Usage
+
+### MCP Tool
+```python
+# Bump patch version (default): v1.0.0 -> v1.0.1
+bump_version("patch")
+
+# Bump minor version: v1.0.0 -> v1.1.0
+bump_version("minor")
+
+# Bump major version: v1.0.0 -> v2.0.0
+bump_version("major")
+
+# Check current version
+get_current_version()
+```
+
+### Command Line
+```bash
+# Using uv
+uv run bump-version patch
+uv run bump-version minor
+uv run bump-version major
+
+# Check current version
+uv run python -m setuptools_scm
+```
+
+## Configuration
+
+The tool requires:
+- **git**: Version control system
+- **uv**: Python package manager
+- **bump-my-version**: Configured in pyproject.toml
+
+### pyproject.toml Configuration
+
+```toml
+[project]
+dynamic = ["version"]  # Version is not hardcoded
+
+[build-system]
+requires = ["setuptools>=80", "setuptools_scm[toml]>=8", "wheel"]
+
+[tool.setuptools_scm]
+version_scheme = "post-release"  # Use .postN for commits after a tag
+
+[tool.bumpversion]
+current_version = "0.1.0"
+commit = true
+tag = true
+```
+
+## Best Practices
+
+1. **Commit all changes** before bumping version
+2. **Use appropriate bump type**:
+   - `patch` for bug fixes
+   - `minor` for new features
+   - `major` for breaking changes
+3. **Tag before running experiments** for reproducibility
+4. **Push tags** to remote for team visibility
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| START | 0.1.0 | Initial version if no tag exists |
+| PREFIX | v | Tag prefix |
+"""
+
+    @mcp.resource(
+        "deriva-ml://docs/install-kernel",
+        name="Install Kernel Documentation",
+        description="Documentation for Jupyter kernel installation",
+        mime_type="text/markdown",
+    )
+    def get_install_kernel_docs() -> str:
+        """Return documentation for the install-kernel tool."""
+        return """# Install Jupyter Kernel Tool
+
+A utility for installing a Jupyter kernel that points to the current Python virtual environment.
+
+## Why Install a Kernel?
+
+When working with Jupyter notebooks, the kernel determines which Python environment executes
+the code. By default, Jupyter may not see packages installed in your virtual environment.
+Installing a kernel creates a link so Jupyter can find and use your DerivaML environment.
+
+## How It Works
+
+1. Detects the current virtual environment name from `pyvenv.cfg`
+2. Normalizes the name to be Jupyter-compatible (lowercase, alphanumeric)
+3. Registers the kernel with Jupyter using ipykernel's install mechanism
+4. The kernel appears in Jupyter's kernel selector with a friendly display name
+
+## Usage
+
+### MCP Tool
+```python
+# Install kernel for current venv (auto-detects name)
+install_jupyter_kernel()
+
+# Custom kernel name and display name
+install_jupyter_kernel("my-kernel", "My Custom Kernel")
+
+# List all installed kernels
+list_jupyter_kernels()
+```
+
+### Command Line
+```bash
+# Install kernel
+uv run deriva-ml-install-kernel
+
+# Or run as a module
+uv run python -m deriva_ml.install_kernel
+```
+
+## Example Workflow
+
+Setting up a new DerivaML project with Jupyter support:
+
+```bash
+# Create and activate virtual environment
+uv venv --prompt my-ml-project
+source .venv/bin/activate
+
+# Install DerivaML
+uv pip install deriva-ml
+
+# Install Jupyter kernel
+uv run deriva-ml-install-kernel
+# Output: Installed Jupyter kernel 'my-ml-project' with display name 'Python (my-ml-project)'
+
+# Start Jupyter and select the new kernel
+jupyter lab
+```
+
+## Kernel Location
+
+Kernels are installed to the user's Jupyter data directory:
+
+| Platform | Location |
+|----------|----------|
+| Linux/macOS | `~/.local/share/jupyter/kernels/` |
+| Windows | `%APPDATA%\\jupyter\\kernels\\` |
+
+Each kernel is a directory containing a `kernel.json` file that specifies
+the Python executable path and display name.
+
+## Requirements
+
+- Must be run from within a virtual environment
+- ipykernel must be installed in the environment
+
+```bash
+uv add ipykernel
+```
+
+## Troubleshooting
+
+### Kernel not showing in Jupyter
+- Verify kernel was installed: `list_jupyter_kernels()`
+- Check kernel location exists
+- Restart Jupyter server
+
+### Wrong Python version
+- Ensure you activated the correct virtual environment
+- Check `kernel.json` points to correct Python executable
+"""
+
+    @mcp.resource(
+        "deriva-ml://docs/run-notebook",
+        name="Run Notebook Documentation",
+        description="Documentation for running Jupyter notebooks with DerivaML tracking",
+        mime_type="text/markdown",
+    )
+    def get_run_notebook_docs() -> str:
+        """Return documentation for the run-notebook tool."""
+        return """# Run Notebook Tool
+
+A command-line tool for executing Jupyter notebooks with DerivaML execution tracking.
+
+## Overview
+
+This tool runs notebooks using papermill while automatically tracking the execution
+in a Deriva catalog. It handles:
+
+- Parameter injection into notebooks from command-line arguments or config files
+- Automatic kernel detection for the current virtual environment
+- Execution tracking with workflow provenance
+- Conversion of executed notebooks to Markdown format
+- Upload of notebook outputs as execution assets
+
+## Usage
+
+### MCP Tool
+```python
+# Run notebook with parameters
+run_notebook(
+    "notebooks/train_model.ipynb",
+    hostname="deriva.example.org",
+    catalog_id="42",
+    parameters={"learning_rate": 0.001, "epochs": 100},
+    kernel="my-ml-project"
+)
+
+# Inspect notebook parameters first
+inspect_notebook("notebooks/train_model.ipynb")
+```
+
+### Command Line
+```bash
+# Basic usage
+uv run deriva-ml-run-notebook notebook.ipynb --host example.org --catalog 1
+
+# With parameters
+uv run deriva-ml-run-notebook notebook.ipynb \\
+    --host deriva.example.org \\
+    --catalog 42 \\
+    -p learning_rate 0.001 \\
+    -p epochs 100 \\
+    --kernel my_ml_env
+
+# Parameters from file
+uv run deriva-ml-run-notebook notebook.ipynb --file parameters.yaml
+
+# Inspect available parameters
+uv run deriva-ml-run-notebook notebook.ipynb --inspect
+```
+
+## Environment Variables
+
+The tool sets these environment variables for the notebook:
+
+| Variable | Description |
+|----------|-------------|
+| `DERIVA_ML_WORKFLOW_URL` | URL to the notebook source (e.g., GitHub URL) |
+| `DERIVA_ML_WORKFLOW_CHECKSUM` | MD5 checksum of the notebook file |
+| `DERIVA_ML_NOTEBOOK_PATH` | Local filesystem path to the notebook |
+| `DERIVA_ML_SAVE_EXECUTION_RID` | Path where notebook should save execution info |
+
+## Notebook Requirements
+
+The notebook being executed should:
+
+1. Use DerivaML's execution context to record its workflow
+2. Save execution metadata to the path in `DERIVA_ML_SAVE_EXECUTION_RID`
+3. Have a parameter cell for papermill to inject values
+
+### Example Notebook Structure
+
+```python
+# Parameters cell (tagged with "parameters" in notebook metadata)
+host = "localhost"
+catalog = "1"
+learning_rate = 0.001
+epochs = 10
+
+# DerivaML setup
+from deriva_ml import DerivaML
+import os
+import json
+
+ml = DerivaML(hostname=host, catalog_id=catalog)
+
+# Create execution (save metadata for the runner)
+execution = ml.create_execution(...)
+
+# Save execution info for the runner
+rid_path = os.environ.get("DERIVA_ML_SAVE_EXECUTION_RID")
+if rid_path:
+    with open(rid_path, "w") as f:
+        json.dump({
+            "execution_rid": execution.rid,
+            "hostname": host,
+            "catalog_id": catalog,
+            "workflow_rid": execution.workflow_rid,
+        }, f)
+
+# ... rest of notebook code ...
+```
+
+## Output Assets
+
+After execution, the tool uploads:
+- The executed notebook (`.ipynb`) with all outputs
+- A Markdown conversion (`.md`) for easy viewing
+
+Both are registered as `Execution_Asset` records with type `notebook_output`.
+
+## Best Practices
+
+1. **Configure nbstripout** to keep notebooks clean in version control
+2. **Use parameter cells** for values that should be injectable
+3. **Pin dataset versions** in parameters for reproducibility
+4. **Commit code before running** for proper provenance tracking
+
+## Requirements
+
+- papermill: For notebook execution
+- nbformat: For notebook parsing
+- nbconvert: For Markdown conversion
+- deriva_ml: For catalog integration
+- ipykernel: For kernel detection
+
+```bash
+uv add papermill nbformat nbconvert
+```
+"""
