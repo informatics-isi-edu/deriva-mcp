@@ -72,5 +72,4 @@ venv.bak/
 /tmp/
 
 # uv
-uv.lock
 .python-version
