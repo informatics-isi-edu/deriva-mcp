@@ -145,7 +145,13 @@ Uses the published Docker image. No local setup required.
 ```
 
 **Docker arguments:**
-- `--add-host localhost:host-gateway` - Allows connecting to localhost Deriva server (see [Connecting to Localhost from Docker](#connecting-to-localhost-from-docker) for SSL setup)
+- `--add-host localhost:host-gateway` - Allows connecting to localhost Deriva server
+
+**For localhost with self-signed certificates**, add the `REQUESTS_CA_BUNDLE` environment variable:
+```json
+"-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
+```
+See [Connecting to Localhost from Docker](#connecting-to-localhost-from-docker) for how to create the CA bundle.
 
 **Volume mounts:**
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Deriva credentials (required)

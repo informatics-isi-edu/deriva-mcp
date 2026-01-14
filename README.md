@@ -131,7 +131,13 @@ Uses Docker for both MCP servers - most consistent setup:
 ```
 
 **Docker arguments explained:**
-- `--add-host localhost:host-gateway` - Allows connecting to a Deriva server running on localhost (see [Troubleshooting](#docker-with-localhost-deriva-server) for SSL certificate setup)
+- `--add-host localhost:host-gateway` - Allows connecting to a Deriva server running on localhost
+
+**For localhost with self-signed certificates**, add the `REQUESTS_CA_BUNDLE` environment variable:
+```json
+"-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
+```
+See [Troubleshooting](#docker-with-localhost-deriva-server) for how to create the CA bundle.
 
 **Volume mounts explained:**
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Mounts your Deriva credentials (read-only)
