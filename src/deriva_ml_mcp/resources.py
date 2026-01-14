@@ -2286,3 +2286,484 @@ Both are registered as `Execution_Asset` records with type `notebook_output`.
 uv add papermill nbformat nbconvert
 ```
 """
+
+    # =========================================================================
+    # ERMrest Documentation Resources
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://docs/ermrest-data-paths",
+        name="ERMrest Data Path Reference",
+        description="Reference documentation for ERMrest data path syntax and query building",
+        mime_type="text/markdown",
+    )
+    def get_ermrest_data_paths_docs() -> str:
+        """Return documentation for ERMrest data path syntax."""
+        return """# ERMrest Data Path Reference
+
+ERMrest uses URL-based "data paths" to query and manipulate data in Deriva catalogs.
+This reference covers the syntax and patterns for building effective queries.
+
+## Overview
+
+Data paths are URL segments that specify:
+- Which tables to query
+- How to join related tables
+- Which filters to apply
+- Which columns to return
+
+## Basic Syntax
+
+### Entity Paths (Full Records)
+```
+/entity/schema:table
+```
+Returns all columns from all rows in the table.
+
+### Attribute Paths (Column Projection)
+```
+/attribute/schema:table/column1,column2,column3
+```
+Returns only specified columns.
+
+### Filtered Queries
+```
+/entity/schema:table/column=value
+/entity/schema:table/column::gt::10
+/entity/schema:table/column::null::
+```
+
+## Filter Operators
+
+| Operator | Meaning | Example |
+|----------|---------|---------|
+| `=` | Equals | `Name=John` |
+| `::gt::` | Greater than | `Age::gt::18` |
+| `::lt::` | Less than | `Score::lt::100` |
+| `::geq::` | Greater or equal | `Count::geq::5` |
+| `::leq::` | Less or equal | `Price::leq::50` |
+| `::null::` | Is null | `Email::null::` |
+| `::regexp::` | Regular expression | `Name::regexp::^J.*` |
+| `::ciregexp::` | Case-insensitive regex | `Name::ciregexp::john` |
+| `::ts::` | Text search | `Description::ts::machine learning` |
+
+## Joining Tables (Links)
+
+Use `/` to traverse foreign key relationships:
+
+```
+/entity/schema:Image/Subject/Species=Human
+```
+
+This:
+1. Starts at the Image table
+2. Follows the foreign key to Subject
+3. Filters where Species equals "Human"
+
+## Table Aliases
+
+Use `alias:=` to reference the same table multiple times or for clarity:
+
+```
+/entity/I:=schema:Image/$I/Subject/I:Name,I:RID
+```
+
+- `I:=` creates an alias "I" for the Image table
+- `$I` returns to the aliased table
+- `I:Name` references the Name column from alias I
+
+## Aggregates
+
+### Count
+```
+/aggregate/schema:table/cnt:=cnt(*)
+```
+
+### Count Distinct
+```
+/aggregate/schema:table/unique_values:=cnt_d(column)
+```
+
+### Min/Max
+```
+/aggregate/schema:table/min_val:=min(column),max_val:=max(column)
+```
+
+### Array Aggregates
+```
+/aggregate/schema:table/all_names:=array(Name)
+```
+
+## Grouped Aggregates
+
+```
+/attributegroup/schema:table/grouping_column/cnt:=cnt(*)
+```
+
+Group by multiple columns:
+```
+/attributegroup/schema:table/col1,col2/cnt:=cnt(*),avg_val:=avg(value)
+```
+
+## Sorting and Pagination
+
+### Sort Results
+```
+/entity/schema:table@sort(column)
+/entity/schema:table@sort(column::desc::)
+```
+
+### Limit Results
+```
+/entity/schema:table?limit=100
+```
+
+### Pagination
+```
+/entity/schema:table@after(last_rid)?limit=100
+```
+
+## Common Patterns
+
+### Get Images with Subject Information
+```
+/entity/domain:Image/Subject/RID,Filename,Subject:Name,Subject:Age
+```
+
+### Count Images per Subject
+```
+/attributegroup/domain:Image/Subject/image_count:=cnt(*)
+```
+
+### Filter by Related Table
+```
+/entity/domain:Image/Subject/Species=Human/$Image
+```
+The `$Image` returns to the Image table after filtering through Subject.
+
+### Multiple Conditions (AND)
+```
+/entity/domain:Image/Width::gt::100/Height::gt::100
+```
+
+### OR Conditions
+Use `;` for OR within same column:
+```
+/entity/domain:Image/Format=PNG;Format=JPEG
+```
+
+## Snapshot Queries
+
+Query historical data at a specific point in time:
+```
+/ermrest/catalog/{id}@{snapshot}/entity/...
+```
+
+The snapshot is a timestamp or snapshot ID from the catalog's version history.
+
+## Python API
+
+The `deriva.core.datapath` module provides a Pythonic interface:
+
+```python
+from deriva.core import ErmrestCatalog
+
+catalog = ErmrestCatalog('https', 'example.org', '1')
+pb = catalog.getPathBuilder()
+
+# Build query
+path = pb.schemas['domain'].tables['Image']
+path = path.filter(path.Width > 100)
+path = path.link(pb.schemas['domain'].tables['Subject'])
+path = path.filter(path.Subject.Species == 'Human')
+
+# Execute
+results = path.entities()
+```
+
+## Tips
+
+1. **Use aliases** when joining the same table multiple times
+2. **Project columns** to reduce data transfer
+3. **Add filters early** to reduce intermediate result sizes
+4. **Use snapshots** for reproducible queries
+5. **Paginate large results** using `@after()` and `limit`
+
+## Related Tools
+
+- `query_table()` - Simple table queries with filters
+- `get_table_schema()` - View table structure
+- `denormalize_dataset()` - Join dataset tables automatically
+"""
+
+    @mcp.resource(
+        "deriva-ml://docs/ermrest-model-management",
+        name="ERMrest Model Management Reference",
+        description="Reference for schema and table management in Deriva catalogs",
+        mime_type="text/markdown",
+    )
+    def get_ermrest_model_docs() -> str:
+        """Return documentation for ERMrest model management."""
+        return """# ERMrest Model Management Reference
+
+ERMrest provides a programmatic interface for managing catalog schemas, tables,
+columns, and constraints. This reference covers common model management operations.
+
+## Overview
+
+The model hierarchy in Deriva:
+- **Catalog**: Top-level container
+- **Schema**: Namespace for related tables
+- **Table**: Data entity with columns and constraints
+- **Column**: Data attribute with type and constraints
+- **Key**: Uniqueness constraint
+- **Foreign Key**: Referential integrity constraint
+
+## Built-in Column Types
+
+| Type | Description | Example Use |
+|------|-------------|-------------|
+| `text` | Variable-length string | Names, descriptions |
+| `int4` | 32-bit integer | Counts, small IDs |
+| `int8` | 64-bit integer | Large numbers |
+| `float4` | 32-bit floating point | Measurements |
+| `float8` | 64-bit floating point | Precise values |
+| `boolean` | True/false | Flags |
+| `date` | Calendar date | Birth dates |
+| `timestamptz` | Timestamp with timezone | Event times |
+| `jsonb` | Binary JSON | Structured metadata |
+
+## System Columns
+
+Every table automatically includes:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `RID` | `ermrest_rid` | Unique record identifier |
+| `RCT` | `ermrest_rct` | Record creation timestamp |
+| `RMT` | `ermrest_rmt` | Record modification timestamp |
+| `RCB` | `ermrest_rcb` | Record created by (user) |
+| `RMB` | `ermrest_rmb` | Record modified by (user) |
+
+## Creating Tables
+
+### Basic Table
+```python
+from deriva.core import ErmrestCatalog
+import deriva.core.ermrest_model as em
+from deriva.core.ermrest_model import builtin_types as typ
+
+catalog = ErmrestCatalog('https', 'example.org', '1')
+model = catalog.getCatalogModel()
+
+# Define columns
+column_defs = [
+    em.Column.define("Name", typ.text, nullok=False),
+    em.Column.define("Description", typ.text),
+    em.Column.define("Count", typ.int4, default=0),
+]
+
+# Define table
+table_def = em.Table.define(
+    "MyTable",
+    column_defs,
+    comment="My new data table",
+)
+
+# Create in schema
+schema = model.schemas['my_schema']
+new_table = schema.create_table(table_def)
+```
+
+### Vocabulary Table
+```python
+# Convenience method for controlled vocabularies
+vocab_table = schema.create_table(
+    em.Table.define_vocabulary(
+        "My_Vocabulary",
+        "MYPROJECT:{RID}",
+        "https://example.org/id/{RID}"
+    )
+)
+```
+
+Vocabulary tables automatically include:
+- `Name`: Term name (unique)
+- `Description`: Term description
+- `Synonyms`: Alternative names (array)
+- `ID`: CURIE identifier
+- `URI`: Full URI
+
+## Creating Columns
+
+```python
+table = model.table('schema_name', 'table_name')
+
+column_def = em.Column.define(
+    "NewColumn",
+    typ.text,
+    nullok=True,
+    comment="Description of the column",
+)
+
+new_column = table.create_column(column_def)
+```
+
+## Creating Keys
+
+```python
+# Unique constraint on single column
+key_def = em.Key.define(
+    ["Email"],  # Column(s)
+    constraint_names=[["schema", "Table_Email_key"]],
+    comment="Email must be unique",
+)
+table.create_key(key_def)
+
+# Compound unique constraint
+key_def = em.Key.define(
+    ["FirstName", "LastName"],
+    constraint_names=[["schema", "Table_Name_key"]],
+)
+```
+
+## Creating Foreign Keys
+
+```python
+fkey_def = em.ForeignKey.define(
+    ["Subject"],  # Local column(s)
+    "domain",     # Referenced schema
+    "Subject",    # Referenced table
+    ["RID"],      # Referenced column(s)
+    on_update='CASCADE',
+    on_delete='SET NULL',
+    constraint_names=[["schema", "Image_Subject_fkey"]],
+)
+table.create_fkey(fkey_def)
+```
+
+### Foreign Key Actions
+
+| Action | On Delete | On Update |
+|--------|-----------|-----------|
+| `NO ACTION` | Block if references exist | Block |
+| `CASCADE` | Delete referencing rows | Update references |
+| `SET NULL` | Set to NULL | Set to NULL |
+
+## Altering Tables
+
+```python
+table = model.table('schema', 'old_name')
+
+# Rename table
+table.alter(table_name='new_name')
+
+# Move to different schema
+table.alter(schema_name='other_schema')
+
+# Both at once
+table.alter(schema_name='other_schema', table_name='new_name')
+```
+
+## Altering Columns
+
+```python
+column = table.column_definitions['old_name']
+
+# Rename
+column.alter(name='new_name')
+
+# Change type (if compatible)
+column.alter(type=typ.int8)
+
+# Change nullability
+column.alter(nullok=False)
+
+# Change default
+column.alter(default='unknown')
+```
+
+## Dropping Elements
+
+```python
+# Drop column
+table.column_definitions['column_name'].drop()
+
+# Drop key
+table.keys[(schema, 'key_name')].drop()
+
+# Drop foreign key
+table.foreign_keys[(schema, 'fkey_name')].drop()
+
+# Drop table
+table.drop()
+
+# Drop schema (must be empty)
+schema.drop()
+```
+
+## Annotations
+
+Annotations control UI display and behavior:
+
+```python
+# Set table annotation
+table.annotations[em.tag.display] = {"name": "Friendly Name"}
+
+# Set column annotation
+column = table.column_definitions['col']
+column.annotations[em.tag.display] = {"name": "Column Label"}
+
+# Apply changes
+model.apply()
+```
+
+### Common Annotation Tags
+
+| Tag | Purpose |
+|-----|---------|
+| `tag:isrd.isi.edu,2016:visible-columns` | Control column visibility |
+| `tag:isrd.isi.edu,2016:visible-foreign-keys` | Control FK visibility |
+| `tag:isrd.isi.edu,2016:table-display` | Table display settings |
+| `tag:misd.isi.edu,2015:display` | Display name/format |
+
+## DerivaML Convenience Methods
+
+DerivaML provides higher-level methods:
+
+```python
+from deriva_ml import DerivaML
+
+ml = DerivaML(hostname='example.org', catalog_id='1')
+
+# Create table
+ml.create_table("MyTable", [
+    {"name": "Name", "type": "text"},
+    {"name": "Value", "type": "float8"},
+])
+
+# Create vocabulary
+ml.create_vocabulary("My_Type", "Types for my data")
+
+# Create asset table (with URL, checksum tracking)
+ml.create_asset_table("MyAsset", [
+    {"name": "Width", "type": "int4"},
+])
+```
+
+## Best Practices
+
+1. **Use vocabularies** for controlled values
+2. **Define foreign keys** to maintain referential integrity
+3. **Add comments** to document schema elements
+4. **Use annotations** to improve UI experience
+5. **Test in development** before modifying production schemas
+
+## Related Tools
+
+- `create_table()` - Create domain tables
+- `create_vocabulary()` - Create vocabulary tables
+- `create_asset_table()` - Create asset tables
+- `get_table_schema()` - View existing structure
+- `apply_annotations()` - Apply UI customizations
+"""

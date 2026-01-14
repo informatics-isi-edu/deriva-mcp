@@ -2666,3 +2666,268 @@ add_term("Dataset_Type", "MyType", "Description")  # Add new type
 - [ ] Called `upload_execution_outputs()` to finalize
 - [ ] Verified dataset exists and has correct members
 """
+
+    @mcp.prompt(
+        name="query-catalog-data",
+        description="Step-by-step guide for querying and exploring data in a Deriva catalog",
+    )
+    def query_catalog_data_prompt() -> str:
+        """Guide for querying data from Deriva catalogs."""
+        return """# Querying Data from Deriva Catalogs
+
+This guide covers how to explore and query data in a DerivaML catalog,
+from simple lookups to complex joins and aggregations.
+
+## Prerequisites
+- Connected to a DerivaML catalog (`connect_catalog`)
+
+## Step 1: Understand the Schema
+
+Before querying, explore what data is available:
+
+```
+# List all tables in the domain schema
+list_tables()
+
+# Get details about a specific table
+get_table_schema("Image")
+
+# See the full schema structure
+get_schema_description()
+```
+
+## Step 2: Simple Queries
+
+### Query All Records
+```
+query_table("Image")
+```
+Returns first 100 records with all columns.
+
+### Select Specific Columns
+```
+query_table("Image", columns=["RID", "Filename", "URL"])
+```
+
+### Limit Results
+```
+query_table("Image", limit=10)
+```
+
+### Paginate Large Results
+```
+# First page
+query_table("Image", limit=100, offset=0)
+
+# Second page
+query_table("Image", limit=100, offset=100)
+```
+
+## Step 3: Filter Queries
+
+### Equality Filter
+```
+query_table("Image", filters={"Format": "PNG"})
+```
+
+### Multiple Filters (AND)
+```
+query_table("Image", filters={"Format": "PNG", "Width": 1024})
+```
+
+### Count Records
+```
+count_table("Image")
+count_table("Image", filters={"Format": "PNG"})
+```
+
+## Step 4: Get Specific Records
+
+### By RID
+```
+get_record("Image", "1-ABC")
+```
+
+### Resolve Unknown RID
+```
+resolve_rid("1-ABC")
+```
+Returns the table and schema for any RID.
+
+## Step 5: Query Related Data
+
+### Using Denormalization
+Join related tables for ML-ready data:
+
+```
+# First, see what's in a dataset
+list_dataset_members("<dataset-rid>")
+
+# Then denormalize to join tables
+denormalize_dataset(
+    "<dataset-rid>",
+    include_tables=["Image", "Subject", "Diagnosis"],
+    limit=1000
+)
+```
+
+Returns flat data with prefixed column names:
+- `Image.RID`, `Image.Filename`
+- `Subject.Name`, `Subject.Age`
+- `Diagnosis.Label`
+
+### Query Dataset Tables
+```
+get_dataset_table("<dataset-rid>", "Image", limit=500)
+```
+
+## Step 6: Vocabulary Lookups
+
+### List Vocabulary Terms
+```
+list_vocabulary_terms("Dataset_Type")
+list_vocabulary_terms("Workflow_Type")
+```
+
+### Find a Term
+```
+lookup_term("Dataset_Type", "Training")
+lookup_term("Dataset_Type", "train")  # Works with synonyms
+```
+
+## Step 7: Feature Queries
+
+### List Features for a Table
+```
+list_features("Image")
+```
+
+### Get Feature Structure
+```
+lookup_feature("Image", "Diagnosis")
+```
+
+### Get All Feature Values
+```
+list_feature_values("Image", "Diagnosis")
+```
+Returns target RIDs, values, and which execution created them.
+
+## Common Query Patterns
+
+### Find All Images for a Subject
+```
+# If you know the Subject RID
+query_table("Image", filters={"Subject": "<subject-rid>"})
+```
+
+### Find Records by Date Range
+Use the catalog's REST API for complex date queries:
+```
+# For records created after a date
+query_table("Image", filters={"RCT": "2024-01-01"})  # Exact match only
+```
+
+For range queries, use the Python API or web interface.
+
+### Export Data for ML
+```
+# Get dataset members
+members = list_dataset_members("<dataset-rid>")
+
+# Denormalize for training
+data = denormalize_dataset(
+    "<dataset-rid>",
+    include_tables=["Image", "Label"],
+    limit=10000
+)
+
+# Or download the full dataset
+download_dataset("<dataset-rid>", materialize=True)
+```
+
+## Historical Queries (Snapshots)
+
+Query data as it existed at a specific version:
+
+```
+# Get version history
+get_dataset_version_history("<dataset-rid>")
+
+# Query specific version
+list_dataset_members("<dataset-rid>", version="1.0.0")
+get_dataset_table("<dataset-rid>", "Image", version="1.0.0")
+denormalize_dataset("<dataset-rid>", ["Image"], version="1.0.0")
+```
+
+## View in Web Interface
+
+Get URLs to browse data in Chaise:
+
+```
+# URL for a table
+get_chaise_url("Image")
+
+# URL for a specific record
+get_chaise_url("1-ABC")
+```
+
+## Complete Example: Explore a Dataset
+
+```
+# 1. Connect (if not already connected)
+connect_catalog("example.org", "1")
+
+# 2. List available datasets
+list_datasets()
+
+# 3. Get dataset details
+get_dataset("1-ABC")
+
+# 4. See what tables have data
+list_dataset_members("1-ABC")
+# Returns: {"Image": [...], "Subject": [...]}
+
+# 5. Check table structure
+get_table_schema("Image")
+
+# 6. Query image data
+query_table("Image", columns=["RID", "Filename", "Subject"], limit=10)
+
+# 7. Get denormalized data for ML
+denormalize_dataset("1-ABC", ["Image", "Subject", "Diagnosis"], limit=100)
+
+# 8. View in browser
+get_chaise_url("1-ABC")
+```
+
+## Tips
+
+1. **Start small**: Use `limit=10` while exploring
+2. **Check schema first**: Understand column names and types
+3. **Use RIDs**: They're globally unique identifiers
+4. **Pin versions**: For reproducible ML, always specify dataset version
+5. **Use denormalize**: It handles joins automatically for ML workflows
+
+## Troubleshooting
+
+### "Table not found"
+```
+list_tables()  # See available tables
+```
+
+### "Column not found"
+```
+get_table_schema("<table>")  # See column names
+```
+
+### "No results returned"
+- Check filter column names match exactly (case-sensitive)
+- Try without filters first to verify data exists
+- Check you're connected to the correct catalog
+
+### "Too many results"
+- Add filters to narrow down
+- Use pagination with `limit` and `offset`
+- Consider using `count_table()` first
+"""
