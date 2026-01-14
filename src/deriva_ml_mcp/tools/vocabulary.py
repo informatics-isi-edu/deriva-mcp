@@ -184,3 +184,91 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         except Exception as e:
             logger.error(f"Failed to create vocabulary: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def add_synonym(vocabulary_name: str, term_name: str, synonym: str) -> str:
+        """Add a synonym to an existing vocabulary term.
+
+        Synonyms are alternative names that can be used to look up a term.
+
+        Args:
+            vocabulary_name: Name of the vocabulary table (e.g., "Dataset_Type").
+            term_name: Primary name of the term to add synonym to.
+            synonym: Alternative name to add.
+
+        Returns:
+            JSON with status, name, synonyms list.
+
+        Example:
+            add_synonym("Dataset_Type", "Training", "train") -> adds "train" as synonym
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            term = ml.add_synonym(vocabulary_name, term_name, synonym)
+            return json.dumps({
+                "status": "added",
+                "name": term.name,
+                "synonyms": term.synonyms or [],
+                "rid": term.rid,
+            })
+        except Exception as e:
+            logger.error(f"Failed to add synonym: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def remove_synonym(vocabulary_name: str, term_name: str, synonym: str) -> str:
+        """Remove a synonym from an existing vocabulary term.
+
+        Args:
+            vocabulary_name: Name of the vocabulary table (e.g., "Dataset_Type").
+            term_name: Primary name of the term to remove synonym from.
+            synonym: Alternative name to remove.
+
+        Returns:
+            JSON with status, name, updated synonyms list.
+
+        Example:
+            remove_synonym("Dataset_Type", "Training", "train") -> removes "train" as synonym
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            term = ml.remove_synonym(vocabulary_name, term_name, synonym)
+            return json.dumps({
+                "status": "removed",
+                "name": term.name,
+                "synonyms": term.synonyms or [],
+                "rid": term.rid,
+            })
+        except Exception as e:
+            logger.error(f"Failed to remove synonym: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def delete_term(vocabulary_name: str, term_name: str) -> str:
+        """Delete a term from a vocabulary.
+
+        The term must not be in use by any records in the catalog. If the term
+        is referenced by other records (e.g., datasets using this type), the
+        delete will fail with an error listing how many records reference it.
+
+        Args:
+            vocabulary_name: Name of the vocabulary table (e.g., "Dataset_Type").
+            term_name: Name of the term to delete.
+
+        Returns:
+            JSON with status, vocabulary, and deleted term name.
+
+        Example:
+            delete_term("Dataset_Type", "Obsolete") -> {"status": "deleted", ...}
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            ml.delete_term(vocabulary_name, term_name)
+            return json.dumps({
+                "status": "deleted",
+                "vocabulary": vocabulary_name,
+                "name": term_name,
+            })
+        except Exception as e:
+            logger.error(f"Failed to delete term: {e}")
+            return json.dumps({"status": "error", "message": str(e)})

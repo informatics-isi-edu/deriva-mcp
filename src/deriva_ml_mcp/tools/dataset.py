@@ -290,6 +290,66 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def add_dataset_type(dataset_rid: str, dataset_type: str) -> str:
+        """Add a type to a dataset.
+
+        Adds a Dataset_Type vocabulary term to this dataset. The type must exist
+        in the Dataset_Type vocabulary.
+
+        Args:
+            dataset_rid: RID of the dataset.
+            dataset_type: Name of the type to add (must exist in Dataset_Type vocabulary).
+
+        Returns:
+            JSON with status, dataset_rid, dataset_types list.
+
+        Example:
+            add_dataset_type("1-ABC", "Training") -> adds "Training" type to dataset
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            dataset = ml.lookup_dataset(dataset_rid)
+            dataset.add_dataset_type(dataset_type)
+            return json.dumps({
+                "status": "added",
+                "dataset_rid": dataset_rid,
+                "dataset_types": dataset.dataset_types,
+            })
+        except Exception as e:
+            logger.error(f"Failed to add dataset type: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def remove_dataset_type(dataset_rid: str, dataset_type: str) -> str:
+        """Remove a type from a dataset.
+
+        Removes a Dataset_Type vocabulary term from this dataset. The type must exist
+        in the Dataset_Type vocabulary.
+
+        Args:
+            dataset_rid: RID of the dataset.
+            dataset_type: Name of the type to remove.
+
+        Returns:
+            JSON with status, dataset_rid, dataset_types list.
+
+        Example:
+            remove_dataset_type("1-ABC", "Training") -> removes "Training" type from dataset
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            dataset = ml.lookup_dataset(dataset_rid)
+            dataset.remove_dataset_type(dataset_type)
+            return json.dumps({
+                "status": "removed",
+                "dataset_rid": dataset_rid,
+                "dataset_types": dataset.dataset_types,
+            })
+        except Exception as e:
+            logger.error(f"Failed to remove dataset type: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def list_dataset_element_types() -> str:
         """List which tables are registered as dataset element types.
 
@@ -563,3 +623,134 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         except Exception as e:
             logger.error(f"Failed to get dataset table: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    # ========================================================================
+    # Dataset Type convenience tools
+    # ========================================================================
+
+    @mcp.tool()
+    async def list_dataset_types() -> str:
+        """List all available dataset types from the Dataset_Type vocabulary.
+
+        Dataset types categorize datasets by their role in ML workflows
+        (e.g., "Training", "Testing", "Validation", "Complete").
+
+        Returns:
+            JSON array of {name, description, synonyms, rid} for each type.
+
+        Example:
+            list_dataset_types() -> [
+                {"name": "Training", "description": "Data for model training", ...},
+                {"name": "Testing", "description": "Held-out test data", ...}
+            ]
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            terms = ml.list_vocabulary_terms("Dataset_Type")
+            result = []
+            for term in terms:
+                result.append({
+                    "name": term.name,
+                    "description": term.description,
+                    "synonyms": term.synonyms or [],
+                    "rid": term.rid,
+                })
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Failed to list dataset types: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def add_dataset_type(
+        type_name: str,
+        description: str,
+        synonyms: list[str] | None = None,
+    ) -> str:
+        """Add a new dataset type to the Dataset_Type vocabulary.
+
+        Dataset types help categorize datasets by their role in ML workflows.
+        Common types include "Training", "Testing", "Validation", "Complete".
+
+        Args:
+            type_name: Name for the dataset type (must be unique).
+            description: What this type of dataset is used for.
+            synonyms: Alternative names that can match this type (e.g., ["train"] for "Training").
+
+        Returns:
+            JSON with status, name, description, synonyms, rid.
+
+        Example:
+            add_dataset_type("Validation", "Held-out data for hyperparameter tuning", ["val", "valid"])
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            term = ml.add_term(
+                table="Dataset_Type",
+                term_name=type_name,
+                description=description,
+                synonyms=synonyms or [],
+                exists_ok=False,
+            )
+            return json.dumps({
+                "status": "created",
+                "name": term.name,
+                "description": term.description,
+                "synonyms": term.synonyms or [],
+                "rid": term.rid,
+            })
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                try:
+                    existing = ml.lookup_term("Dataset_Type", type_name)
+                    return json.dumps({
+                        "status": "exists",
+                        "name": existing.name,
+                        "description": existing.description,
+                        "synonyms": existing.synonyms or [],
+                        "rid": existing.rid,
+                    })
+                except Exception:
+                    pass
+            logger.error(f"Failed to add dataset type: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def delete_dataset_type(type_name: str) -> str:
+        """Delete a dataset type from the Dataset_Type vocabulary.
+
+        WARNING: Only delete types that are not referenced by any datasets.
+        If datasets use this type, the delete will fail with a foreign key error.
+
+        Args:
+            type_name: Name of the dataset type to delete.
+
+        Returns:
+            JSON with status and deleted type name.
+
+        Example:
+            delete_dataset_type("Obsolete") -> {"status": "deleted", "name": "Obsolete"}
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            # Look up the term to get its RID
+            term = ml.lookup_term("Dataset_Type", type_name)
+
+            # Delete using direct ERMrest delete
+            vocab_table = ml.model.schemas[ml.ml_schema].tables["Dataset_Type"]
+            vocab_table.delete_rows(ml.catalog, [{"RID": term.rid}])
+
+            return json.dumps({
+                "status": "deleted",
+                "name": type_name,
+                "rid": term.rid,
+            })
+        except Exception as e:
+            error_msg = str(e)
+            if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
+                return json.dumps({
+                    "status": "error",
+                    "message": f"Cannot delete '{type_name}': it is referenced by existing datasets. "
+                               "Remove the type from all datasets before deleting.",
+                })
+            logger.error(f"Failed to delete dataset type: {e}")
+            return json.dumps({"status": "error", "message": error_msg})
