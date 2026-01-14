@@ -22,6 +22,7 @@ from deriva_ml_mcp.tools import (
     register_schema_tools,
     register_execution_tools,
     register_data_tools,
+    register_devtools,
 )
 from deriva_ml_mcp.resources import register_resources
 from deriva_ml_mcp.prompts import register_prompts
@@ -56,6 +57,7 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     register_schema_tools(mcp_server, conn_manager)
     register_execution_tools(mcp_server, conn_manager)
     register_data_tools(mcp_server, conn_manager)
+    register_devtools(mcp_server, conn_manager)
 
     # Register resources
     register_resources(mcp_server, conn_manager)
