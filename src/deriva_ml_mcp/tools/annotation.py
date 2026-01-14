@@ -62,16 +62,7 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            return json.dumps({
-                "table": table.name,
-                "schema": table.schema.name,
-                "display": table.annotations.get(DISPLAY_TAG),
-                "visible_columns": table.annotations.get(VISIBLE_COLUMNS_TAG),
-                "visible_foreign_keys": table.annotations.get(VISIBLE_FOREIGN_KEYS_TAG),
-                "table_display": table.annotations.get(TABLE_DISPLAY_TAG),
-            })
+            return json.dumps(ml.get_table_annotations(table_name))
         except Exception as e:
             logger.error(f"Failed to get table annotations: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -101,15 +92,7 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-            column = table.columns[column_name]
-
-            return json.dumps({
-                "table": table.name,
-                "column": column.name,
-                "display": column.annotations.get(DISPLAY_TAG),
-                "column_display": column.annotations.get(COLUMN_DISPLAY_TAG),
-            })
+            return json.dumps(ml.get_column_annotations(table_name, column_name))
         except Exception as e:
             logger.error(f"Failed to get column annotations: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -177,21 +160,7 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            if column_name:
-                column = table.columns[column_name]
-                if annotation is None:
-                    column.annotations.pop(DISPLAY_TAG, None)
-                else:
-                    column.annotations[DISPLAY_TAG] = annotation
-                target = f"{table_name}.{column_name}"
-            else:
-                if annotation is None:
-                    table.annotations.pop(DISPLAY_TAG, None)
-                else:
-                    table.annotations[DISPLAY_TAG] = annotation
-                target = table_name
+            target = ml.set_display_annotation(table_name, annotation, column_name)
 
             return json.dumps({
                 "status": "staged",
@@ -327,16 +296,11 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            if annotation is None:
-                table.annotations.pop(VISIBLE_COLUMNS_TAG, None)
-            else:
-                table.annotations[VISIBLE_COLUMNS_TAG] = annotation
+            target = ml.set_visible_columns(table_name, annotation)
 
             return json.dumps({
                 "status": "staged",
-                "target": table_name,
+                "target": target,
                 "annotation": "visible-columns",
                 "value": annotation,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
@@ -424,16 +388,11 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            if annotation is None:
-                table.annotations.pop(VISIBLE_FOREIGN_KEYS_TAG, None)
-            else:
-                table.annotations[VISIBLE_FOREIGN_KEYS_TAG] = annotation
+            target = ml.set_visible_foreign_keys(table_name, annotation)
 
             return json.dumps({
                 "status": "staged",
-                "target": table_name,
+                "target": target,
                 "annotation": "visible-foreign-keys",
                 "value": annotation,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
@@ -530,16 +489,11 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            if annotation is None:
-                table.annotations.pop(TABLE_DISPLAY_TAG, None)
-            else:
-                table.annotations[TABLE_DISPLAY_TAG] = annotation
+            target = ml.set_table_display(table_name, annotation)
 
             return json.dumps({
                 "status": "staged",
-                "target": table_name,
+                "target": target,
                 "annotation": "table-display",
                 "value": annotation,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
@@ -634,17 +588,11 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-            column = table.columns[column_name]
-
-            if annotation is None:
-                column.annotations.pop(COLUMN_DISPLAY_TAG, None)
-            else:
-                column.annotations[COLUMN_DISPLAY_TAG] = annotation
+            target = ml.set_column_display(table_name, column_name, annotation)
 
             return json.dumps({
                 "status": "staged",
-                "target": f"{table_name}.{column_name}",
+                "target": target,
                 "annotation": "column-display",
                 "value": annotation,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
@@ -672,7 +620,7 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            ml.model.apply()
+            ml.apply_annotations()
 
             return json.dumps({
                 "status": "applied",
@@ -727,33 +675,7 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            outbound = []
-            for fkey in table.foreign_keys:
-                outbound.append({
-                    "constraint_name": [fkey.constraint_schema.name, fkey.constraint_name],
-                    "from_table": table.name,
-                    "from_columns": [col.name for col in fkey.columns],
-                    "to_table": fkey.pk_table.name,
-                    "to_columns": [col.name for col in fkey.referenced_columns],
-                })
-
-            inbound = []
-            for fkey in table.referenced_by:
-                inbound.append({
-                    "constraint_name": [fkey.constraint_schema.name, fkey.constraint_name],
-                    "from_table": fkey.table.name,
-                    "from_columns": [col.name for col in fkey.columns],
-                    "to_table": table.name,
-                    "to_columns": [col.name for col in fkey.referenced_columns],
-                })
-
-            return json.dumps({
-                "table": table_name,
-                "outbound": outbound,
-                "inbound": inbound,
-            })
+            return json.dumps(ml.list_foreign_keys(table_name))
         except Exception as e:
             logger.error(f"Failed to list foreign keys: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -814,43 +736,15 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            # Get or create visible_columns annotation
-            visible_cols = table.annotations.get(VISIBLE_COLUMNS_TAG, {})
-            if visible_cols is None:
-                visible_cols = {}
-
-            # Get or create the context list
-            context_list = visible_cols.get(context, [])
-            if isinstance(context_list, str):
-                # Context references another context, need to resolve or error
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' references another context '{context_list}'. "
-                               "Set it explicitly first with set_visible_columns()."
-                })
-
-            # Make a copy to avoid modifying in place
-            context_list = list(context_list)
-
-            # Insert at position or append
-            if position is not None:
-                context_list.insert(position, column)
-            else:
-                context_list.append(column)
-
-            # Update the annotation
-            visible_cols[context] = context_list
-            table.annotations[VISIBLE_COLUMNS_TAG] = visible_cols
+            new_list = ml.add_visible_column(table_name, context, column, position)
 
             return json.dumps({
                 "status": "staged",
                 "target": table_name,
                 "context": context,
                 "column_added": column,
-                "position": position if position is not None else len(context_list) - 1,
-                "new_list": context_list,
+                "position": position if position is not None else len(new_list) - 1,
+                "new_list": new_list,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
             })
         except Exception as e:
@@ -892,71 +786,14 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            # Get visible_columns annotation
-            visible_cols = table.annotations.get(VISIBLE_COLUMNS_TAG, {})
-            if not visible_cols:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Table '{table_name}' has no visible-columns annotation."
-                })
-
-            # Get the context list
-            context_list = visible_cols.get(context)
-            if context_list is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' not found in visible-columns annotation."
-                })
-            if isinstance(context_list, str):
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' references another context '{context_list}'. "
-                               "Set it explicitly first with set_visible_columns()."
-                })
-
-            # Make a copy
-            context_list = list(context_list)
-            removed = None
-
-            # Remove by index or by value
-            if isinstance(column, int):
-                if 0 <= column < len(context_list):
-                    removed = context_list.pop(column)
-                else:
-                    return json.dumps({
-                        "status": "error",
-                        "message": f"Index {column} out of range (list has {len(context_list)} items)."
-                    })
-            else:
-                # Find and remove the column
-                for i, item in enumerate(context_list):
-                    if item == column:
-                        removed = context_list.pop(i)
-                        break
-                    # Also check if it's a pseudo-column with matching source
-                    if isinstance(item, dict) and isinstance(column, str):
-                        if item.get("source") == column:
-                            removed = context_list.pop(i)
-                            break
-
-                if removed is None:
-                    return json.dumps({
-                        "status": "error",
-                        "message": f"Column {column!r} not found in context '{context}'."
-                    })
-
-            # Update the annotation
-            visible_cols[context] = context_list
-            table.annotations[VISIBLE_COLUMNS_TAG] = visible_cols
+            new_list = ml.remove_visible_column(table_name, context, column)
 
             return json.dumps({
                 "status": "staged",
                 "target": table_name,
                 "context": context,
-                "column_removed": removed,
-                "new_list": context_list,
+                "column_removed": column,
+                "new_list": new_list,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
             })
         except Exception as e:
@@ -997,61 +834,12 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            # Get visible_columns annotation
-            visible_cols = table.annotations.get(VISIBLE_COLUMNS_TAG, {})
-            if not visible_cols:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Table '{table_name}' has no visible-columns annotation."
-                })
-
-            # Get the context list
-            context_list = visible_cols.get(context)
-            if context_list is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' not found in visible-columns annotation."
-                })
-            if isinstance(context_list, str):
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' references another context '{context_list}'. "
-                               "Set it explicitly first with set_visible_columns()."
-                })
-
-            original_list = list(context_list)
-
-            # Determine if new_order is indices or column specs
-            if new_order and isinstance(new_order[0], int):
-                # Reorder by indices
-                if len(new_order) != len(original_list):
-                    return json.dumps({
-                        "status": "error",
-                        "message": f"Index list length ({len(new_order)}) must match "
-                                   f"current list length ({len(original_list)})."
-                    })
-                if set(new_order) != set(range(len(original_list))):
-                    return json.dumps({
-                        "status": "error",
-                        "message": "Index list must contain each index exactly once."
-                    })
-                new_list = [original_list[i] for i in new_order]
-            else:
-                # new_order is the exact new column list
-                # Validate that all items exist in original or are valid new items
-                new_list = new_order
-
-            # Update the annotation
-            visible_cols[context] = new_list
-            table.annotations[VISIBLE_COLUMNS_TAG] = visible_cols
+            new_list = ml.reorder_visible_columns(table_name, context, new_order)
 
             return json.dumps({
                 "status": "staged",
                 "target": table_name,
                 "context": context,
-                "previous_order": original_list,
                 "new_order": new_list,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
             })
@@ -1289,42 +1077,15 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            # Get or create visible_foreign_keys annotation
-            visible_fkeys = table.annotations.get(VISIBLE_FOREIGN_KEYS_TAG, {})
-            if visible_fkeys is None:
-                visible_fkeys = {}
-
-            # Get or create the context list
-            context_list = visible_fkeys.get(context, [])
-            if isinstance(context_list, str):
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' references another context '{context_list}'. "
-                               "Set it explicitly first with set_visible_foreign_keys()."
-                })
-
-            # Make a copy to avoid modifying in place
-            context_list = list(context_list)
-
-            # Insert at position or append
-            if position is not None:
-                context_list.insert(position, foreign_key)
-            else:
-                context_list.append(foreign_key)
-
-            # Update the annotation
-            visible_fkeys[context] = context_list
-            table.annotations[VISIBLE_FOREIGN_KEYS_TAG] = visible_fkeys
+            new_list = ml.add_visible_foreign_key(table_name, context, foreign_key, position)
 
             return json.dumps({
                 "status": "staged",
                 "target": table_name,
                 "context": context,
                 "foreign_key_added": foreign_key,
-                "position": position if position is not None else len(context_list) - 1,
-                "new_list": context_list,
+                "position": position if position is not None else len(new_list) - 1,
+                "new_list": new_list,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
             })
         except Exception as e:
@@ -1362,66 +1123,14 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            # Get visible_foreign_keys annotation
-            visible_fkeys = table.annotations.get(VISIBLE_FOREIGN_KEYS_TAG, {})
-            if not visible_fkeys:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Table '{table_name}' has no visible-foreign-keys annotation."
-                })
-
-            # Get the context list
-            context_list = visible_fkeys.get(context)
-            if context_list is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' not found in visible-foreign-keys annotation."
-                })
-            if isinstance(context_list, str):
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' references another context '{context_list}'. "
-                               "Set it explicitly first with set_visible_foreign_keys()."
-                })
-
-            # Make a copy
-            context_list = list(context_list)
-            removed = None
-
-            # Remove by index or by value
-            if isinstance(foreign_key, int):
-                if 0 <= foreign_key < len(context_list):
-                    removed = context_list.pop(foreign_key)
-                else:
-                    return json.dumps({
-                        "status": "error",
-                        "message": f"Index {foreign_key} out of range (list has {len(context_list)} items)."
-                    })
-            else:
-                # Find and remove the foreign key
-                for i, item in enumerate(context_list):
-                    if item == foreign_key:
-                        removed = context_list.pop(i)
-                        break
-
-                if removed is None:
-                    return json.dumps({
-                        "status": "error",
-                        "message": f"Foreign key {foreign_key!r} not found in context '{context}'."
-                    })
-
-            # Update the annotation
-            visible_fkeys[context] = context_list
-            table.annotations[VISIBLE_FOREIGN_KEYS_TAG] = visible_fkeys
+            new_list = ml.remove_visible_foreign_key(table_name, context, foreign_key)
 
             return json.dumps({
                 "status": "staged",
                 "target": table_name,
                 "context": context,
-                "foreign_key_removed": removed,
-                "new_list": context_list,
+                "foreign_key_removed": foreign_key,
+                "new_list": new_list,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
             })
         except Exception as e:
@@ -1462,60 +1171,12 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            # Get visible_foreign_keys annotation
-            visible_fkeys = table.annotations.get(VISIBLE_FOREIGN_KEYS_TAG, {})
-            if not visible_fkeys:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Table '{table_name}' has no visible-foreign-keys annotation."
-                })
-
-            # Get the context list
-            context_list = visible_fkeys.get(context)
-            if context_list is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' not found in visible-foreign-keys annotation."
-                })
-            if isinstance(context_list, str):
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Context '{context}' references another context '{context_list}'. "
-                               "Set it explicitly first with set_visible_foreign_keys()."
-                })
-
-            original_list = list(context_list)
-
-            # Determine if new_order is indices or foreign key specs
-            if new_order and isinstance(new_order[0], int):
-                # Reorder by indices
-                if len(new_order) != len(original_list):
-                    return json.dumps({
-                        "status": "error",
-                        "message": f"Index list length ({len(new_order)}) must match "
-                                   f"current list length ({len(original_list)})."
-                    })
-                if set(new_order) != set(range(len(original_list))):
-                    return json.dumps({
-                        "status": "error",
-                        "message": "Index list must contain each index exactly once."
-                    })
-                new_list = [original_list[i] for i in new_order]
-            else:
-                # new_order is the exact new foreign key list
-                new_list = new_order
-
-            # Update the annotation
-            visible_fkeys[context] = new_list
-            table.annotations[VISIBLE_FOREIGN_KEYS_TAG] = visible_fkeys
+            new_list = ml.reorder_visible_foreign_keys(table_name, context, new_order)
 
             return json.dumps({
                 "status": "staged",
                 "target": table_name,
                 "context": context,
-                "previous_order": original_list,
                 "new_order": new_list,
                 "message": "Use apply_annotations() to commit changes to the catalog.",
             })
@@ -1563,71 +1224,7 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-
-            # Get columns
-            columns = []
-            for col in table.columns:
-                columns.append({
-                    "name": col.name,
-                    "type": str(col.type.typename),
-                    "template": "{{{" + col.name + "}}}",
-                    "row_template": "{{{_row." + col.name + "}}}",
-                })
-
-            # Get foreign keys (outbound)
-            foreign_keys = []
-            for fkey in table.foreign_keys:
-                schema_name = fkey.constraint_schema.name
-                constraint_name = fkey.constraint_name
-                fk_path = f"$fkeys.{schema_name}.{constraint_name}"
-
-                # Get columns from referenced table
-                ref_columns = [col.name for col in fkey.pk_table.columns]
-
-                foreign_keys.append({
-                    "constraint": [schema_name, constraint_name],
-                    "from_columns": [col.name for col in fkey.columns],
-                    "to_table": fkey.pk_table.name,
-                    "to_columns": ref_columns,
-                    "values_template": "{{{" + fk_path + ".values.COLUMN}}}",
-                    "row_name_template": "{{{" + fk_path + ".rowName}}}",
-                    "example_column_templates": [
-                        "{{{" + fk_path + ".values." + c + "}}}"
-                        for c in ref_columns[:3]  # Show first 3 as examples
-                    ]
-                })
-
-            return json.dumps({
-                "table": table_name,
-                "columns": columns,
-                "foreign_keys": foreign_keys,
-                "special_variables": {
-                    "_value": {
-                        "description": "Current column value (in column_display)",
-                        "template": "{{{_value}}}"
-                    },
-                    "_row": {
-                        "description": "Object with all row columns",
-                        "template": "{{{_row.column_name}}}"
-                    },
-                    "$catalog.id": {
-                        "description": "Catalog ID",
-                        "template": "{{{$catalog.id}}}"
-                    },
-                    "$catalog.snapshot": {
-                        "description": "Current snapshot ID",
-                        "template": "{{{$catalog.snapshot}}}"
-                    },
-                },
-                "helper_examples": {
-                    "conditional": "{{#if column}}...{{else}}...{{/if}}",
-                    "iteration": "{{#each array}}{{{this}}}{{/each}}",
-                    "comparison": "{{#ifCond val1 '==' val2}}...{{/ifCond}}",
-                    "date_format": "{{formatDate RCT 'YYYY-MM-DD'}}",
-                    "json_output": "{{toJSON object}}"
-                }
-            })
+            return json.dumps(ml.get_handlebars_template_variables(table_name))
         except Exception as e:
             logger.error(f"Failed to get template variables: {e}")
             return json.dumps({"status": "error", "message": str(e)})
