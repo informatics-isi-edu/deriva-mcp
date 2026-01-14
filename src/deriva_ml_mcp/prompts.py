@@ -1504,3 +1504,266 @@ Before running an ML workflow:
 | Test config | `python deriva_run.py dry_run=True` |
 | Run experiment | `python deriva_run.py +experiment=<name>` |
 """
+
+    @mcp.prompt(
+        name="run-experiment",
+        description="Step-by-step checklist for running an ML experiment with DerivaML",
+    )
+    def run_experiment_prompt() -> str:
+        """Guide for running an ML experiment."""
+        return """# Running an ML Experiment with DerivaML
+
+Follow this checklist to run a reproducible ML experiment with full provenance tracking.
+
+## Prerequisites
+- Repository set up following the DerivaML model template
+- Connected to the target DerivaML catalog
+- Model code implemented and tested
+
+## Step 1: Verify Repository Structure
+
+Ensure your repository follows the recommended configuration structure:
+
+```
+src/
+├── configs/
+│   ├── __init__.py         # Auto-loads all config modules
+│   ├── deriva.py           # Catalog connection configs
+│   ├── datasets.py         # Dataset specifications
+│   ├── assets.py           # Input asset references
+│   ├── workflow.py         # Workflow definitions
+│   ├── <model_name>.py     # Model hyperparameters
+│   └── experiments.py      # Experiment presets
+├── models/
+│   └── <model_name>.py     # Model implementation
+└── deriva_run.py           # Main entry point
+```
+
+**Check:**
+- [ ] All config modules are in `configs/` directory
+- [ ] `configs/__init__.py` calls `load_all_configs()`
+- [ ] Model implementation exists in `models/`
+- [ ] Entry point `deriva_run.py` is present
+
+## Step 2: Configure Datasets
+
+Edit `configs/datasets.py` to specify the datasets for your experiment.
+
+**Find dataset RIDs in the catalog:**
+```
+list_datasets()
+get_dataset("<rid>")
+get_dataset_version_history("<rid>")
+```
+
+**Update configuration:**
+```python
+from hydra_zen import store
+from deriva_ml.dataset import DatasetSpecConfig
+
+datasets_store = store(group="datasets")
+
+# Pin versions for reproducibility
+training_data = [
+    DatasetSpecConfig(rid="<DATASET_RID>", version="<VERSION>")
+]
+datasets_store(training_data, name="training")
+```
+
+**Check:**
+- [ ] Dataset RIDs are correct for target catalog
+- [ ] Versions are pinned for production runs
+- [ ] Multiple datasets listed if needed
+
+## Step 3: Configure Input Assets
+
+Edit `configs/assets.py` to specify pre-trained weights or other input files.
+
+**Find asset RIDs in the catalog:**
+```
+list_assets("<asset_table>")  # e.g., "Model", "Checkpoint"
+query_table("<asset_table>", columns=["RID", "Filename", "Description"])
+```
+
+**Update configuration:**
+```python
+from hydra_zen import store
+
+asset_store = store(group="assets")
+
+# Pre-trained weights
+pretrained = ["<MODEL_RID>"]
+asset_store(pretrained, name="pretrained_weights")
+
+# No assets needed
+asset_store([], name="no_assets")
+```
+
+**Check:**
+- [ ] Asset RIDs reference correct files in catalog
+- [ ] All required input files are specified
+- [ ] Asset table names match catalog schema
+
+## Step 4: Configure Model Parameters
+
+Edit `configs/<model_name>.py` to define model hyperparameters.
+
+**Create configurations for different scenarios:**
+```python
+from hydra_zen import builds, store
+from models.my_model import train_model
+
+model_store = store(group="model_config")
+
+# Base configuration
+BaseConfig = builds(
+    train_model,
+    epochs=10,
+    learning_rate=1e-3,
+    batch_size=32,
+    hidden_size=128,
+    populate_full_signature=True,
+    zen_partial=True,
+)
+
+# Register variants
+model_store(BaseConfig, name="default_model")
+model_store(BaseConfig, name="quick", epochs=2)
+model_store(BaseConfig, name="full", epochs=50, hidden_size=256)
+```
+
+**Check:**
+- [ ] All hyperparameters have sensible defaults
+- [ ] Quick/test configuration exists for debugging
+- [ ] Production configuration is defined
+- [ ] `zen_partial=True` set for configs needing runtime context
+
+## Step 5: Commit Changes and Bump Version
+
+**CRITICAL: Commit all changes before running!**
+
+```bash
+# Check for uncommitted changes
+git status
+
+# Stage and commit all changes
+git add .
+git commit -m "Configure experiment: <description>"
+
+# Bump version (choose appropriate level)
+uv run bump-version patch   # Bug fixes, small tweaks
+uv run bump-version minor   # New features, config changes
+uv run bump-version major   # Breaking changes
+
+# Push changes and tags
+git push && git push --tags
+
+# Verify version
+uv run python -m setuptools_scm
+```
+
+**Check:**
+- [ ] All code changes committed
+- [ ] All config changes committed
+- [ ] Version bumped appropriately
+- [ ] Tags pushed to remote
+- [ ] `uv.lock` is current and committed
+
+## Step 6: Run the Experiment
+
+### Test First (Dry Run)
+```bash
+# Test configuration without creating records
+uv run python deriva_run.py dry_run=True
+
+# Test with specific experiment preset
+uv run python deriva_run.py +experiment=quick_test dry_run=True
+```
+
+### Production Run
+```bash
+# Run with defaults
+uv run python deriva_run.py
+
+# Run specific experiment
+uv run python deriva_run.py +experiment=full_training
+
+# Override parameters
+uv run python deriva_run.py \\
+    datasets=training \\
+    model_config=full \\
+    model_config.epochs=100
+
+# Run parameter sweep
+uv run python deriva_run.py -m \\
+    model_config.learning_rate=1e-2,1e-3,1e-4
+```
+
+**Common Hydra overrides:**
+| Override | Purpose |
+|----------|---------|
+| `+experiment=<name>` | Use experiment preset |
+| `datasets=<name>` | Select dataset config |
+| `model_config=<name>` | Select model config |
+| `assets=<name>` | Select asset config |
+| `dry_run=True` | Test without records |
+| `-m param=a,b,c` | Parameter sweep |
+
+## Step 7: Verify Results
+
+After the run completes:
+
+```
+# List recent executions
+list_executions(limit=5)
+
+# Check execution details
+get_execution_info()
+
+# View in Chaise
+get_chaise_url("Execution")
+```
+
+**Verify:**
+- [ ] Execution record created in catalog
+- [ ] Output assets uploaded
+- [ ] Metrics/metadata captured
+- [ ] Provenance links correct (datasets, code version)
+
+## Complete Checklist
+
+Before running:
+- [ ] Repository structure matches template
+- [ ] Dataset RIDs and versions configured
+- [ ] Asset RIDs configured (if needed)
+- [ ] Model parameters configured
+- [ ] All changes committed to Git
+- [ ] Version bumped with `bump-version`
+- [ ] Dry run successful
+
+After running:
+- [ ] Execution record exists in catalog
+- [ ] Outputs uploaded successfully
+- [ ] Results reproducible with same config
+
+## Troubleshooting
+
+### "Dataset not found"
+- Verify RID exists: `get_dataset("<rid>")`
+- Check you're connected to correct catalog
+- Ensure version exists: `get_dataset_version_history("<rid>")`
+
+### "Asset not found"
+- Verify RID exists: `resolve_rid("<rid>")`
+- Check asset table name matches catalog
+
+### "Execution failed"
+- Check logs for error details
+- Try `dry_run=True` to debug
+- Verify all dependencies installed: `uv sync`
+
+### "Config not found"
+- Ensure `configs/__init__.py` loads all modules
+- Check config name matches store registration
+- Verify no syntax errors in config files
+"""
