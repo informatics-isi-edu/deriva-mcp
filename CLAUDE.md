@@ -117,6 +117,7 @@ Uses the published Docker image. No local setup required.
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
@@ -136,6 +137,7 @@ Uses the published Docker image. No local setup required.
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
@@ -154,8 +156,9 @@ Uses the published Docker image. No local setup required.
 See [Connecting to Localhost from Docker](#connecting-to-localhost-from-docker) for how to create the CA bundle.
 
 **Volume mounts:**
-- `~/.deriva:/home/mcpuser/.deriva:ro` - Deriva credentials (required)
-- `~/.deriva/deriva-ml:/home/mcpuser/workspace` - For execution outputs (optional)
+- `~/.deriva:/home/mcpuser/.deriva:ro` - Deriva credentials (read-only)
+- `~/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml` - Writable overlay for the workspace inside `.deriva`
+- `~/.deriva/deriva-ml:/home/mcpuser/workspace` - Working directory for execution outputs
 
 **Note:** If using the workspace volume, create the directory first:
 ```bash
@@ -183,6 +186,7 @@ When connecting to a Deriva server running on localhost (e.g., for local develop
         "--add-host", "localhost:host-gateway",
         "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "deriva-ml-mcp:latest"
       ]

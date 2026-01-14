@@ -111,6 +111,7 @@ Uses Docker for both MCP servers - most consistent setup:
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
@@ -141,6 +142,7 @@ See [Troubleshooting](#docker-with-localhost-deriva-server) for how to create th
 
 **Volume mounts explained:**
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Mounts your Deriva credentials (read-only)
+- `~/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml` - Writable overlay for the workspace inside `.deriva`
 - `~/.deriva/deriva-ml:/home/mcpuser/workspace` - Working directory for execution outputs
 
 **Note:** Create the workspace directory before first use:
@@ -222,6 +224,8 @@ If you don't need GitHub integration:
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
     }
@@ -256,6 +260,7 @@ Add to your project's `.mcp.json` file:
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
@@ -317,6 +322,8 @@ Add to your MCP configuration (typically `.vscode/mcp.json`):
           "run", "-i", "--rm",
           "--add-host", "localhost:host-gateway",
           "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+          "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
+          "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
           "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
         ]
       },
@@ -766,6 +773,7 @@ If your localhost Deriva server uses a self-signed certificate (common for devel
         "--add-host", "localhost:host-gateway",
         "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
