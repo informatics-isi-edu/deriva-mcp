@@ -676,9 +676,8 @@ exe.upload_execution_outputs()
 
 **MCP Tools:**
 ```
-# Start an execution for dataset creation
+# Create an execution for dataset creation
 create_execution("Create Training Set", "Preprocessing", "Curate training data")
-start_execution()
 
 # Create the dataset
 create_execution_dataset(
@@ -2375,4 +2374,295 @@ run_notebook(
 
 ### "Authentication failed"
 - Re-authenticate: `uv run deriva-globus-auth-utils login --host <HOST>`
+"""
+
+    @mcp.prompt(
+        name="create-new-dataset-workflow",
+        description="Complete workflow for creating a new dataset with workflow, execution, and proper cleanup",
+    )
+    def create_new_dataset_workflow_prompt() -> str:
+        """Complete workflow for creating datasets from scratch."""
+        return """# Complete Dataset Creation Workflow
+
+This guide walks through the entire process of creating a new dataset in DerivaML,
+including creating a workflow, execution context, datasets, and proper cleanup.
+
+## Prerequisites
+- Connected to a DerivaML catalog (`connect_catalog`)
+- Data exists in domain tables (e.g., Images, Subjects)
+- Know which records you want to include in the dataset
+
+## Overview
+
+Creating a dataset requires these components:
+1. **Workflow**: Defines what type of operation this is (reusable)
+2. **Execution**: A single run of the workflow (tracks this specific operation)
+3. **Dataset**: The collection of data being created
+4. **Upload**: Finalizes and persists everything
+
+## Step 1: Check for Existing Workflow (Optional)
+
+If you've created datasets before, you may already have a workflow:
+
+```
+list_workflows()
+```
+
+If a suitable workflow exists (e.g., "Dataset Curation" with type "Preprocessing"),
+you can reuse it. Otherwise, create a new one in Step 2.
+
+## Step 2: Create the Execution
+
+The execution automatically creates or references a workflow:
+
+```
+create_execution(
+    workflow_name="Dataset Curation",           # Descriptive name
+    workflow_type="Preprocessing",              # From Workflow_Type vocabulary
+    description="Create curated dataset for training"
+)
+```
+
+**Available workflow types** (use `list_workflow_types()` to see all):
+- `Preprocessing` - Data preparation and curation
+- `Training` - Model training runs
+- `Inference` - Running predictions
+- `Annotation` - Adding labels/features
+
+## Step 3: Ensure Element Types are Registered
+
+Before adding records, their tables must be registered as dataset element types:
+
+```
+# Check what's already registered
+list_dataset_element_types()
+
+# Register tables if needed
+add_dataset_element_type("Image")
+add_dataset_element_type("Subject")
+```
+
+## Step 4: Create the Dataset
+
+Create a new dataset within the execution context:
+
+```
+create_execution_dataset(
+    description="Training images - batch 1",
+    dataset_types=["Training"]                  # From Dataset_Type vocabulary
+)
+```
+
+**Returns**: The new dataset's RID (e.g., "1-ABC"). Save this for the next step.
+
+**Available dataset types** (use `list_vocabulary_terms("Dataset_Type")` to see all):
+- `Training` - For model training
+- `Testing` - For model evaluation
+- `Validation` - For hyperparameter tuning
+- `Complete` - Full dataset (often parent of train/test splits)
+
+## Step 5: Add Members to the Dataset
+
+Add records by their RIDs:
+
+```
+# Find records to add
+query_table("Image", limit=100)
+
+# Add them to the dataset
+add_dataset_members("<dataset-rid>", [
+    "<image-rid-1>",
+    "<image-rid-2>",
+    "<image-rid-3>"
+])
+```
+
+Each call to `add_dataset_members` automatically increments the dataset's minor version.
+
+## Step 6: Upload and Finalize (REQUIRED)
+
+**Critical**: Nothing is persisted until you upload!
+
+```
+upload_execution_outputs()
+```
+
+This:
+- Finalizes the execution record
+- Persists all dataset relationships
+- Records provenance (who created what, when)
+
+## Step 7: Verify the Dataset
+
+Confirm everything was created correctly:
+
+```
+# Check the dataset exists
+get_dataset("<dataset-rid>")
+
+# View members
+list_dataset_members("<dataset-rid>")
+
+# Check version
+get_dataset_version_history("<dataset-rid>")
+
+# Get URL to view in browser
+get_chaise_url("<dataset-rid>")
+```
+
+## Complete Example: Single Dataset
+
+```
+# 1. Create execution (creates/references workflow automatically)
+create_execution(
+    "Image Dataset Creation",
+    "Preprocessing",
+    "Create initial training dataset from uploaded images"
+)
+
+# 2. Register element type if needed
+add_dataset_element_type("Image")
+
+# 3. Create the dataset
+create_execution_dataset(
+    "Training Images v1",
+    ["Training"]
+)
+# Returns: "1-ABC"
+
+# 4. Query for images to add
+query_table("Image", columns=["RID", "Filename"], limit=50)
+# Returns list of images with RIDs
+
+# 5. Add images to dataset
+add_dataset_members("1-ABC", [
+    "2-D01", "2-D02", "2-D03", "2-D04", "2-D05"
+])
+
+# 6. Upload to finalize
+upload_execution_outputs()
+
+# 7. Verify
+get_dataset("1-ABC")
+list_dataset_members("1-ABC")
+```
+
+## Complete Example: Train/Test Split
+
+```
+# 1. Create execution
+create_execution(
+    "Train/Test Split",
+    "Preprocessing",
+    "Split images into 80/20 train/test sets"
+)
+
+# 2. Ensure element types registered
+add_dataset_element_type("Image")
+
+# 3. Create parent dataset
+create_execution_dataset("Complete Image Set", ["Complete"])
+# Returns: "1-PARENT"
+
+# 4. Add all images to parent
+add_dataset_members("1-PARENT", [
+    "2-D01", "2-D02", "2-D03", "2-D04", "2-D05",
+    "2-D06", "2-D07", "2-D08", "2-D09", "2-D10"
+])
+
+# 5. Create training dataset
+create_execution_dataset("Training Set (80%)", ["Training"])
+# Returns: "1-TRAIN"
+add_dataset_members("1-TRAIN", [
+    "2-D01", "2-D02", "2-D03", "2-D04",
+    "2-D05", "2-D06", "2-D07", "2-D08"
+])
+
+# 6. Create test dataset
+create_execution_dataset("Test Set (20%)", ["Testing"])
+# Returns: "1-TEST"
+add_dataset_members("1-TEST", ["2-D09", "2-D10"])
+
+# 7. Upload to finalize
+upload_execution_outputs()
+
+# 8. Link children to parent
+add_dataset_child("1-PARENT", "1-TRAIN")
+add_dataset_child("1-PARENT", "1-TEST")
+
+# 9. Verify
+get_dataset("1-PARENT")  # Shows children
+list_dataset_children("1-PARENT")
+```
+
+## Python API Equivalent
+
+For reference, the same workflow in Python:
+
+```python
+from deriva_ml import DerivaML
+from deriva_ml.execution import ExecutionConfiguration, Workflow
+
+ml = DerivaML(hostname="example.org", catalog_id="1")
+
+# Create execution with context manager
+config = ExecutionConfiguration(
+    workflow=Workflow(
+        name="Dataset Curation",
+        workflow_type="Preprocessing",
+        description="Create curated dataset"
+    )
+)
+
+with ml.create_execution(config) as exe:
+    # Ensure element type registered
+    ml.add_dataset_element_type("Image")
+
+    # Create dataset
+    dataset = exe.create_execution_dataset(
+        description="Training Images v1",
+        dataset_types=["Training"]
+    )
+
+    # Add members
+    ml.add_dataset_members(dataset.rid, ["2-D01", "2-D02", "2-D03"])
+
+# Upload AFTER context manager exits
+exe.upload_execution_outputs()
+
+# Verify
+print(ml.get_dataset(dataset.rid))
+```
+
+## Common Issues
+
+### "Element type not registered"
+```
+add_dataset_element_type("<table-name>")
+```
+
+### "Dataset not found after creation"
+Did you call `upload_execution_outputs()`? Nothing persists without it.
+
+### "Workflow type not found"
+```
+list_workflow_types()  # See available types
+add_workflow_type("MyType", "Description")  # Add new type if needed
+```
+
+### "Dataset type not found"
+```
+list_vocabulary_terms("Dataset_Type")  # See available types
+add_term("Dataset_Type", "MyType", "Description")  # Add new type
+```
+
+## Summary Checklist
+
+- [ ] Connected to catalog
+- [ ] Created execution with workflow name and type
+- [ ] Registered element types for tables being used
+- [ ] Created dataset with description and types
+- [ ] Added members (records) to dataset
+- [ ] Called `upload_execution_outputs()` to finalize
+- [ ] Verified dataset exists and has correct members
 """
