@@ -522,20 +522,41 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         version: str | None = None,
         limit: int = 1000,
     ) -> str:
-        """Denormalize dataset tables into a flat structure for ML.
+        """Denormalize dataset tables into a wide table for ML.
 
-        Joins related tables together to produce a "wide" view of the data,
-        with columns from multiple tables combined. Column names are prefixed
-        with the source table name (e.g., "Image.Filename", "Subject.RID").
+        Denormalization transforms normalized relational data into a single "wide table"
+        (also called a "flat table" or "denormalized table") by joining related tables
+        together. This produces rows where each row contains all related information
+        from multiple source tables, with columns from each table combined side-by-side.
 
-        This is useful for:
+        Wide tables are the standard input format for most machine learning frameworks,
+        which expect all features for a single observation to be in one row. This method
+        bridges the gap between normalized database schemas and ML-ready tabular data.
+
+        **How it works:**
+
+        Tables are joined based on their foreign key relationships. For example, if
+        Image has a foreign key to Subject, and Diagnosis has a foreign key to Image,
+        then denormalizing ["Subject", "Image", "Diagnosis"] produces rows where each
+        image appears with its subject's metadata and any associated diagnoses.
+
+        **Common use cases:**
+
         - Creating training data with all features in one table
-        - Joining images with their labels/diagnoses
-        - Combining subject metadata with associated records
+        - Joining images with their labels/diagnoses for supervised learning
+        - Combining subject metadata with associated records for stratified splitting
+        - Preparing data for pandas, scikit-learn, or other ML tools
+
+        **Column naming:**
+
+        Column names are prefixed with the source table name using dots to avoid
+        collisions (e.g., "Image.Filename", "Subject.RID", "Diagnosis.Label").
 
         Args:
             dataset_rid: RID of the dataset to denormalize.
             include_tables: List of table names to include in the join.
+                Tables are joined based on their foreign key relationships.
+                Order doesn't matter - the join order is determined automatically.
             version: Specific version (default: current).
             limit: Maximum rows to return (default: 1000).
 
@@ -544,7 +565,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
         Example:
             denormalize_dataset("1-ABC", ["Image", "Diagnosis"])
-            -> {"columns": ["Image.RID", "Image.Filename", "Diagnosis.Name"], "rows": [...]}
+            -> {"columns": ["Image.RID", "Image.Filename", "Diagnosis.Label"], "rows": [...]}
+
+            # Include subject info for analysis by demographics
+            denormalize_dataset("1-ABC", ["Subject", "Image", "Diagnosis"])
+            -> {"columns": ["Subject.Age", "Subject.Gender", "Image.RID", ...], "rows": [...]}
         """
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec
