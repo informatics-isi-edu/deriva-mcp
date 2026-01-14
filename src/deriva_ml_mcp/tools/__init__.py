@@ -4,6 +4,7 @@ This module provides tool registration functions that expose
 DerivaML operations as MCP tools.
 """
 
+from deriva_ml_mcp.tools.annotation import register_annotation_tools
 from deriva_ml_mcp.tools.catalog import register_catalog_tools
 from deriva_ml_mcp.tools.dataset import register_dataset_tools
 from deriva_ml_mcp.tools.vocabulary import register_vocabulary_tools
@@ -14,6 +15,7 @@ from deriva_ml_mcp.tools.execution import register_execution_tools
 from deriva_ml_mcp.tools.data import register_data_tools
 
 __all__ = [
+    "register_annotation_tools",
     "register_catalog_tools",
     "register_dataset_tools",
     "register_vocabulary_tools",

@@ -8,6 +8,7 @@ Resources provide read-only access to:
 - Configuration templates for hydra-zen
 - Vocabulary definitions
 - Dataset metadata
+- Annotation documentation and context reference
 """
 
 from __future__ import annotations
@@ -418,3 +419,1403 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
             ], indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
+
+    # =========================================================================
+    # Annotation Documentation Resources
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://docs/annotations",
+        name="Annotation Reference",
+        description="Complete reference documentation for Deriva annotations",
+        mime_type="application/json",
+    )
+    def get_annotation_reference() -> str:
+        """Return comprehensive annotation documentation."""
+        return json.dumps({
+            "title": "Deriva Annotation Reference",
+            "description": "Complete guide to Deriva catalog annotations for UI customization",
+            "annotations": {
+                "display": {
+                    "tag_uri": "tag:isrd.isi.edu,2015:display",
+                    "applies_to": ["catalog", "schema", "table", "column", "foreign_key"],
+                    "description": "Controls display name and basic presentation options",
+                    "schema": {
+                        "name": {"type": "string", "description": "Display name (mutually exclusive with markdown_name)"},
+                        "markdown_name": {"type": "string", "description": "Markdown-formatted display name"},
+                        "name_style": {
+                            "type": "object",
+                            "properties": {
+                                "underline_space": {"type": "boolean", "description": "Replace underscores with spaces"},
+                                "title_case": {"type": "boolean", "description": "Apply title case formatting"},
+                                "markdown": {"type": "boolean", "description": "Interpret name as markdown"}
+                            }
+                        },
+                        "comment": {"type": "string", "description": "Tooltip/description text"},
+                        "show_null": {
+                            "type": "object",
+                            "description": "Per-context null value display (true=show 'No value', false=hide, string=custom text)",
+                            "pattern_properties": {"context": "boolean | string"}
+                        },
+                        "show_foreign_key_link": {
+                            "type": "object",
+                            "description": "Per-context control of FK link display",
+                            "pattern_properties": {"context": "boolean"}
+                        }
+                    },
+                    "examples": [
+                        {"name": "Images", "_comment": "Simple display name"},
+                        {"name_style": {"underline_space": True}, "_comment": "Auto-format names"},
+                        {"name": "My Table", "comment": "Tooltip shown on hover"}
+                    ]
+                },
+                "visible_columns": {
+                    "tag_uri": "tag:isrd.isi.edu,2016:visible-columns",
+                    "applies_to": ["table"],
+                    "description": "Controls which columns appear in each UI context and their order",
+                    "contexts": {
+                        "*": "Default for all unspecified contexts",
+                        "compact": "Main list/table view (record lists, search results)",
+                        "compact/brief": "Abbreviated display (tooltips, inline previews)",
+                        "compact/brief/inline": "Minimal inline display (FK cell values)",
+                        "compact/select": "Selection modal (FK picker dialogs)",
+                        "detailed": "Full single-record view",
+                        "entry": "Data entry forms (both create and edit)",
+                        "entry/create": "Create new record form only",
+                        "entry/edit": "Edit existing record form only",
+                        "export": "Data export (CSV/JSON)",
+                        "filter": "Faceted search sidebar (special format)"
+                    },
+                    "column_formats": {
+                        "string": {
+                            "description": "Simple column name",
+                            "example": "\"Filename\""
+                        },
+                        "array": {
+                            "description": "Foreign key reference [schema, constraint_name]",
+                            "example": "[\"domain\", \"Image_Subject_fkey\"]"
+                        },
+                        "object": {
+                            "description": "Pseudo-column with source path and display options",
+                            "properties": {
+                                "source": "Column name or path array with outbound/inbound FK traversal",
+                                "sourcekey": "Reference to predefined source in source-definitions",
+                                "entity": "boolean - Show as entity (row link) vs scalar value",
+                                "aggregate": "Aggregation function: min, max, cnt, cnt_d, array, array_d",
+                                "self_link": "boolean - Link to current row",
+                                "markdown_name": "Custom column header display",
+                                "comment": "Column tooltip text",
+                                "display": {
+                                    "markdown_pattern": "Template using {{{column}}} syntax",
+                                    "template_engine": "handlebars or mustache",
+                                    "show_foreign_key_link": "boolean",
+                                    "array_ux_mode": "raw, csv, olist, or ulist"
+                                }
+                            }
+                        }
+                    },
+                    "filter_format": {
+                        "description": "Special format for filter context (faceted search)",
+                        "structure": {
+                            "and": [
+                                {
+                                    "source": "column_name or path",
+                                    "markdown_name": "Filter label",
+                                    "open": "boolean - Expand by default",
+                                    "ux_mode": "choices, ranges, or check_presence",
+                                    "bar_plot": "boolean - Show distribution chart",
+                                    "hide_null_choice": "boolean",
+                                    "hide_not_null_choice": "boolean",
+                                    "choices": "Array of preset values",
+                                    "ranges": "Array of {min, max} range objects"
+                                }
+                            ]
+                        }
+                    },
+                    "examples": [
+                        {
+                            "_comment": "Basic column list per context",
+                            "compact": ["Name", "Status", "RCT"],
+                            "detailed": ["Name", "Status", "Description", "Notes", "RCT", "RMT"]
+                        },
+                        {
+                            "_comment": "Include FK and hide in entry",
+                            "compact": ["Name", ["domain", "Parent_fkey"]],
+                            "entry": ["Name", "Description"]
+                        },
+                        {
+                            "_comment": "Pseudo-column traversing FK",
+                            "compact": [
+                                "Name",
+                                {
+                                    "source": [{"outbound": ["domain", "Image_Subject_fkey"]}, "Name"],
+                                    "markdown_name": "Subject Name"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "visible_foreign_keys": {
+                    "tag_uri": "tag:isrd.isi.edu,2016:visible-foreign-keys",
+                    "applies_to": ["table"],
+                    "description": "Controls which related tables (inbound FKs) appear in detailed view",
+                    "contexts": {
+                        "*": "Default for all contexts",
+                        "detailed": "Full record view - related tables section"
+                    },
+                    "important_note": "Only INBOUND foreign keys are valid - other tables that reference this table",
+                    "foreign_key_formats": {
+                        "array": {
+                            "description": "Inbound FK reference [schema, constraint_name]",
+                            "example": "[\"domain\", \"Image_Subject_fkey\"]"
+                        },
+                        "object": {
+                            "description": "Pseudo-column for complex relationships",
+                            "properties": {
+                                "source": "Path starting with inbound FK",
+                                "sourcekey": "Reference to source-definitions",
+                                "markdown_name": "Section header",
+                                "comment": "Section tooltip",
+                                "display": "Display options object"
+                            }
+                        }
+                    },
+                    "examples": [
+                        {
+                            "_comment": "Show specific related tables",
+                            "detailed": [
+                                ["domain", "Image_Subject_fkey"],
+                                ["domain", "Diagnosis_Subject_fkey"]
+                            ]
+                        },
+                        {
+                            "_comment": "Hide all related tables",
+                            "detailed": []
+                        }
+                    ]
+                },
+                "table_display": {
+                    "tag_uri": "tag:isrd.isi.edu,2016:table-display",
+                    "applies_to": ["table"],
+                    "description": "Controls table-level display like row naming, page size, and sort order",
+                    "contexts": {
+                        "*": "Default for all contexts",
+                        "row_name": "Special context for row identifier display",
+                        "compact": "List view options",
+                        "detailed": "Record view options"
+                    },
+                    "options": {
+                        "row_markdown_pattern": {"type": "string", "description": "Template for row display using {{{column}}}"},
+                        "template_engine": {"type": "string", "enum": ["handlebars", "mustache"]},
+                        "row_order": {"type": "array", "description": "Default sort order - column names or {column, descending} objects"},
+                        "page_size": {"type": "number", "description": "Rows per page"},
+                        "hide_column_headers": {"type": "boolean", "description": "Hide column headers (detailed only)"},
+                        "collapse_toc_panel": {"type": "boolean", "description": "Collapse table of contents (detailed only)"},
+                        "page_markdown_pattern": {"type": "string", "description": "Template for entire page"},
+                        "separator_markdown": {"type": "string", "description": "Separator between rows"},
+                        "prefix_markdown": {"type": "string", "description": "Content before rows"},
+                        "suffix_markdown": {"type": "string", "description": "Content after rows"}
+                    },
+                    "examples": [
+                        {
+                            "_comment": "Set row name pattern",
+                            "row_name": {"row_markdown_pattern": "{{{Name}}} ({{{Species}}})"}
+                        },
+                        {
+                            "_comment": "Set sort order and page size",
+                            "compact": {
+                                "row_order": [{"column": "RCT", "descending": True}],
+                                "page_size": 50
+                            }
+                        }
+                    ]
+                },
+                "column_display": {
+                    "tag_uri": "tag:isrd.isi.edu,2016:column-display",
+                    "applies_to": ["column"],
+                    "description": "Controls how column values are rendered",
+                    "contexts": {
+                        "*": "Default for all contexts",
+                        "compact": "List view rendering",
+                        "detailed": "Record view rendering",
+                        "entry": "Entry form rendering"
+                    },
+                    "options": {
+                        "pre_format": {
+                            "type": "object",
+                            "properties": {
+                                "format": "printf-style format string (e.g., '%.2f')",
+                                "bool_true_value": "Text for boolean true",
+                                "bool_false_value": "Text for boolean false"
+                            }
+                        },
+                        "markdown_pattern": {"type": "string", "description": "Template using {{{_value}}} or {{{column}}}"},
+                        "template_engine": {"type": "string", "enum": ["handlebars", "mustache"]},
+                        "column_order": {"description": "Sort config or false to disable sorting"}
+                    },
+                    "template_variables": {
+                        "{{{_value}}}": "The column's own value",
+                        "{{{value}}}": "Alias for _value",
+                        "{{{_row.column_name}}}": "Another column's value from same row",
+                        "{{{$fkeys.schema.fkey.values.col}}}": "Value from related table via FK"
+                    },
+                    "examples": [
+                        {
+                            "_comment": "Format number with 2 decimals",
+                            "*": {"pre_format": {"format": "%.2f"}}
+                        },
+                        {
+                            "_comment": "Display boolean as Yes/No",
+                            "*": {"pre_format": {"bool_true_value": "Yes", "bool_false_value": "No"}}
+                        },
+                        {
+                            "_comment": "Clickable image thumbnail",
+                            "detailed": {"markdown_pattern": "[![Image]({{{_value}}})]({{{_value}}})"}
+                        }
+                    ]
+                }
+            },
+            "tools_reference": {
+                "read_tools": [
+                    {"name": "get_table_annotations", "description": "Get all annotations for a table"},
+                    {"name": "get_column_annotations", "description": "Get annotations for a column"},
+                    {"name": "get_annotation_contexts", "description": "Get context documentation"},
+                    {"name": "list_foreign_keys", "description": "List FKs to find constraint names"}
+                ],
+                "write_tools": [
+                    {"name": "set_display_annotation", "description": "Set display annotation on table/column"},
+                    {"name": "set_visible_columns", "description": "Set visible-columns annotation"},
+                    {"name": "set_visible_foreign_keys", "description": "Set visible-foreign-keys annotation"},
+                    {"name": "set_table_display", "description": "Set table-display annotation"},
+                    {"name": "set_column_display", "description": "Set column-display annotation"}
+                ],
+                "convenience_tools": [
+                    {"name": "add_visible_column", "description": "Add column to visible list"},
+                    {"name": "remove_visible_column", "description": "Remove column from visible list"},
+                    {"name": "reorder_visible_columns", "description": "Reorder visible columns"},
+                    {"name": "add_visible_foreign_key", "description": "Add FK to visible list"},
+                    {"name": "remove_visible_foreign_key", "description": "Remove FK from visible list"},
+                    {"name": "reorder_visible_foreign_keys", "description": "Reorder visible FKs"}
+                ],
+                "apply_tool": {"name": "apply_annotations", "description": "Commit staged changes to catalog"}
+            },
+            "workflow_example": [
+                "1. get_table_annotations('Image')  # See current state",
+                "2. list_foreign_keys('Image')  # Find FK constraint names",
+                "3. add_visible_column('Image', 'compact', 'Description')  # Add column",
+                "4. reorder_visible_columns('Image', 'compact', [1, 0, 2, 3])  # Reorder",
+                "5. set_table_display('Image', {'row_name': {'row_markdown_pattern': '{{{Filename}}}'}})  # Set row name",
+                "6. apply_annotations()  # Commit all changes"
+            ]
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://docs/annotation-contexts",
+        name="Annotation Contexts Quick Reference",
+        description="Quick reference for annotation contexts and when they are used",
+        mime_type="application/json",
+    )
+    def get_annotation_contexts_reference() -> str:
+        """Return a quick reference for annotation contexts."""
+        return json.dumps({
+            "title": "Annotation Contexts Quick Reference",
+            "visible_columns": {
+                "contexts": [
+                    {"name": "*", "when_used": "Fallback for unspecified contexts"},
+                    {"name": "compact", "when_used": "Main record list, search results, related tables"},
+                    {"name": "compact/brief", "when_used": "Tooltips, hover previews"},
+                    {"name": "compact/brief/inline", "when_used": "FK cell values in tables"},
+                    {"name": "compact/select", "when_used": "FK picker/selection dialogs"},
+                    {"name": "detailed", "when_used": "Single record page"},
+                    {"name": "entry", "when_used": "Create and edit forms"},
+                    {"name": "entry/create", "when_used": "New record form only"},
+                    {"name": "entry/edit", "when_used": "Edit form only"},
+                    {"name": "export", "when_used": "CSV/JSON export"},
+                    {"name": "filter", "when_used": "Faceted search (special format)"}
+                ],
+                "fallback_chain": "specific → parent → * → system default"
+            },
+            "visible_foreign_keys": {
+                "contexts": [
+                    {"name": "*", "when_used": "Default for all views"},
+                    {"name": "detailed", "when_used": "Related tables on record page"}
+                ],
+                "note": "Only inbound FKs (tables referencing this table) are valid"
+            },
+            "table_display": {
+                "contexts": [
+                    {"name": "*", "when_used": "Default options"},
+                    {"name": "row_name", "when_used": "Row identifier in links/titles"},
+                    {"name": "compact", "when_used": "List view settings"},
+                    {"name": "detailed", "when_used": "Record view settings"}
+                ]
+            },
+            "column_display": {
+                "contexts": [
+                    {"name": "*", "when_used": "Default rendering"},
+                    {"name": "compact", "when_used": "Table cell rendering"},
+                    {"name": "detailed", "when_used": "Record field rendering"},
+                    {"name": "entry", "when_used": "Form field rendering"}
+                ]
+            }
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://docs/handlebars-templates",
+        name="Handlebars Template Guide",
+        description="Complete guide to Handlebars templates for Deriva annotations",
+        mime_type="application/json",
+    )
+    def get_handlebars_guide() -> str:
+        """Return comprehensive Handlebars template documentation."""
+        return json.dumps({
+            "title": "Handlebars Template Guide for Deriva",
+            "description": "Templates are used in row_markdown_pattern, markdown_pattern, and other display options",
+            "template_engines": {
+                "handlebars": {
+                    "description": "Default template engine with more features",
+                    "triple_braces": "{{{value}}} - Raw output (no HTML escaping)",
+                    "double_braces": "{{value}} - HTML-escaped output"
+                },
+                "mustache": {
+                    "description": "Simpler template engine, subset of Handlebars",
+                    "note": "Use template_engine: 'mustache' to select"
+                }
+            },
+            "basic_syntax": {
+                "variable_output": {
+                    "raw": "{{{column_name}}}",
+                    "escaped": "{{column_name}}",
+                    "recommendation": "Use triple braces {{{...}}} for most Deriva use cases"
+                },
+                "accessing_values": {
+                    "current_column": "{{{_value}}} or {{{value}}}",
+                    "other_column": "{{{column_name}}}",
+                    "nested_property": "{{{object.property}}}",
+                    "array_element": "{{{array.0}}}"
+                }
+            },
+            "deriva_specific_variables": {
+                "row_context": {
+                    "_value": "Current column/field value",
+                    "_row": "Object with all columns in current row",
+                    "_row.RID": "RID of current row",
+                    "_row.column_name": "Any column value from current row"
+                },
+                "foreign_key_values": {
+                    "$fkeys": "Object containing FK-related data",
+                    "$fkeys.schema.constraint.values": "Values from related table via FK",
+                    "$fkeys.schema.constraint.values.column_name": "Specific column from related row",
+                    "$fkeys.schema.constraint.rowName": "Row name of related record"
+                },
+                "system_values": {
+                    "$moment": "Moment.js for date formatting",
+                    "$catalog": "Catalog information object",
+                    "$catalog.id": "Catalog ID",
+                    "$catalog.snapshot": "Current snapshot ID"
+                },
+                "url_encoding": {
+                    "$uri_path": "URI path component (for paths)",
+                    "$uri_component": "URI component (for query params)"
+                }
+            },
+            "handlebars_helpers": {
+                "conditionals": {
+                    "#if": {
+                        "syntax": "{{#if value}}...{{/if}}",
+                        "example": "{{#if Description}}{{{Description}}}{{else}}No description{{/if}}",
+                        "note": "Tests for truthiness (false, null, undefined, '', 0, [] are falsy)"
+                    },
+                    "#unless": {
+                        "syntax": "{{#unless value}}...{{/unless}}",
+                        "example": "{{#unless Active}}(Inactive){{/unless}}"
+                    },
+                    "if_else": {
+                        "syntax": "{{#if cond}}...{{else}}...{{/if}}",
+                        "example": "{{#if URL}}[Link]({{{URL}}}){{else}}No link{{/if}}"
+                    }
+                },
+                "iteration": {
+                    "#each": {
+                        "syntax": "{{#each array}}...{{/each}}",
+                        "example": "{{#each Tags}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}",
+                        "variables": {
+                            "this": "Current item",
+                            "@index": "Current index (0-based)",
+                            "@first": "Boolean - is first item",
+                            "@last": "Boolean - is last item",
+                            "@key": "Current key (for objects)"
+                        }
+                    }
+                },
+                "comparison": {
+                    "#ifCond": {
+                        "syntax": "{{#ifCond val1 op val2}}...{{/ifCond}}",
+                        "operators": ["==", "!=", "<", ">", "<=", ">=", "===", "!==", "&&", "||"],
+                        "example": "{{#ifCond Status '==' 'Active'}}✓{{/ifCond}}"
+                    }
+                },
+                "string_helpers": {
+                    "escape": "{{escape value}} - HTML escape",
+                    "toJSON": "{{toJSON object}} - Convert to JSON string",
+                    "encodeFacet": "{{encodeFacet object}} - Encode for facet URL"
+                },
+                "math_helpers": {
+                    "math": {
+                        "syntax": "{{math val1 op val2}}",
+                        "operators": ["+", "-", "*", "/", "%"],
+                        "example": "{{math Price '*' Quantity}}"
+                    }
+                },
+                "date_helpers": {
+                    "formatDate": {
+                        "syntax": "{{formatDate date format}}",
+                        "formats": ["YYYY-MM-DD", "MM/DD/YYYY", "MMMM D, YYYY", "relative"],
+                        "example": "{{formatDate RCT 'MMMM D, YYYY'}}"
+                    },
+                    "humanizeBytes": {
+                        "syntax": "{{humanizeBytes bytes}}",
+                        "example": "{{humanizeBytes Length}} → '1.5 MB'"
+                    }
+                }
+            },
+            "common_patterns": {
+                "row_name_patterns": [
+                    {
+                        "description": "Simple column value",
+                        "pattern": "{{{Name}}}"
+                    },
+                    {
+                        "description": "Multiple columns",
+                        "pattern": "{{{First_Name}}} {{{Last_Name}}}"
+                    },
+                    {
+                        "description": "With conditional",
+                        "pattern": "{{{Name}}}{{#if Nickname}} ({{{Nickname}}}){{/if}}"
+                    },
+                    {
+                        "description": "With FK value",
+                        "pattern": "{{{Filename}}} - {{{$fkeys.domain.Image_Subject_fkey.rowName}}}"
+                    }
+                ],
+                "column_display_patterns": [
+                    {
+                        "description": "Link from URL column",
+                        "pattern": "[{{{_value}}}]({{{_value}}})"
+                    },
+                    {
+                        "description": "Image thumbnail",
+                        "pattern": "[![Thumbnail]({{{_value}}}?h=100)]({{{_value}}})"
+                    },
+                    {
+                        "description": "Email link",
+                        "pattern": "[{{{_value}}}](mailto:{{{_value}}})"
+                    },
+                    {
+                        "description": "Badge/status",
+                        "pattern": "**{{{_value}}}**"
+                    },
+                    {
+                        "description": "Conditional formatting",
+                        "pattern": "{{#ifCond _value '>' 0}}+{{{_value}}}{{else}}{{{_value}}}{{/ifCond}}"
+                    }
+                ],
+                "pseudo_column_patterns": [
+                    {
+                        "description": "Count related items",
+                        "pattern": "{{{$self.values.length}}} items"
+                    },
+                    {
+                        "description": "List with separator",
+                        "pattern": "{{#each $self.values}}{{{this.Name}}}{{#unless @last}}, {{/unless}}{{/each}}"
+                    }
+                ]
+            },
+            "debugging_tips": [
+                "Use {{toJSON variable}} to inspect complex objects",
+                "Start simple and add complexity incrementally",
+                "Check browser console for template rendering errors",
+                "Test with sample data using preview_handlebars_template tool",
+                "Triple braces {{{...}}} prevent HTML escaping issues"
+            ],
+            "examples": {
+                "row_name": {
+                    "simple": {
+                        "pattern": "{{{Name}}}",
+                        "output": "John Smith"
+                    },
+                    "composite": {
+                        "pattern": "{{{Last_Name}}}, {{{First_Name}}}",
+                        "output": "Smith, John"
+                    },
+                    "with_fk": {
+                        "pattern": "{{{Filename}}} ({{{$fkeys.domain.Image_Subject_fkey.rowName}}})",
+                        "output": "scan001.jpg (Patient A)"
+                    }
+                },
+                "column_display": {
+                    "url_as_link": {
+                        "pattern": "[Download]({{{_value}}})",
+                        "input": "https://example.com/file.pdf",
+                        "output": "[Download](https://example.com/file.pdf)"
+                    },
+                    "image_thumbnail": {
+                        "pattern": "[![]({{{_value}}}?h=80)]({{{_value}}})",
+                        "note": "Creates clickable thumbnail"
+                    },
+                    "conditional_status": {
+                        "pattern": "{{#if _value}}✓ Active{{else}}✗ Inactive{{/if}}",
+                        "input_true": True,
+                        "output_true": "✓ Active"
+                    }
+                }
+            },
+            "tools_for_templates": {
+                "preview_handlebars_template": "Test a template with sample data",
+                "get_table_sample_data": "Get sample row data for template testing",
+                "get_handlebars_template_variables": "List available variables for a table"
+            }
+        }, indent=2)
+
+    # =========================================================================
+    # JSON Schema Resources - Official Deriva Annotation Schemas
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://schemas/display",
+        name="Display Annotation Schema",
+        description="Official JSON Schema for the display annotation (tag:isrd.isi.edu,2015:display)",
+        mime_type="application/json",
+    )
+    def get_display_schema() -> str:
+        """Return the official JSON schema for the display annotation."""
+        return json.dumps({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$id": "http://deriva.isi.edu/schemas/display.schema.json",
+            "title": "tag:isrd.isi.edu,2015:display",
+            "description": "Schema document for the 'display' annotation. Controls display name and presentation options for tables, columns, and foreign keys.",
+            "type": "object",
+            "properties": {
+                "comment": {
+                    "type": "string",
+                    "description": "Tooltip or description text shown on hover"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Plain text display name (mutually exclusive with markdown_name)"
+                },
+                "markdown_name": {
+                    "type": "string",
+                    "description": "Markdown-formatted display name (mutually exclusive with name)"
+                },
+                "name_style": {
+                    "type": "object",
+                    "description": "Automatic name formatting options",
+                    "properties": {
+                        "underline_space": {
+                            "type": "boolean",
+                            "description": "Replace underscores with spaces in names"
+                        },
+                        "title_case": {
+                            "type": "boolean",
+                            "description": "Apply title case formatting to names"
+                        },
+                        "markdown": {
+                            "type": "boolean",
+                            "description": "Interpret name as markdown"
+                        }
+                    }
+                },
+                "show_null": {
+                    "type": "object",
+                    "description": "How to display null values per context. Values can be: true (show 'No value'), false (hide), or a quoted string for custom text",
+                    "patternProperties": {
+                        "^[*]$|^compact([/]select|[/]brief([/]inline)?)?$|^detailed$": {
+                            "oneOf": [
+                                {"type": "boolean"},
+                                {"type": "string", "pattern": "^[\"].*[\"]$", "description": "Quoted custom text for null display"}
+                            ]
+                        }
+                    },
+                    "additionalProperties": False
+                },
+                "show_foreign_key_link": {
+                    "type": "object",
+                    "description": "Whether to show foreign key values as clickable links per context",
+                    "patternProperties": {
+                        "^[*]$|^compact([/]select|[/]brief([/]inline)?)?$|^detailed$": {"type": "boolean"}
+                    },
+                    "additionalProperties": False
+                }
+            },
+            "anyOf": [
+                {"required": ["name"], "not": {"required": ["markdown_name"]}},
+                {"required": ["markdown_name"], "not": {"required": ["name"]}},
+                {"not": {"required": ["name", "markdown_name"]}}
+            ],
+            "examples": [
+                {"name": "Images", "_comment": "Simple display name"},
+                {"markdown_name": "**Images**", "_comment": "Markdown formatted name"},
+                {"name_style": {"underline_space": True, "title_case": True}, "_comment": "Auto-format names"},
+                {"name": "My Table", "comment": "Tooltip shown on hover"},
+                {"show_null": {"*": True, "compact": False}, "_comment": "Show null in most views, hide in compact"}
+            ]
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://schemas/visible-columns",
+        name="Visible Columns Annotation Schema",
+        description="Official JSON Schema for the visible-columns annotation (tag:isrd.isi.edu,2016:visible-columns)",
+        mime_type="application/json",
+    )
+    def get_visible_columns_schema() -> str:
+        """Return the official JSON schema for the visible-columns annotation."""
+        return json.dumps({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$id": "http://deriva.isi.edu/schemas/visible_columns.schema.json",
+            "title": "tag:isrd.isi.edu,2016:visible-columns",
+            "description": "Schema document for the 'visible-columns' annotation. Controls which columns appear in each UI context and their order.",
+            "definitions": {
+                "column-name": {
+                    "type": "string",
+                    "description": "A column name from the annotated table"
+                },
+                "constraint-name": {
+                    "type": "array",
+                    "description": "Foreign key reference as [schema_name, constraint_name]",
+                    "items": {"type": "string"},
+                    "minItems": 2,
+                    "maxItems": 2
+                },
+                "pseudo-column": {
+                    "type": "object",
+                    "description": "A computed/virtual column with custom source path and display",
+                    "properties": {
+                        "source": {
+                            "description": "Column name or path through foreign keys",
+                            "oneOf": [
+                                {"type": "string"},
+                                {
+                                    "type": "array",
+                                    "items": {
+                                        "anyOf": [
+                                            {"type": "string", "description": "Column name (must be last item)"},
+                                            {
+                                                "type": "object",
+                                                "properties": {
+                                                    "inbound": {"$ref": "#/definitions/constraint-name"},
+                                                    "outbound": {"$ref": "#/definitions/constraint-name"}
+                                                },
+                                                "minProperties": 1,
+                                                "maxProperties": 1
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        "sourcekey": {
+                            "type": "string",
+                            "description": "Reference to a predefined source in source-definitions annotation"
+                        },
+                        "entity": {
+                            "type": "boolean",
+                            "description": "Show as entity (row link) vs scalar value. Default: true for FK paths"
+                        },
+                        "aggregate": {
+                            "type": "string",
+                            "enum": ["min", "max", "cnt", "cnt_d", "array", "array_d"],
+                            "description": "Aggregation function for multi-valued results"
+                        },
+                        "self_link": {
+                            "type": "boolean",
+                            "description": "Make the column value a link to the current row"
+                        },
+                        "markdown_name": {
+                            "type": "string",
+                            "description": "Custom column header display"
+                        },
+                        "comment": {
+                            "anyOf": [{"type": "string"}, {"type": "boolean", "const": False}],
+                            "description": "Column tooltip text, or false to suppress"
+                        },
+                        "display": {
+                            "type": "object",
+                            "properties": {
+                                "markdown_pattern": {"type": "string", "description": "Template using {{{column}}} syntax"},
+                                "template_engine": {"type": "string", "enum": ["handlebars", "mustache"]},
+                                "show_foreign_key_link": {"type": "boolean"},
+                                "array_ux_mode": {"type": "string", "enum": ["raw", "csv", "olist", "ulist"]}
+                            }
+                        }
+                    }
+                },
+                "facet-entry": {
+                    "type": "object",
+                    "description": "Faceted search filter configuration",
+                    "properties": {
+                        "source": {"description": "Column or path to filter on"},
+                        "sourcekey": {"type": "string"},
+                        "choices": {
+                            "type": "array",
+                            "items": {"type": ["string", "number", "boolean", "null"]},
+                            "description": "Preset filter choices"
+                        },
+                        "ranges": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "min": {"type": "number"},
+                                    "max": {"type": "number"},
+                                    "min_exclusive": {"type": "boolean"},
+                                    "max_exclusive": {"type": "boolean"}
+                                }
+                            },
+                            "description": "Preset filter ranges"
+                        },
+                        "not_null": {"type": "boolean", "const": True},
+                        "entity": {"type": "boolean"},
+                        "markdown_name": {"type": "string", "description": "Filter label"},
+                        "comment": {"type": "string"},
+                        "open": {"type": "boolean", "description": "Expand facet by default"},
+                        "bar_plot": {"type": "boolean", "description": "Show distribution chart"},
+                        "ux_mode": {
+                            "type": "string",
+                            "enum": ["choices", "ranges", "check_presence"],
+                            "description": "Filter interaction mode"
+                        },
+                        "hide_null_choice": {"type": "boolean"},
+                        "hide_not_null_choice": {"type": "boolean"},
+                        "n_bins": {"type": "number", "minimum": 1, "description": "Number of histogram bins"}
+                    }
+                }
+            },
+            "type": "object",
+            "patternProperties": {
+                "^[*]$|^compact([/]select|[/]brief([/]inline)?)?$|^detailed$|^entry([/]edit|[/]create)?$|^export$": {
+                    "oneOf": [
+                        {"type": "string", "description": "Reference to another context"},
+                        {
+                            "type": "array",
+                            "description": "List of columns/foreign keys/pseudo-columns",
+                            "items": {
+                                "anyOf": [
+                                    {"$ref": "#/definitions/column-name"},
+                                    {"$ref": "#/definitions/constraint-name"},
+                                    {"$ref": "#/definitions/pseudo-column"}
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+            "properties": {
+                "filter": {
+                    "type": "object",
+                    "description": "Faceted search configuration (special format)",
+                    "properties": {
+                        "and": {
+                            "type": "array",
+                            "items": {"$ref": "#/definitions/facet-entry"}
+                        }
+                    }
+                }
+            },
+            "additionalProperties": False,
+            "context_reference": {
+                "*": "Default for all unspecified contexts",
+                "compact": "Main list/table view (record lists, search results)",
+                "compact/brief": "Abbreviated display (tooltips, inline previews)",
+                "compact/brief/inline": "Minimal inline display (FK cell values)",
+                "compact/select": "Selection modal (FK picker dialogs)",
+                "detailed": "Full single-record view",
+                "entry": "Data entry forms (both create and edit)",
+                "entry/create": "Create new record form only",
+                "entry/edit": "Edit existing record form only",
+                "export": "Data export (CSV/JSON)",
+                "filter": "Faceted search sidebar (special format with 'and' array)"
+            },
+            "examples": [
+                {
+                    "_comment": "Basic column lists per context",
+                    "compact": ["RID", "Name", "Status"],
+                    "detailed": ["RID", "Name", "Status", "Description", "Notes", "RCT", "RMT"]
+                },
+                {
+                    "_comment": "Include foreign key reference",
+                    "compact": ["Name", ["domain", "Image_Subject_fkey"]]
+                },
+                {
+                    "_comment": "Pseudo-column traversing foreign key",
+                    "detailed": [
+                        "Name",
+                        {
+                            "source": [{"outbound": ["domain", "Image_Subject_fkey"]}, "Name"],
+                            "markdown_name": "Subject Name"
+                        }
+                    ]
+                },
+                {
+                    "_comment": "Faceted search configuration",
+                    "filter": {
+                        "and": [
+                            {"source": "Species", "open": True, "bar_plot": True},
+                            {"source": "Quality", "ux_mode": "choices"}
+                        ]
+                    }
+                }
+            ]
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://schemas/visible-foreign-keys",
+        name="Visible Foreign Keys Annotation Schema",
+        description="Official JSON Schema for the visible-foreign-keys annotation (tag:isrd.isi.edu,2016:visible-foreign-keys)",
+        mime_type="application/json",
+    )
+    def get_visible_foreign_keys_schema() -> str:
+        """Return the official JSON schema for the visible-foreign-keys annotation."""
+        return json.dumps({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$id": "http://deriva.isi.edu/schemas/visible_foreign_keys.schema.json",
+            "title": "tag:isrd.isi.edu,2016:visible-foreign-keys",
+            "description": "Schema document for the 'visible-foreign-keys' annotation. Controls which related tables (via inbound FKs) appear in detailed view.",
+            "definitions": {
+                "constraint-name": {
+                    "type": "array",
+                    "description": "Foreign key reference as [schema_name, constraint_name]",
+                    "items": {"type": "string"},
+                    "minItems": 2,
+                    "maxItems": 2
+                },
+                "pseudo-column": {
+                    "type": "object",
+                    "description": "A computed relationship with custom source path",
+                    "properties": {
+                        "source": {
+                            "type": "array",
+                            "description": "Path starting with inbound FK",
+                            "items": {
+                                "anyOf": [
+                                    {"type": "string"},
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "inbound": {"$ref": "#/definitions/constraint-name"},
+                                            "outbound": {"$ref": "#/definitions/constraint-name"}
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        "sourcekey": {"type": "string"},
+                        "markdown_name": {"type": "string", "description": "Section header"},
+                        "comment": {"type": "string", "description": "Section tooltip"},
+                        "display": {
+                            "type": "object",
+                            "properties": {
+                                "markdown_pattern": {"type": "string"},
+                                "template_engine": {"type": "string", "enum": ["handlebars", "mustache"]}
+                            }
+                        }
+                    }
+                }
+            },
+            "type": "object",
+            "properties": {
+                "*": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {
+                            "type": "array",
+                            "items": {
+                                "anyOf": [
+                                    {"$ref": "#/definitions/constraint-name"},
+                                    {"$ref": "#/definitions/pseudo-column"}
+                                ]
+                            }
+                        }
+                    ],
+                    "description": "Default for all contexts"
+                },
+                "detailed": {
+                    "oneOf": [
+                        {"type": "string"},
+                        {
+                            "type": "array",
+                            "items": {
+                                "anyOf": [
+                                    {"$ref": "#/definitions/constraint-name"},
+                                    {"$ref": "#/definitions/pseudo-column"}
+                                ]
+                            }
+                        }
+                    ],
+                    "description": "Related tables in detailed view"
+                }
+            },
+            "additionalProperties": False,
+            "important_note": "Only INBOUND foreign keys are valid - these are foreign keys from OTHER tables that reference THIS table. Use list_foreign_keys() tool to see available inbound FKs.",
+            "examples": [
+                {
+                    "_comment": "Show specific related tables in order",
+                    "detailed": [
+                        ["domain", "Image_Subject_fkey"],
+                        ["domain", "Diagnosis_Subject_fkey"]
+                    ]
+                },
+                {
+                    "_comment": "Hide all related tables",
+                    "detailed": []
+                },
+                {
+                    "_comment": "Pseudo-column for custom relationship display",
+                    "detailed": [
+                        {
+                            "source": [{"inbound": ["domain", "Image_Subject_fkey"]}],
+                            "markdown_name": "Subject Images"
+                        }
+                    ]
+                }
+            ]
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://schemas/table-display",
+        name="Table Display Annotation Schema",
+        description="Official JSON Schema for the table-display annotation (tag:isrd.isi.edu,2016:table-display)",
+        mime_type="application/json",
+    )
+    def get_table_display_schema() -> str:
+        """Return the official JSON schema for the table-display annotation."""
+        return json.dumps({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$id": "http://deriva.isi.edu/schemas/table_display.schema.json",
+            "title": "tag:isrd.isi.edu,2016:table-display",
+            "description": "Schema document for the 'table-display' annotation. Controls table-level display like row naming, page size, and sort order.",
+            "definitions": {
+                "template-engine": {
+                    "type": "string",
+                    "enum": ["handlebars", "mustache"],
+                    "description": "Template engine to use for pattern rendering"
+                },
+                "sort-key": {
+                    "oneOf": [
+                        {"type": "string", "description": "Column name for ascending sort"},
+                        {
+                            "type": "object",
+                            "properties": {
+                                "column": {"type": "string", "description": "Column name"},
+                                "descending": {"type": "boolean", "default": False}
+                            },
+                            "required": ["column"]
+                        }
+                    ]
+                },
+                "row-order": {
+                    "type": "array",
+                    "description": "Default sort order as array of sort keys",
+                    "minItems": 1,
+                    "items": {"$ref": "#/definitions/sort-key"}
+                },
+                "table-display-options": {
+                    "type": "object",
+                    "properties": {
+                        "row_order": {
+                            "$ref": "#/definitions/row-order",
+                            "description": "Default sort order for rows"
+                        },
+                        "page_size": {
+                            "type": "number",
+                            "description": "Number of rows per page"
+                        },
+                        "collapse_toc_panel": {
+                            "type": "boolean",
+                            "description": "Collapse table of contents panel (detailed view only)"
+                        },
+                        "hide_column_headers": {
+                            "type": "boolean",
+                            "description": "Hide column headers (detailed view only)"
+                        },
+                        "page_markdown_pattern": {
+                            "type": "string",
+                            "description": "Template for entire page layout"
+                        },
+                        "row_markdown_pattern": {
+                            "type": "string",
+                            "description": "Template for row display using {{{column}}} syntax"
+                        },
+                        "separator_markdown": {
+                            "type": "string",
+                            "description": "Markdown separator between rows"
+                        },
+                        "prefix_markdown": {
+                            "type": "string",
+                            "description": "Markdown content before rows"
+                        },
+                        "suffix_markdown": {
+                            "type": "string",
+                            "description": "Markdown content after rows"
+                        },
+                        "template_engine": {
+                            "$ref": "#/definitions/template-engine"
+                        }
+                    }
+                }
+            },
+            "type": "object",
+            "patternProperties": {
+                "^[*]$|^detailed$|^row_name.*$|^compact.*$": {
+                    "oneOf": [
+                        {"type": "string", "description": "Reference to another context"},
+                        {"$ref": "#/definitions/table-display-options"},
+                        {"type": "null"}
+                    ]
+                }
+            },
+            "additionalProperties": False,
+            "context_reference": {
+                "*": "Default options for all contexts",
+                "row_name": "Special context for row identifier display (used in links, breadcrumbs, titles)",
+                "compact": "List view settings",
+                "detailed": "Record view settings"
+            },
+            "examples": [
+                {
+                    "_comment": "Set row name pattern for display in links and titles",
+                    "row_name": {
+                        "row_markdown_pattern": "{{{Name}}} ({{{Species}}})"
+                    }
+                },
+                {
+                    "_comment": "Set default sort order and page size for list view",
+                    "compact": {
+                        "row_order": [{"column": "RCT", "descending": True}],
+                        "page_size": 50
+                    }
+                },
+                {
+                    "_comment": "Configure detailed view appearance",
+                    "detailed": {
+                        "hide_column_headers": True,
+                        "collapse_toc_panel": True
+                    }
+                },
+                {
+                    "_comment": "Row name with foreign key value",
+                    "row_name": {
+                        "row_markdown_pattern": "{{{Filename}}} - {{{$fkeys.domain.Image_Subject_fkey.rowName}}}"
+                    }
+                }
+            ]
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://schemas/column-display",
+        name="Column Display Annotation Schema",
+        description="Official JSON Schema for the column-display annotation (tag:isrd.isi.edu,2016:column-display)",
+        mime_type="application/json",
+    )
+    def get_column_display_schema() -> str:
+        """Return the official JSON schema for the column-display annotation."""
+        return json.dumps({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$id": "http://deriva.isi.edu/schemas/column_display.schema.json",
+            "title": "tag:isrd.isi.edu,2016:column-display",
+            "description": "Schema document for the 'column-display' annotation. Controls how column values are rendered.",
+            "definitions": {
+                "template-engine": {
+                    "type": "string",
+                    "enum": ["handlebars", "mustache"]
+                },
+                "column-order": {
+                    "oneOf": [
+                        {"type": "boolean", "const": False, "description": "Disable sorting on this column"},
+                        {
+                            "type": "array",
+                            "description": "Custom sort order",
+                            "items": {
+                                "oneOf": [
+                                    {"type": "string"},
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "column": {"type": "string"},
+                                            "descending": {"type": "boolean"}
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "column-display-options": {
+                    "type": "object",
+                    "properties": {
+                        "pre_format": {
+                            "type": "object",
+                            "description": "Pre-processing before display",
+                            "properties": {
+                                "format": {
+                                    "type": "string",
+                                    "description": "printf-style format string (e.g., '%.2f' for 2 decimal places)"
+                                },
+                                "bool_true_value": {
+                                    "type": "string",
+                                    "description": "Text to display for boolean true"
+                                },
+                                "bool_false_value": {
+                                    "type": "string",
+                                    "description": "Text to display for boolean false"
+                                }
+                            }
+                        },
+                        "markdown_pattern": {
+                            "type": "string",
+                            "description": "Template using {{{_value}}} or {{{column_name}}} substitution"
+                        },
+                        "template_engine": {
+                            "$ref": "#/definitions/template-engine"
+                        },
+                        "column_order": {
+                            "$ref": "#/definitions/column-order"
+                        }
+                    },
+                    "dependencies": {
+                        "template_engine": ["markdown_pattern"]
+                    }
+                }
+            },
+            "type": "object",
+            "patternProperties": {
+                "^[*]$|^detailed$|^compact.*$|^entry.*$": {
+                    "oneOf": [
+                        {"type": "string", "description": "Reference to another context"},
+                        {"$ref": "#/definitions/column-display-options"}
+                    ]
+                }
+            },
+            "additionalProperties": False,
+            "template_variables": {
+                "{{{_value}}}": "The column's own value",
+                "{{{value}}}": "Alias for _value",
+                "{{{_row.column_name}}}": "Another column's value from the same row",
+                "{{{$fkeys.schema.fkey.values.col}}}": "Value from related table via foreign key"
+            },
+            "context_reference": {
+                "*": "Default rendering for all contexts",
+                "compact": "Table cell rendering in list views",
+                "detailed": "Field rendering on record page",
+                "entry": "Form field rendering (usually not customized)"
+            },
+            "examples": [
+                {
+                    "_comment": "Format number with 2 decimal places",
+                    "*": {"pre_format": {"format": "%.2f"}}
+                },
+                {
+                    "_comment": "Display boolean as Yes/No",
+                    "*": {
+                        "pre_format": {
+                            "bool_true_value": "Yes",
+                            "bool_false_value": "No"
+                        }
+                    }
+                },
+                {
+                    "_comment": "Clickable image thumbnail",
+                    "detailed": {
+                        "markdown_pattern": "[![Image]({{{_value}}}?h=100)]({{{_value}}})"
+                    }
+                },
+                {
+                    "_comment": "URL as clickable link",
+                    "*": {
+                        "markdown_pattern": "[{{{_value}}}]({{{_value}}})"
+                    }
+                },
+                {
+                    "_comment": "Disable sorting on this column",
+                    "*": {"column_order": False}
+                },
+                {
+                    "_comment": "Custom sort using another column",
+                    "*": {
+                        "column_order": [{"column": "sort_order", "descending": False}]
+                    }
+                }
+            ]
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://schemas/source-definitions",
+        name="Source Definitions Annotation Schema",
+        description="Official JSON Schema for the source-definitions annotation (tag:isrd.isi.edu,2019:source-definitions)",
+        mime_type="application/json",
+    )
+    def get_source_definitions_schema() -> str:
+        """Return the official JSON schema for the source-definitions annotation."""
+        return json.dumps({
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$id": "http://deriva.isi.edu/schemas/source_definitions.schema.json",
+            "title": "tag:isrd.isi.edu,2019:source-definitions",
+            "description": "Schema document for the 'source-definitions' annotation. Defines reusable source paths and column/fkey subsets for use in other annotations.",
+            "definitions": {
+                "column-name": {
+                    "type": "string",
+                    "description": "A column name from the table"
+                },
+                "constraint-name": {
+                    "type": "array",
+                    "description": "Foreign key reference as [schema_name, constraint_name]",
+                    "items": {"type": "string"},
+                    "minItems": 2,
+                    "maxItems": 2
+                },
+                "foreign-key-path": {
+                    "type": "object",
+                    "description": "A step in a source path traversing a foreign key",
+                    "properties": {
+                        "inbound": {"$ref": "#/definitions/constraint-name", "description": "Traverse inbound FK (from other table to this)"},
+                        "outbound": {"$ref": "#/definitions/constraint-name", "description": "Traverse outbound FK (from this table to other)"}
+                    },
+                    "minProperties": 1,
+                    "maxProperties": 1
+                },
+                "source-entry": {
+                    "description": "A source path specification",
+                    "oneOf": [
+                        {"$ref": "#/definitions/column-name"},
+                        {
+                            "type": "array",
+                            "description": "Path: [fkey-step, ..., fkey-step, column-name]",
+                            "items": {
+                                "anyOf": [
+                                    {"type": "string", "description": "Column name (must be last)"},
+                                    {"$ref": "#/definitions/foreign-key-path"}
+                                ]
+                            },
+                            "minItems": 1
+                        }
+                    ]
+                },
+                "pseudo-column": {
+                    "type": "object",
+                    "description": "A named source definition",
+                    "properties": {
+                        "source": {"$ref": "#/definitions/source-entry"},
+                        "entity": {"type": "boolean"},
+                        "aggregate": {"type": "string", "enum": ["min", "max", "cnt", "cnt_d", "array", "array_d"]},
+                        "self_link": {"type": "boolean"},
+                        "markdown_name": {"type": "string"},
+                        "comment": {"anyOf": [{"type": "string"}, {"type": "boolean", "const": False}]},
+                        "display": {
+                            "type": "object",
+                            "properties": {
+                                "column_order": {},
+                                "markdown_pattern": {"type": "string"},
+                                "template_engine": {"type": "string", "enum": ["handlebars", "mustache"]},
+                                "wait_for": {"type": "array", "items": {"type": "string"}},
+                                "show_foreign_key_link": {"type": "boolean"},
+                                "array_ux_mode": {"type": "string", "enum": ["raw", "csv", "olist", "ulist"]}
+                            }
+                        },
+                        "array_options": {
+                            "type": "object",
+                            "properties": {
+                                "order": {},
+                                "max_length": {"type": "number", "minimum": 1}
+                            }
+                        }
+                    }
+                },
+                "search-column": {
+                    "type": "object",
+                    "properties": {
+                        "source": {"$ref": "#/definitions/column-name"},
+                        "markdown_name": {"type": "string"}
+                    },
+                    "required": ["source"]
+                }
+            },
+            "type": "object",
+            "properties": {
+                "columns": {
+                    "oneOf": [
+                        {"type": "boolean", "const": True, "description": "Include all columns"},
+                        {
+                            "type": "array",
+                            "description": "Subset of column names to include",
+                            "items": {"$ref": "#/definitions/column-name"}
+                        }
+                    ],
+                    "description": "Columns available for template rendering"
+                },
+                "fkeys": {
+                    "oneOf": [
+                        {"type": "boolean", "const": True, "description": "Include all outbound FKs"},
+                        {
+                            "type": "array",
+                            "description": "Subset of outbound foreign keys",
+                            "items": {"$ref": "#/definitions/constraint-name"}
+                        }
+                    ],
+                    "description": "Foreign keys available for template rendering ($fkeys.schema.constraint)"
+                },
+                "sources": {
+                    "type": "object",
+                    "description": "Named source definitions that can be referenced by 'sourcekey' in other annotations",
+                    "properties": {
+                        "search-box": {
+                            "type": "object",
+                            "description": "Columns to include in search",
+                            "properties": {
+                                "or": {
+                                    "type": "array",
+                                    "items": {"$ref": "#/definitions/search-column"},
+                                    "minItems": 1
+                                }
+                            },
+                            "required": ["or"]
+                        }
+                    },
+                    "patternProperties": {
+                        "^[^$].*": {"$ref": "#/definitions/pseudo-column"}
+                    }
+                }
+            },
+            "examples": [
+                {
+                    "_comment": "Expose specific columns and FKs for templates",
+                    "columns": ["RID", "Name", "Description"],
+                    "fkeys": [["domain", "Image_Subject_fkey"]]
+                },
+                {
+                    "_comment": "Define reusable source paths",
+                    "sources": {
+                        "subject_name": {
+                            "source": [{"outbound": ["domain", "Image_Subject_fkey"]}, "Name"],
+                            "markdown_name": "Subject"
+                        },
+                        "image_count": {
+                            "source": [{"inbound": ["domain", "Image_Subject_fkey"]}],
+                            "aggregate": "cnt",
+                            "markdown_name": "# Images"
+                        }
+                    }
+                },
+                {
+                    "_comment": "Configure search box columns",
+                    "sources": {
+                        "search-box": {
+                            "or": [
+                                {"source": "Name"},
+                                {"source": "Description"},
+                                {"source": "Notes"}
+                            ]
+                        }
+                    }
+                }
+            ]
+        }, indent=2)

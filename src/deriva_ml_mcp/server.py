@@ -13,6 +13,7 @@ from mcp.server.fastmcp import FastMCP
 
 from deriva_ml_mcp.connection import ConnectionManager
 from deriva_ml_mcp.tools import (
+    register_annotation_tools,
     register_catalog_tools,
     register_dataset_tools,
     register_vocabulary_tools,
@@ -45,6 +46,7 @@ connection_manager = ConnectionManager()
 def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> None:
     """Register all DerivaML tools and resources with the MCP server."""
     # Register tools
+    register_annotation_tools(mcp_server, conn_manager)
     register_catalog_tools(mcp_server, conn_manager)
     register_dataset_tools(mcp_server, conn_manager)
     register_vocabulary_tools(mcp_server, conn_manager)
