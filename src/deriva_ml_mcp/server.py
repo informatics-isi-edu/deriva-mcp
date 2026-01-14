@@ -24,6 +24,7 @@ from deriva_ml_mcp.tools import (
     register_data_tools,
 )
 from deriva_ml_mcp.resources import register_resources
+from deriva_ml_mcp.prompts import register_prompts
 
 # Configure logging - NEVER use print() in STDIO MCP servers
 logging.basicConfig(
@@ -44,7 +45,7 @@ connection_manager = ConnectionManager()
 
 
 def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> None:
-    """Register all DerivaML tools and resources with the MCP server."""
+    """Register all DerivaML tools, resources, and prompts with the MCP server."""
     # Register tools
     register_annotation_tools(mcp_server, conn_manager)
     register_catalog_tools(mcp_server, conn_manager)
@@ -58,6 +59,9 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
 
     # Register resources
     register_resources(mcp_server, conn_manager)
+
+    # Register prompts
+    register_prompts(mcp_server, conn_manager)
 
 
 # Register all tools

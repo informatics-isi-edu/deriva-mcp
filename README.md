@@ -1,6 +1,6 @@
 # DerivaML MCP Server
 
-A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that exposes [DerivaML](https://github.com/informatics-isi-edu/deriva-ml) operations as tools for LLM applications.
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that exposes [DerivaML](https://github.com/informatics-isi-edu/deriva-ml) operations as tools for LLM applications.
 
 ## Overview
 
