@@ -115,6 +115,7 @@ Uses the published Docker image. No local setup required.
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
+        "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -133,6 +134,7 @@ Uses the published Docker image. No local setup required.
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
+        "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -141,6 +143,9 @@ Uses the published Docker image. No local setup required.
   }
 }
 ```
+
+**Docker arguments:**
+- `--add-host localhost:host-gateway` - Allows connecting to localhost Deriva server (see [Connecting to Localhost from Docker](#connecting-to-localhost-from-docker) for SSL setup)
 
 **Volume mounts:**
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Deriva credentials (required)

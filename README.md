@@ -109,6 +109,7 @@ Uses Docker for both MCP servers - most consistent setup:
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
+        "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -128,6 +129,9 @@ Uses Docker for both MCP servers - most consistent setup:
   }
 }
 ```
+
+**Docker arguments explained:**
+- `--add-host localhost:host-gateway` - Allows connecting to a Deriva server running on localhost (see [Troubleshooting](#docker-with-localhost-deriva-server) for SSL certificate setup)
 
 **Volume mounts explained:**
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Mounts your Deriva credentials (read-only)
@@ -210,6 +214,7 @@ If you don't need GitHub integration:
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
+        "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ]
@@ -243,6 +248,7 @@ Add to your project's `.mcp.json` file:
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
+        "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -303,6 +309,7 @@ Add to your MCP configuration (typically `.vscode/mcp.json`):
         "command": "docker",
         "args": [
           "run", "-i", "--rm",
+          "--add-host", "localhost:host-gateway",
           "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
           "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
         ]
