@@ -247,12 +247,17 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
 
         try:
             vocabularies = {}
-            for vocab in ml.list_vocabularies():
-                terms = ml.list_vocabulary(vocab.name)
-                vocabularies[vocab.name] = [
-                    {"name": t.name, "description": t.description}
-                    for t in terms
-                ]
+            # Iterate through schemas to find vocabulary tables
+            for schema_name in [ml.ml_schema, ml.domain_schema]:
+                schema = ml.model.schemas.get(schema_name)
+                if schema:
+                    for table in schema.tables.values():
+                        if ml.model.is_vocabulary(table):
+                            terms = ml.list_vocabulary_terms(table.name)
+                            vocabularies[table.name] = [
+                                {"name": t.name, "description": t.description}
+                                for t in terms
+                            ]
             return json.dumps(vocabularies, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -321,7 +326,7 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
             return json.dumps({"error": "No active catalog connection"})
 
         try:
-            terms = ml.list_vocabulary("Feature_Name")
+            terms = ml.list_vocabulary_terms("Feature_Name")
             features = [
                 {"name": t.name, "description": t.description}
                 for t in terms
@@ -386,9 +391,11 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
             return json.dumps([
                 {
                     "name": f.feature_name,
-                    "table": f.target_table,
-                    "value_type": f.value_type,
-                    "terms": f.terms,
+                    "target_table": f.target_table.name,
+                    "feature_table": f.feature_table.name,
+                    "asset_columns": [c.name for c in f.asset_columns],
+                    "term_columns": [c.name for c in f.term_columns],
+                    "value_columns": [c.name for c in f.value_columns],
                 }
                 for f in features
             ], indent=2)
@@ -408,7 +415,7 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
             return json.dumps({"error": "No active catalog connection"})
 
         try:
-            terms = ml.list_vocabulary(vocab_name)
+            terms = ml.list_vocabulary_terms(vocab_name)
             return json.dumps([
                 {
                     "name": t.name,
@@ -1645,6 +1652,114 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
                         "column_order": [{"column": "sort_order", "descending": False}]
                     }
                 }
+            ]
+        }, indent=2)
+
+    # =========================================================================
+    # Dataset Operations Documentation
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://docs/dataset-denormalization",
+        name="Dataset Denormalization Guide",
+        description="Guide to denormalizing datasets for ML workflows",
+        mime_type="application/json",
+    )
+    def get_denormalization_guide() -> str:
+        """Return comprehensive dataset denormalization documentation."""
+        return json.dumps({
+            "title": "Dataset Denormalization Guide",
+            "description": "Denormalization joins related tables into a flat structure suitable for ML training",
+            "overview": {
+                "what_it_does": "Joins tables from a dataset into a single 'wide' table with columns from multiple source tables",
+                "why_use_it": [
+                    "ML frameworks expect flat tabular data",
+                    "Combines features from related tables (e.g., Image + Subject + Diagnosis)",
+                    "Creates training-ready datasets without manual joins"
+                ],
+                "column_naming": "Columns are prefixed with table name: 'Image.Filename', 'Subject.Name', 'Diagnosis.Type'"
+            },
+            "tool_reference": {
+                "name": "denormalize_dataset",
+                "parameters": {
+                    "dataset_rid": "RID of the dataset to denormalize",
+                    "include_tables": "List of table names to include in the join",
+                    "version": "Optional: specific dataset version (default: current)",
+                    "limit": "Maximum rows to return (default: 1000)"
+                },
+                "returns": {
+                    "columns": "List of column names (prefixed with table name)",
+                    "rows": "Array of row objects with column values",
+                    "count": "Number of rows returned",
+                    "limit": "Limit that was applied"
+                }
+            },
+            "how_tables_are_joined": {
+                "description": "Tables are joined based on foreign key relationships in the schema",
+                "join_types": "Uses inner joins following FK paths between included tables",
+                "important_note": "Only tables that are related (directly or through other tables) will produce rows"
+            },
+            "examples": [
+                {
+                    "description": "Basic denormalization of Images with Subject info",
+                    "call": "denormalize_dataset('1-ABC', ['Image', 'Subject'])",
+                    "result_columns": ["Image.RID", "Image.Filename", "Image.URL", "Subject.RID", "Subject.Name", "Subject.Species"],
+                    "use_case": "Get images with their associated subject metadata"
+                },
+                {
+                    "description": "Three-table join for ML training data",
+                    "call": "denormalize_dataset('1-ABC', ['Image', 'Subject', 'Diagnosis'])",
+                    "result_columns": ["Image.RID", "Image.Filename", "Subject.Name", "Diagnosis.Type", "Diagnosis.Confidence"],
+                    "use_case": "Create labeled training dataset with image paths and diagnosis labels"
+                },
+                {
+                    "description": "Get specific version of dataset",
+                    "call": "denormalize_dataset('1-ABC', ['Image', 'Subject'], version='1.0.0')",
+                    "use_case": "Reproducible ML training with pinned dataset version"
+                }
+            ],
+            "common_patterns": {
+                "image_classification": {
+                    "tables": ["Image", "Label"],
+                    "description": "Image paths with classification labels",
+                    "example_columns": ["Image.URL", "Image.Filename", "Label.Class", "Label.Confidence"]
+                },
+                "patient_data": {
+                    "tables": ["Image", "Subject", "Diagnosis"],
+                    "description": "Medical images with patient info and diagnoses",
+                    "example_columns": ["Image.URL", "Subject.Age", "Subject.Sex", "Diagnosis.Disease", "Diagnosis.Stage"]
+                },
+                "multi_modal": {
+                    "tables": ["Image", "Scan", "Subject"],
+                    "description": "Multiple imaging modalities per subject",
+                    "example_columns": ["Image.URL", "Scan.Modality", "Scan.Date", "Subject.ID"]
+                }
+            },
+            "workflow_example": [
+                "1. list_datasets() - Find your dataset",
+                "2. list_dataset_members(dataset_rid) - See which tables have data",
+                "3. get_table_schema(table_name) - Understand column structure",
+                "4. denormalize_dataset(dataset_rid, ['Table1', 'Table2']) - Get flat data",
+                "5. Use rows for ML training (e.g., create DataFrame, build data loader)"
+            ],
+            "related_tools": {
+                "list_dataset_members": "See which tables are in a dataset",
+                "get_dataset_table": "Get raw data from a single table (no joins)",
+                "get_table_schema": "View table columns and types",
+                "download_dataset": "Download entire dataset as BDBag for offline use"
+            },
+            "tips": [
+                "Start with list_dataset_members() to see available tables",
+                "Include only tables you need - more tables = slower queries",
+                "Use limit parameter for testing before fetching all data",
+                "For production ML, use download_dataset() and process locally",
+                "Column names are prefixed, so 'RID' becomes 'Image.RID' vs 'Subject.RID'"
+            ],
+            "limitations": [
+                "Tables must be related through foreign keys to produce join results",
+                "Very large datasets should use download_dataset() for local processing",
+                "Default limit is 1000 rows - increase if needed",
+                "Returns dict rows - convert to DataFrame/tensor for ML use"
             ]
         }, indent=2)
 
