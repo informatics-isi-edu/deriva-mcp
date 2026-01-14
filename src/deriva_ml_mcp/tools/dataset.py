@@ -188,9 +188,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     ) -> str:
         """Add records as dataset elements. Auto-increments minor version.
 
-        Records must be from tables registered as dataset element types
-        (see list_dataset_element_types). Adding members automatically increments
-        the dataset's minor version for change tracking.
+        Records must be from tables registered as dataset element types.
+        Use add_dataset_element_type() to register a table, or list_dataset_element_types()
+        to see which tables are already registered.
+
+        Adding members automatically increments the dataset's minor version for change tracking.
+
+        This tool accepts a list of RIDs and automatically resolves each RID to
+        determine which table it belongs to. For better performance with large
+        numbers of members, use the Python API directly with a dict mapping
+        table names to RID lists (skips RID resolution).
 
         Args:
             dataset_rid: The RID of the dataset to add members to.
