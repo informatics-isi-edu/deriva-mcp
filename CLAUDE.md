@@ -154,6 +154,41 @@ If the directory doesn't exist, Docker creates it as root, causing permission is
 
 If you already have a DerivaML `working_dir` configured locally, you can mount that instead to share outputs between local and Docker runs.
 
+### Connecting to Localhost from Docker
+
+When connecting to a Deriva server running on localhost (e.g., for local development), the Docker container needs additional configuration:
+
+1. **Network access**: Use `--add-host localhost:host-gateway` to map localhost to the host machine
+2. **SSL certificates**: If using a self-signed certificate, set `REQUESTS_CA_BUNDLE` to a CA bundle containing your local CA
+
+**Localhost Docker configuration:**
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "--add-host", "localhost:host-gateway",
+        "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
+        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+        "deriva-ml-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**Creating the CA bundle (macOS):**
+```bash
+# Export local CA from System Keychain
+security find-certificate -a -c "DERIVA Dev Local CA" -p /Library/Keychains/System.keychain > /tmp/deriva-local-ca.pem
+
+# Combine with existing bundle
+cat ~/.deriva/allCAbundle.pem /tmp/deriva-local-ca.pem > ~/.deriva/allCAbundle-with-local.pem
+```
+
 ### Option 2: From Source (Development)
 
 Run directly using `uv`. Use this when developing or modifying the MCP server.

@@ -722,6 +722,60 @@ See the [DerivaML Hydra-zen Guide](https://github.com/informatics-isi-edu/deriva
 
 ## Troubleshooting
 
+### Docker with Localhost Deriva Server
+
+When running the MCP server in Docker and connecting to a Deriva server on your local machine (localhost), you need additional configuration:
+
+**Problem 1: Container can't reach localhost**
+
+Inside Docker, `localhost` refers to the container itself, not your host machine. Add `--add-host` to map localhost to the host:
+
+```json
+"--add-host", "localhost:host-gateway",
+```
+
+**Problem 2: SSL certificate verification fails**
+
+If your localhost Deriva server uses a self-signed certificate (common for development), the container won't trust it. You need to:
+
+1. Export your local CA certificate to a PEM file accessible to the container
+2. Set the `REQUESTS_CA_BUNDLE` environment variable
+
+**Complete localhost configuration:**
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "--add-host", "localhost:host-gateway",
+        "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
+        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+        "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**Creating the CA bundle with your local certificate:**
+
+If your local Deriva CA is in the macOS System Keychain:
+
+```bash
+# Export the local CA certificate
+security find-certificate -a -c "DERIVA Dev Local CA" -p /Library/Keychains/System.keychain > /tmp/deriva-local-ca.pem
+
+# Combine with existing CA bundle (if you have one)
+cat ~/.deriva/allCAbundle.pem /tmp/deriva-local-ca.pem > ~/.deriva/allCAbundle-with-local.pem
+
+# Or just use the local CA alone
+cp /tmp/deriva-local-ca.pem ~/.deriva/allCAbundle-with-local.pem
+```
+
 ### Deriva Authentication Issues
 
 **Error: "No credentials found"**
