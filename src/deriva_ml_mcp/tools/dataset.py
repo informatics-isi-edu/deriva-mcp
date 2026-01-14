@@ -661,14 +661,17 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def add_dataset_type(
+    async def create_dataset_type_term(
         type_name: str,
         description: str,
         synonyms: list[str] | None = None,
     ) -> str:
-        """Add a new dataset type to the Dataset_Type vocabulary.
+        """Create a new dataset type term in the Dataset_Type vocabulary.
 
-        Dataset types help categorize datasets by their role in ML workflows.
+        This creates a new vocabulary term that can then be assigned to datasets
+        using add_dataset_type(). Dataset types help categorize datasets by their
+        role in ML workflows.
+
         Common types include "Training", "Testing", "Validation", "Complete".
 
         Args:
@@ -680,7 +683,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             JSON with status, name, description, synonyms, rid.
 
         Example:
-            add_dataset_type("Validation", "Held-out data for hyperparameter tuning", ["val", "valid"])
+            create_dataset_type_term("Validation", "Held-out data for hyperparameter tuning", ["val", "valid"])
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -711,15 +714,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     })
                 except Exception:
                     pass
-            logger.error(f"Failed to add dataset type: {e}")
+            logger.error(f"Failed to create dataset type term: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def delete_dataset_type(type_name: str) -> str:
-        """Delete a dataset type from the Dataset_Type vocabulary.
+    async def delete_dataset_type_term(type_name: str) -> str:
+        """Delete a dataset type term from the Dataset_Type vocabulary.
 
         WARNING: Only delete types that are not referenced by any datasets.
         If datasets use this type, the delete will fail with a foreign key error.
+        Use remove_dataset_type() first to remove the type from all datasets.
 
         Args:
             type_name: Name of the dataset type to delete.
@@ -728,29 +732,15 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             JSON with status and deleted type name.
 
         Example:
-            delete_dataset_type("Obsolete") -> {"status": "deleted", "name": "Obsolete"}
+            delete_dataset_type_term("Obsolete") -> {"status": "deleted", "name": "Obsolete"}
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            # Look up the term to get its RID
-            term = ml.lookup_term("Dataset_Type", type_name)
-
-            # Delete using direct ERMrest delete
-            vocab_table = ml.model.schemas[ml.ml_schema].tables["Dataset_Type"]
-            vocab_table.delete_rows(ml.catalog, [{"RID": term.rid}])
-
+            ml.delete_term("Dataset_Type", type_name)
             return json.dumps({
                 "status": "deleted",
                 "name": type_name,
-                "rid": term.rid,
             })
         except Exception as e:
-            error_msg = str(e)
-            if "foreign key" in error_msg.lower() or "constraint" in error_msg.lower():
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Cannot delete '{type_name}': it is referenced by existing datasets. "
-                               "Remove the type from all datasets before deleting.",
-                })
-            logger.error(f"Failed to delete dataset type: {e}")
-            return json.dumps({"status": "error", "message": error_msg})
+            logger.error(f"Failed to delete dataset type term: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
