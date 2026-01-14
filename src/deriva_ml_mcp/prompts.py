@@ -1939,3 +1939,466 @@ After running:
 - Check config name matches store registration
 - Verify no syntax errors in config files
 """
+
+    @mcp.prompt(
+        name="setup-notebook-environment",
+        description="Step-by-step guide to set up environment for running DerivaML notebooks",
+    )
+    def setup_notebook_environment_prompt() -> str:
+        """Guide for setting up notebook development environment."""
+        return """# Setting Up a DerivaML Notebook Environment
+
+Follow these steps to set up your environment for developing and running
+Jupyter notebooks with DerivaML tracking.
+
+## Prerequisites
+- Repository created from deriva-ml-model-template
+- `uv` installed (https://docs.astral.sh/uv/)
+
+## Step 1: Initialize the Virtual Environment
+
+Create the Python environment and install dependencies:
+
+```bash
+# From repository root
+uv sync
+```
+
+This creates a virtual environment and generates `uv.lock`. Commit the lock file
+for reproducible environments.
+
+## Step 2: Install Jupyter Dependencies
+
+Install the Jupyter-specific dependency group:
+
+```bash
+uv sync --group=jupyter
+```
+
+This installs:
+- jupyter / jupyterlab
+- ipykernel
+- nbstripout
+- papermill
+- nbconvert
+
+## Step 3: Install nbstripout
+
+Configure nbstripout to automatically strip output cells from notebooks on commit:
+
+```bash
+uv run nbstripout --install
+```
+
+**Why this matters:**
+- Prevents large output cells from bloating Git history
+- Ensures notebooks can be compared meaningfully in diffs
+- Required by DerivaML coding guidelines
+- Notebooks MUST NOT be committed with output cells
+
+**Verify installation:**
+```bash
+# Check Git hooks are installed
+cat .git/hooks/pre-commit | grep nbstripout
+```
+
+## Step 4: Install the Jupyter Kernel
+
+Register a Jupyter kernel for your virtual environment:
+
+```bash
+uv run deriva-ml-install-kernel
+```
+
+This creates a kernel named after your project (from `pyvenv.cfg` prompt).
+The kernel will appear in Jupyter's kernel selector.
+
+**Verify kernel installation:**
+```bash
+uv run jupyter kernelspec list
+```
+
+You should see your project kernel listed (e.g., `deriva-model-template`).
+
+**MCP Tool alternative:**
+```
+install_jupyter_kernel()
+list_jupyter_kernels()
+```
+
+## Step 5: Authenticate to Deriva
+
+Before accessing catalog data, authenticate with Globus:
+
+```bash
+uv run deriva-globus-auth-utils login --host <HOSTNAME>
+```
+
+Replace `<HOSTNAME>` with your Deriva server (e.g., `www.eye-ai.org`).
+
+## Step 6: Verify Setup
+
+Test your environment:
+
+```bash
+# Start Jupyter Lab
+uv run jupyter lab
+
+# Or start classic notebook
+uv run jupyter notebook
+```
+
+In Jupyter:
+1. Create a new notebook
+2. Select your project kernel from the kernel dropdown
+3. Test DerivaML import:
+   ```python
+   from deriva_ml import DerivaML
+   print("DerivaML ready!")
+   ```
+
+## Optional: Install ML Framework Dependencies
+
+Install additional dependency groups as needed:
+
+```bash
+# PyTorch
+uv sync --group=pytorch
+
+# TensorFlow
+uv sync --group=tensorflow
+
+# All groups
+uv sync --all-groups
+```
+
+To make these permanent, add them to `default-groups` in `pyproject.toml`:
+```toml
+[tool.uv]
+default-groups = ["jupyter", "pytorch"]
+```
+
+## Complete Setup Checklist
+
+- [ ] `uv sync` completed successfully
+- [ ] `uv sync --group=jupyter` completed
+- [ ] `nbstripout --install` configured Git hooks
+- [ ] `deriva-ml-install-kernel` registered kernel
+- [ ] Globus authentication completed
+- [ ] Jupyter launches and shows project kernel
+- [ ] DerivaML imports successfully in notebook
+
+## Troubleshooting
+
+### Kernel not showing in Jupyter
+```bash
+# List installed kernels
+uv run jupyter kernelspec list
+
+# Reinstall kernel
+uv run deriva-ml-install-kernel
+```
+
+### nbstripout not stripping outputs
+```bash
+# Check if installed
+uv run nbstripout --status
+
+# Reinstall
+uv run nbstripout --install
+```
+
+### Authentication errors
+```bash
+# Re-authenticate
+uv run deriva-globus-auth-utils login --host <HOSTNAME>
+
+# Check credentials
+ls ~/.deriva/
+```
+
+### Missing dependencies
+```bash
+# Update lock file
+uv lock --upgrade
+
+# Reinstall
+uv sync --group=jupyter
+```
+"""
+
+    @mcp.prompt(
+        name="run-notebook",
+        description="Step-by-step guide to develop and run a DerivaML notebook with tracking",
+    )
+    def run_notebook_prompt() -> str:
+        """Guide for developing and running notebooks with DerivaML."""
+        return """# Developing and Running DerivaML Notebooks
+
+Follow these steps to develop a notebook and run it with full DerivaML
+execution tracking and provenance.
+
+## Prerequisites
+- Environment set up (see `setup-notebook-environment` prompt)
+- nbstripout and kernel installed
+- Authenticated to Deriva catalog
+
+## Step 0: Verify Environment Setup
+
+Before developing notebooks, ensure your environment is ready:
+
+```bash
+# Verify nbstripout is installed
+uv run nbstripout --status
+
+# Verify kernel is installed
+uv run jupyter kernelspec list
+
+# Should show your project kernel
+```
+
+**MCP Tools:**
+```
+list_jupyter_kernels()
+```
+
+If not set up, follow the `setup-notebook-environment` prompt first.
+
+## Step 1: Create Notebook from Template
+
+Start with the notebook template from deriva-ml-model-template:
+
+```
+notebooks/
+└── notebook_template.ipynb
+```
+
+Copy and rename the template for your analysis:
+```bash
+cp notebooks/notebook_template.ipynb notebooks/my_analysis.ipynb
+```
+
+### Required Notebook Structure
+
+Your notebook MUST include:
+
+1. **Imports cell**: DerivaML and hydra-zen imports
+```python
+from deriva_ml import DerivaML
+from deriva_ml.execution import ExecutionConfiguration, Execution
+from hydra_zen import builds, store, launch, zen
+```
+
+2. **Parameters cell**: Tagged with "parameters" metadata for papermill
+```python
+# Parameters cell - values can be overridden at runtime
+dry_run: bool = False
+host: str = "www.example.org"
+catalog: str = "1"
+learning_rate: float = 0.001
+epochs: int = 10
+```
+
+3. **Configuration loading**: Load hydra-zen configs
+```python
+import configs.datasets
+import configs.deriva
+import configs.assets
+```
+
+4. **Execution context**: Create and use DerivaML execution
+```python
+ml_instance = DerivaML(hostname=host, catalog_id=catalog)
+
+config = ExecutionConfiguration(
+    workflow=ml_instance.create_workflow('my-workflow', 'Analysis'),
+    datasets=config.datasets,
+)
+
+with ml_instance.create_execution(config, dry_run=dry_run) as exe:
+    # Your analysis code here...
+    pass
+
+# Upload AFTER context manager
+exe.upload_execution_outputs()
+```
+
+5. **Save execution info**: For the notebook runner
+```python
+import os
+import json
+
+rid_path = os.environ.get("DERIVA_ML_SAVE_EXECUTION_RID")
+if rid_path:
+    with open(rid_path, "w") as f:
+        json.dump({
+            "execution_rid": exe.rid,
+            "hostname": host,
+            "catalog_id": catalog,
+            "workflow_rid": exe.workflow_rid,
+        }, f)
+```
+
+## Step 2: Develop Your Notebook
+
+Follow these guidelines while developing:
+
+### Coding Guidelines
+- **Single task focus**: Each notebook should do one thing well
+- **Parameterize values**: Use the parameters cell for anything that might change
+- **Clear outputs before commit**: Or rely on nbstripout
+- **Run end-to-end**: Ensure notebook runs completely after Kernel > Restart & Run All
+- **Use execution context**: Register all outputs with `exe.asset_file_path()`
+
+### Testing Your Notebook
+1. Clear all outputs: Kernel > Restart & Clear Output
+2. Run all cells: Kernel > Restart & Run All
+3. Verify no errors
+4. Verify outputs are generated correctly
+
+### Using dry_run for Development
+Set `dry_run=True` in the parameters cell during development:
+- Downloads input data normally
+- Does NOT create Execution records
+- Does NOT upload results
+- Safe for iterative testing
+
+## Step 3: Commit and Version
+
+Once your notebook runs successfully end-to-end:
+
+```bash
+# Check status (outputs should be stripped)
+git status
+
+# Stage and commit
+git add notebooks/my_analysis.ipynb
+git commit -m "Add my analysis notebook"
+
+# Bump version
+uv run bump-version patch
+
+# Push
+git push && git push --tags
+```
+
+**CRITICAL**: Always commit before running with DerivaML tracking.
+This ensures proper code provenance.
+
+**MCP Tools:**
+```
+bump_version("patch")
+get_current_version()
+```
+
+## Step 4: Run with DerivaML Tracking
+
+Run your notebook with full execution tracking:
+
+### Command Line
+```bash
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \\
+    --host <HOSTNAME> \\
+    --catalog <CATALOG_ID> \\
+    --kernel <your-project-kernel>
+```
+
+### With Parameter Overrides
+```bash
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \\
+    --host www.example.org \\
+    --catalog 1 \\
+    -p learning_rate 0.01 \\
+    -p epochs 50 \\
+    --kernel my-project
+```
+
+### From Parameter File
+```bash
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \\
+    --file parameters.yaml \\
+    --kernel my-project
+```
+
+### Inspect Parameters First
+```bash
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --inspect
+```
+
+### MCP Tools
+```
+# Inspect available parameters
+inspect_notebook("notebooks/my_analysis.ipynb")
+
+# Run with tracking
+run_notebook(
+    "notebooks/my_analysis.ipynb",
+    hostname="www.example.org",
+    catalog_id="1",
+    parameters={"learning_rate": 0.01, "epochs": 50},
+    kernel="my-project"
+)
+```
+
+## What Happens During Execution
+
+1. **Environment setup**: Sets provenance environment variables
+   - `DERIVA_ML_WORKFLOW_URL`: GitHub URL to notebook
+   - `DERIVA_ML_WORKFLOW_CHECKSUM`: MD5 of notebook file
+   - `DERIVA_ML_NOTEBOOK_PATH`: Local path
+
+2. **Parameter injection**: Papermill injects parameters into notebook
+
+3. **Execution**: Notebook runs with DerivaML tracking
+
+4. **Output conversion**: Executed notebook converted to Markdown
+
+5. **Upload**: Both `.ipynb` and `.md` uploaded as execution assets
+
+6. **Citation**: Execution RID and citation info printed
+
+## Complete Workflow Checklist
+
+**Before developing:**
+- [ ] Environment set up (kernel, nbstripout)
+- [ ] Template notebook copied
+
+**During development:**
+- [ ] Parameters cell defined
+- [ ] Execution context used
+- [ ] Save execution info included
+- [ ] Runs end-to-end without errors
+- [ ] Tested with `dry_run=True`
+
+**Before running:**
+- [ ] All changes committed
+- [ ] Version bumped
+- [ ] Changes pushed
+
+**Running:**
+- [ ] Correct host and catalog specified
+- [ ] Correct kernel specified
+- [ ] Parameters set as needed
+
+**After running:**
+- [ ] Execution record created in catalog
+- [ ] Notebook and Markdown uploaded
+- [ ] Results viewable in Chaise
+
+## Troubleshooting
+
+### "Notebook did not save execution metadata"
+- Ensure notebook has the execution info save block
+- Check `DERIVA_ML_SAVE_EXECUTION_RID` environment variable handling
+
+### "Kernel not found"
+- Verify kernel name: `uv run jupyter kernelspec list`
+- Reinstall: `uv run deriva-ml-install-kernel`
+
+### "nbstripout warning"
+- Install nbstripout: `uv run nbstripout --install`
+- Clear outputs before commit: Kernel > Restart & Clear Output
+
+### "Authentication failed"
+- Re-authenticate: `uv run deriva-globus-auth-utils login --host <HOST>`
+"""
