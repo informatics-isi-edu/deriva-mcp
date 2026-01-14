@@ -88,9 +88,9 @@ exe.upload_execution_outputs()
 - The `with` block automatically calls `stop_execution()` on exit
 - You MUST call `upload_execution_outputs()` AFTER the `with` block
 
-## MCP Tools: Step-by-Step Approach
+## MCP Tools
 
-When using MCP tools directly (not Python API), follow these steps:
+MCP tools mirror the Python API. Use the execution tools in this order:
 
 ### Step 1: Create the Execution
 
@@ -106,13 +106,7 @@ create_execution(
 
 Use `list_workflow_types()` to see available workflow types.
 
-### Step 2: Start Timing
-
-```
-start_execution()
-```
-
-### Step 3: Do Your ML Work
+### Step 2: Do Your ML Work
 
 - **Download input data**: Use `download_execution_dataset(dataset_rid)` to get data
 - **Process/train/infer**: Run your ML code
@@ -126,13 +120,7 @@ asset_file_path(
 )
 ```
 
-### Step 4: Stop Timing
-
-```
-stop_execution()
-```
-
-### Step 5: Upload Outputs (REQUIRED)
+### Step 3: Upload Outputs (REQUIRED)
 
 ```
 upload_execution_outputs()
@@ -146,24 +134,18 @@ upload_execution_outputs()
 # 1. Create execution
 create_execution("CIFAR-10 ResNet", "Training", "Train ResNet50 on CIFAR-10", ["1-ABC"])
 
-# 2. Start timing
-start_execution()
-
-# 3. Get training data
+# 2. Get training data
 download_execution_dataset("1-ABC")
 
-# 4. [Run training code here...]
+# 3. [Run training code here...]
 
-# 5. Register model output
+# 4. Register model output
 asset_file_path("Model", "/tmp/model.pt", ["Trained Model"])
 
-# 6. Register metrics
+# 5. Register metrics
 asset_file_path("Execution_Metadata", "metrics.json")
 
-# 7. Stop timing
-stop_execution()
-
-# 8. Upload everything
+# 6. Upload everything
 upload_execution_outputs()
 ```
 
@@ -544,16 +526,14 @@ exe.upload_execution_outputs()
 
 **MCP Tools:**
 ```
-# Create and start execution
+# Create execution
 create_execution("Labeling Run", "Annotation", "Manual image labeling")
-start_execution()
 
 # Add labels
 add_feature_value("Image", "Diagnosis", "<image-rid>", "Normal")
 add_feature_value("Image", "Diagnosis", "<image-rid-2>", "Abnormal")
 
-# Complete execution
-stop_execution()
+# Upload outputs
 upload_execution_outputs()
 ```
 
@@ -624,17 +604,15 @@ add_term("Image_Class", "Other", "Other content")
 # 2. Create feature
 create_feature("Image", "Classification", "Image class label", terms=["Image_Class"])
 
-# 3. Start labeling execution
+# 3. Create labeling execution
 create_execution("Manual Labeling", "Annotation", "Label training images")
-start_execution()
 
 # 4. Add labels (typically in a loop over images)
 add_feature_value("Image", "Classification", "1-ABC", "Cat")
 add_feature_value("Image", "Classification", "1-DEF", "Dog")
 add_feature_value("Image", "Classification", "1-GHI", "Cat")
 
-# 5. Complete
-stop_execution()
+# 5. Upload outputs
 upload_execution_outputs()
 
 # 6. Query for training
@@ -739,9 +717,9 @@ add_dataset_members("<dataset-rid>", [
 
 Adding members automatically increments the minor version.
 
-## Step 4: Complete the Execution
+## Step 4: Upload Outputs (REQUIRED)
 
-**Python API:** The context manager handles stop automatically. Call upload after:
+**Python API:** The context manager handles timing automatically. Call upload after exiting:
 ```python
 # After exiting the `with` block:
 exe.upload_execution_outputs()
@@ -749,7 +727,6 @@ exe.upload_execution_outputs()
 
 **MCP Tools:**
 ```
-stop_execution()
 upload_execution_outputs()
 ```
 
@@ -800,7 +777,6 @@ ml.add_dataset_child("<parent-rid>", testing_ds.rid)
 # Create parent "Complete" dataset first (via execution)
 # Then create children
 create_execution("Create Train/Test Split", "Preprocessing", "Split data")
-start_execution()
 
 # Create training subset
 create_execution_dataset("Training subset (80%)", ["Training"])
@@ -810,7 +786,7 @@ create_execution_dataset("Training subset (80%)", ["Training"])
 create_execution_dataset("Testing subset (20%)", ["Testing"])
 # Add testing members...
 
-stop_execution()
+# Upload outputs
 upload_execution_outputs()
 
 # Link as nested datasets
@@ -871,9 +847,8 @@ ml.list_dataset_children(complete_ds.rid)
 
 **MCP Tools:**
 ```
-# 1. Start execution
+# 1. Create execution
 create_execution("Dataset Curation", "Preprocessing", "Create ML datasets")
-start_execution()
 
 # 2. Ensure element types registered
 add_dataset_element_type("Image")
@@ -895,8 +870,7 @@ create_execution_dataset("Test Set (20%)", ["Testing"])
 # Returns: "1-GHI"
 add_dataset_members("1-GHI", ["2-D81", ..., "2-D100"])
 
-# 7. Link as children
-stop_execution()
+# 7. Upload and link as children
 upload_execution_outputs()
 
 add_dataset_child("1-ABC", "1-DEF")
