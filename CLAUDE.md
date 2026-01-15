@@ -170,12 +170,12 @@ If you already have a DerivaML `working_dir` configured locally, you can mount t
 
 ### Connecting to Localhost from Docker
 
-When connecting to a Deriva server running on localhost (e.g., for local development), the Docker container needs additional configuration:
+When connecting to a Deriva server running on localhost, the Docker container needs additional configuration depending on how Deriva is running.
 
-1. **Network access**: Use `--add-host localhost:host-gateway` to map localhost to the host machine
-2. **SSL certificates**: If using a self-signed certificate, set `REQUESTS_CA_BUNDLE` to a CA bundle containing your local CA
+#### Deriva Running Directly on Host
 
-**Localhost Docker configuration:**
+If Deriva runs directly on the host (not in Docker), use `host-gateway`:
+
 ```json
 {
   "mcpServers": {
@@ -194,6 +194,37 @@ When connecting to a Deriva server running on localhost (e.g., for local develop
   }
 }
 ```
+
+#### Deriva Running in Docker (deriva-localhost)
+
+If Deriva runs in Docker (e.g., deriva-localhost), join the same network and map localhost to the webserver IP:
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "--network", "deriva-localhost_internal_network",
+        "--add-host", "localhost:172.28.3.15",
+        "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
+        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+        "deriva-ml-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**Find the webserver IP:**
+```bash
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deriva-webserver
+```
+
+The entrypoint script automatically adjusts `/etc/hosts` so that `--add-host` takes effect for localhost resolution.
 
 **Creating the CA bundle (macOS):**
 ```bash

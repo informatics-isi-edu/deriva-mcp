@@ -744,24 +744,11 @@ See the [DerivaML Hydra-zen Guide](https://github.com/informatics-isi-edu/deriva
 
 ### Docker with Localhost Deriva Server
 
-When running the MCP server in Docker and connecting to a Deriva server on your local machine (localhost), you need additional configuration:
+When running the MCP server in Docker and connecting to a Deriva server on your local machine, you need additional configuration depending on how Deriva is running.
 
-**Problem 1: Container can't reach localhost**
+#### Option A: Deriva Running Directly on Host (not in Docker)
 
-Inside Docker, `localhost` refers to the container itself, not your host machine. Add `--add-host` to map localhost to the host:
-
-```json
-"--add-host", "localhost:host-gateway",
-```
-
-**Problem 2: SSL certificate verification fails**
-
-If your localhost Deriva server uses a self-signed certificate (common for development), the container won't trust it. You need to:
-
-1. Export your local CA certificate to a PEM file accessible to the container
-2. Set the `REQUESTS_CA_BUNDLE` environment variable
-
-**Complete localhost configuration:**
+If your Deriva server is running directly on the host machine (not in Docker), use `host-gateway`:
 
 ```json
 {
@@ -781,6 +768,44 @@ If your localhost Deriva server uses a self-signed certificate (common for devel
   }
 }
 ```
+
+#### Option B: Deriva Running in Docker (deriva-localhost)
+
+If your Deriva server is running in Docker (e.g., using deriva-localhost), the MCP container must join the same Docker network and map `localhost` to the webserver container's IP:
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "--network", "deriva-localhost_internal_network",
+        "--add-host", "localhost:172.28.3.15",
+        "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
+        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
+        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+        "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**Finding the webserver IP:**
+```bash
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deriva-webserver
+```
+
+**Why this is needed:** The MCP container needs to download dataset assets from the Deriva server. When Deriva runs in Docker, URLs in the dataset bags reference `localhost`, which must resolve to the Deriva webserver container. The entrypoint script in the MCP image automatically adjusts `/etc/hosts` so that the `--add-host` mapping takes effect.
+
+#### SSL Certificate Configuration
+
+If your localhost Deriva server uses a self-signed certificate (common for development), the container won't trust it. You need to:
+
+1. Export your local CA certificate to a PEM file accessible to the container
+2. Set the `REQUESTS_CA_BUNDLE` environment variable
 
 **Creating the CA bundle with your local certificate:**
 

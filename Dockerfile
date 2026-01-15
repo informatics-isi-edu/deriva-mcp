@@ -54,7 +54,22 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash mcpuser
-USER mcpuser
+
+# Create entrypoint wrapper script that fixes localhost resolution for Docker networking.
+# When running in Docker with --add-host localhost:<webserver-ip>, Docker adds the custom
+# entry AFTER the default 127.0.0.1 localhost entry. Since /etc/hosts is resolved first-match,
+# the custom entry is ignored. This script comments out the default 127.0.0.1 localhost line
+# so that the custom --add-host entry takes effect, allowing the container to reach the
+# Deriva webserver when URLs use "localhost".
+RUN printf '#!/bin/sh\n\
+# Fix localhost resolution: comment out default localhost entries so --add-host takes effect\n\
+# Cannot use sed -i on /etc/hosts (mounted file), so use cp to modify in place\n\
+cp /etc/hosts /tmp/hosts.tmp\n\
+sed -e "s/^127\\.0\\.0\\.1[[:space:]]\\+localhost/#&/" -e "s/^::1[[:space:]]\\+localhost/#&/" /tmp/hosts.tmp > /etc/hosts 2>/dev/null || true\n\
+rm -f /tmp/hosts.tmp\n\
+# Drop privileges and exec the main command\n\
+exec su -s /bin/sh mcpuser -c "exec \\"\\$0\\" \\"\\$@\\"" -- "$@"\n\
+' > /entrypoint-wrapper.sh && chmod +x /entrypoint-wrapper.sh
 
 # Re-declare build args in runtime stage (they don't persist across FROM)
 ARG VERSION
@@ -76,7 +91,8 @@ ENV DERIVAML_MCP_IMAGE_NAME="ghcr.io/informatics-isi-edu/deriva-ml-mcp"
 ENV DERIVAML_MCP_IN_DOCKER="true"
 
 # MCP servers communicate via stdio
-ENTRYPOINT ["deriva-ml-mcp"]
+# Use wrapper script to fix localhost resolution before dropping to mcpuser
+ENTRYPOINT ["/entrypoint-wrapper.sh", "deriva-ml-mcp"]
 
 # Labels for container metadata
 LABEL org.opencontainers.image.title="DerivaML MCP Server"
