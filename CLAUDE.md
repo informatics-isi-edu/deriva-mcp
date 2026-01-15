@@ -117,6 +117,7 @@ Uses the published Docker image. No local setup required.
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -137,6 +138,7 @@ Uses the published Docker image. No local setup required.
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -149,14 +151,14 @@ Uses the published Docker image. No local setup required.
 **Docker arguments:**
 - `--add-host localhost:host-gateway` - Allows connecting to localhost Deriva server
 
-**For localhost with self-signed certificates**, add the `REQUESTS_CA_BUNDLE` environment variable:
+**For localhost with self-signed certificates**, the image defaults to using `~/.deriva/allCAbundle-with-local.pem` as the CA bundle. See [Connecting to Localhost from Docker](#connecting-to-localhost-from-docker) for how to create this file. To use a different path, override with:
 ```json
-"-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
+"-e", "REQUESTS_CA_BUNDLE=/path/to/your/ca-bundle.pem",
 ```
-See [Connecting to Localhost from Docker](#connecting-to-localhost-from-docker) for how to create the CA bundle.
 
 **Volume mounts:**
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Deriva credentials (read-only)
+- `~/.bdbag:/home/mcpuser/.bdbag` - bdbag keychain for dataset download authentication (writable, allows keychain updates)
 - `~/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml` - Writable overlay for the workspace inside `.deriva`
 - `~/.deriva/deriva-ml:/home/mcpuser/workspace` - Working directory for execution outputs
 
@@ -184,8 +186,8 @@ If Deriva runs directly on the host (not in Docker), use `host-gateway`:
       "args": [
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
-        "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "deriva-ml-mcp:latest"
@@ -208,8 +210,8 @@ If Deriva runs in Docker (e.g., deriva-localhost), join the same network and map
         "run", "-i", "--rm",
         "--network", "deriva-localhost_internal_network",
         "--add-host", "localhost:172.28.3.15",
-        "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "deriva-ml-mcp:latest"

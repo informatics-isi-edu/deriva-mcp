@@ -90,6 +90,10 @@ ENV DERIVAML_MCP_IMAGE_NAME="ghcr.io/informatics-isi-edu/deriva-ml-mcp"
 # Flag to indicate running in Docker container
 ENV DERIVAML_MCP_IN_DOCKER="true"
 
+# Default CA bundle path for localhost with self-signed certificates
+# This can be overridden at runtime with -e REQUESTS_CA_BUNDLE=...
+ENV REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem
+
 # MCP servers communicate via stdio
 # Use wrapper script to fix localhost resolution before dropping to mcpuser
 ENTRYPOINT ["/entrypoint-wrapper.sh", "deriva-ml-mcp"]

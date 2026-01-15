@@ -111,6 +111,7 @@ Uses Docker for both MCP servers - most consistent setup:
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -134,14 +135,14 @@ Uses Docker for both MCP servers - most consistent setup:
 **Docker arguments explained:**
 - `--add-host localhost:host-gateway` - Allows connecting to a Deriva server running on localhost
 
-**For localhost with self-signed certificates**, add the `REQUESTS_CA_BUNDLE` environment variable:
+**For localhost with self-signed certificates**, the image defaults to using `~/.deriva/allCAbundle-with-local.pem` as the CA bundle. See [Troubleshooting](#docker-with-localhost-deriva-server) for how to create this file. To use a different CA bundle path, override with:
 ```json
-"-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
+"-e", "REQUESTS_CA_BUNDLE=/path/to/your/ca-bundle.pem",
 ```
-See [Troubleshooting](#docker-with-localhost-deriva-server) for how to create the CA bundle.
 
 **Volume mounts explained:**
 - `~/.deriva:/home/mcpuser/.deriva:ro` - Mounts your Deriva credentials (read-only)
+- `~/.bdbag:/home/mcpuser/.bdbag` - Mounts bdbag keychain for dataset download authentication (writable, allows keychain updates)
 - `~/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml` - Writable overlay for the workspace inside `.deriva`
 - `~/.deriva/deriva-ml:/home/mcpuser/workspace` - Working directory for execution outputs
 
@@ -224,6 +225,7 @@ If you don't need GitHub integration:
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -260,6 +262,7 @@ Add to your project's `.mcp.json` file:
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -322,6 +325,7 @@ Add to your MCP configuration (typically `.vscode/mcp.json`):
           "run", "-i", "--rm",
           "--add-host", "localhost:host-gateway",
           "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+          "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
           "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
           "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
           "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -758,8 +762,8 @@ If your Deriva server is running directly on the host machine (not in Docker), u
       "args": [
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
-        "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
@@ -782,8 +786,8 @@ If your Deriva server is running in Docker (e.g., using deriva-localhost), the M
         "run", "-i", "--rm",
         "--network", "deriva-localhost_internal_network",
         "--add-host", "localhost:172.28.3.15",
-        "-e", "REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem",
         "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
+        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
         "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
