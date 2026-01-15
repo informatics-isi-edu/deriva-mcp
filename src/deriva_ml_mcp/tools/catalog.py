@@ -24,26 +24,42 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     ) -> str:
         """Connect to an existing DerivaML catalog. Must be called before using other tools.
 
+        On connection, an MCP workflow and execution are automatically created to
+        track all operations performed through the MCP server. The workflow type
+        "DerivaML MCP" is created if it doesn't exist.
+
         Args:
             hostname: Server hostname (e.g., "dev.eye-ai.org", "www.atlas-d2k.org").
             catalog_id: Catalog ID number (e.g., "1", "52").
             domain_schema: Schema name for domain tables. Auto-detected if omitted.
 
         Returns:
-            JSON with status, hostname, catalog_id, domain_schema, project_name.
+            JSON with status, hostname, catalog_id, domain_schema, project_name,
+            workflow_rid, execution_rid.
 
         Example:
             connect_catalog("dev.eye-ai.org", "52") -> connects to eye-ai catalog
         """
         try:
             ml = conn_manager.connect(hostname, catalog_id, domain_schema)
-            return json.dumps({
+            conn_info = conn_manager.get_active_connection_info()
+
+            result = {
                 "status": "connected",
                 "hostname": hostname,
                 "catalog_id": catalog_id,
                 "domain_schema": ml.domain_schema,
                 "project_name": ml.project_name,
-            })
+            }
+
+            # Add workflow/execution info if available
+            if conn_info:
+                result["workflow_rid"] = conn_info.workflow_rid
+                result["execution_rid"] = (
+                    conn_info.execution.execution_rid if conn_info.execution else None
+                )
+
+            return json.dumps(result)
         except Exception as e:
             logger.error(f"Connection failed: {e}")
             return json.dumps({
@@ -84,16 +100,27 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def get_catalog_info() -> str:
-        """Get details about the active catalog: hostname, schemas, project name."""
+        """Get details about the active catalog: hostname, schemas, project name, and MCP execution."""
         try:
             ml = conn_manager.get_active_or_raise()
-            return json.dumps({
+            conn_info = conn_manager.get_active_connection_info()
+
+            result = {
                 "hostname": ml.host_name,
                 "catalog_id": ml.catalog_id,
                 "domain_schema": ml.domain_schema,
                 "ml_schema": ml.ml_schema,
                 "project_name": ml.project_name,
-            })
+            }
+
+            # Add workflow/execution info if available
+            if conn_info:
+                result["workflow_rid"] = conn_info.workflow_rid
+                result["execution_rid"] = (
+                    conn_info.execution.execution_rid if conn_info.execution else None
+                )
+
+            return json.dumps(result)
         except Exception as e:
             return json.dumps({"status": "error", "message": str(e)})
 

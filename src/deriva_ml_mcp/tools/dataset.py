@@ -87,6 +87,57 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def create_dataset(
+        description: str = "",
+        dataset_types: list[str] | None = None,
+        version: str | None = None,
+    ) -> str:
+        """Create a new empty dataset within the MCP execution context.
+
+        The dataset is created through the MCP execution for proper provenance
+        tracking. Use add_dataset_members() to populate it after creation.
+
+        Assign Dataset_Type labels to categorize the dataset's role
+        (e.g., "Training", "Testing", "Validation").
+
+        Args:
+            description: Human-readable description of the dataset's purpose.
+            dataset_types: Type labels from Dataset_Type vocabulary (e.g., ["Training", "Image"]).
+            version: Initial version string (default: "0.1.0").
+
+        Returns:
+            JSON with status, rid, description, dataset_types, version, execution_rid.
+
+        Example:
+            create_dataset("Training images for model v2", ["Training"])
+        """
+        try:
+            execution = conn_manager.get_active_execution()
+            if execution is None:
+                return json.dumps({
+                    "status": "error",
+                    "message": "No active execution context. Connect to a catalog first.",
+                })
+
+            # Create dataset through execution for provenance
+            dataset = execution.create_dataset(
+                description=description,
+                dataset_types=dataset_types or [],
+            )
+
+            return json.dumps({
+                "status": "created",
+                "rid": dataset.dataset_rid,
+                "description": dataset.description,
+                "dataset_types": dataset.dataset_types,
+                "version": str(dataset.current_version) if dataset.current_version else version or "0.1.0",
+                "execution_rid": execution.execution_rid,
+            })
+        except Exception as e:
+            logger.error(f"Failed to create dataset: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def get_dataset(dataset_rid: str) -> str:
         """Get full details about a dataset including nested dataset relationships.
 

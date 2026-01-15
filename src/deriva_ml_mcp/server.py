@@ -38,7 +38,57 @@ logger = logging.getLogger("deriva-ml-mcp")
 # Initialize FastMCP server
 mcp = FastMCP(
     "deriva-ml",
-    instructions="MCP server for DerivaML - manage ML workflows, datasets, and features in Deriva catalogs",
+    instructions="""MCP server for DerivaML - manage ML workflows, datasets, and features in Deriva catalogs
+
+## Connection
+
+Always call `connect_catalog` before using other tools. This establishes the connection and auto-detects the domain schema.
+
+## Tool Selection Guidelines
+
+**Prefer high-level tools over low-level operations:**
+
+- Use domain-specific tools like `create_dataset`, `add_dataset_members`, `create_feature`, `add_feature_value`, `create_execution`, etc. instead of raw `insert_records`
+- High-level tools properly initialize default values, enforce data integrity constraints, and handle relationships
+- Only use `insert_records` as a last resort when no high-level API exists for your use case - it bypasses business logic and may leave required fields uninitialized
+
+**Provenance tracking:**
+
+- Use `create_execution` to track the provenance of datasets, features, and other artifacts
+- When creating datasets or features that should be tracked, create them within an execution context
+- Executions link inputs, outputs, and configuration for reproducibility
+
+## Common Workflows
+
+**Exploring a catalog:**
+1. `connect_catalog` - Connect to the catalog
+2. `list_tables` or `get_schema_description` - Understand the schema
+3. `list_datasets` - See available datasets
+4. `list_vocabularies` / `list_vocabulary_terms` - Explore controlled vocabularies
+5. `list_features` / `list_feature_values` - Examine feature definitions
+
+**Working with datasets:**
+1. `create_dataset` - Create a new dataset with types
+2. `add_dataset_members` - Add assets or nested datasets as members
+3. `list_dataset_members` - View dataset contents
+4. `download_dataset` - Download dataset assets locally
+
+**Adding features:**
+1. `create_feature` - Define a new feature linking a target table to vocabulary terms
+2. `add_feature_value` or `add_feature_value_record` - Assign feature values to records
+
+**Running workflows:**
+1. `create_execution` - Start a tracked execution
+2. `start_execution` / `stop_execution` - Manage execution lifecycle
+3. `upload_execution_outputs` - Upload results to the catalog
+
+## Schema Conventions
+
+- `deriva-ml` schema: Core ML tables (Dataset, Execution, Feature, etc.)
+- Domain schema: Project-specific tables (assets, vocabularies, features)
+- Vocabularies: Controlled term lists for consistent labeling
+- Assets: Tables with file attachments (images, models, etc.)
+""",
 )
 
 # Global connection manager

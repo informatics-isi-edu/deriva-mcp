@@ -46,6 +46,16 @@ USER mcpuser
 # Deriva credentials should be mounted at ~/.deriva at runtime
 ENV HOME=/home/mcpuser
 
+# Workflow metadata environment variables
+# These are used to create the MCP workflow and execution on connection
+ENV DERIVAML_MCP_WORKFLOW_NAME="DerivaML MCP Server"
+ENV DERIVAML_MCP_WORKFLOW_TYPE="DerivaML MCP"
+ENV DERIVAML_MCP_VERSION=""
+ENV DERIVAML_MCP_CONTAINER_ID=""
+
+# Flag to indicate running in Docker container
+ENV DERIVAML_MCP_IN_DOCKER="true"
+
 # MCP servers communicate via stdio
 ENTRYPOINT ["deriva-ml-mcp"]
 
