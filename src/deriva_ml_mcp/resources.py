@@ -774,214 +774,337 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
         mime_type="application/json",
     )
     def get_handlebars_guide() -> str:
-        """Return comprehensive Handlebars template documentation."""
+        """Return comprehensive Handlebars template documentation from ermrestjs."""
         return json.dumps({
             "title": "Handlebars Template Guide for Deriva",
             "description": "Templates are used in row_markdown_pattern, markdown_pattern, and other display options",
-            "template_engines": {
-                "handlebars": {
-                    "description": "Default template engine with more features",
-                    "triple_braces": "{{{value}}} - Raw output (no HTML escaping)",
-                    "double_braces": "{{value}} - HTML-escaped output"
+            "source": "https://github.com/informatics-isi-edu/ermrestjs/blob/master/docs/user-docs/handlebars.md",
+            "handlebars_vs_mustache": {
+                "description": "Handlebars is almost similar to Mustache with additional benefits like helpers",
+                "null_checking": {
+                    "mustache": "{{#name}}Hello {{{name}}}{{/name}}{{^name}}No name available{{/name}}",
+                    "handlebars": "{{#if name}}Hello {{{name}}}{{else}}No name available{{/if}}",
+                    "note": "Handlebars if doesn't change context; use #with for context-changing null checks"
                 },
-                "mustache": {
-                    "description": "Simpler template engine, subset of Handlebars",
-                    "note": "Use template_engine: 'mustache' to select"
+                "encode_syntax": {
+                    "mustache": "{{#encode}}{{{col}}}{{/encode}}",
+                    "handlebars": "{{#encode col}}{{/encode}}"
+                },
+                "attribute_syntax": {
+                    "issue": "Handlebars doesn't recognize {{{{}}}} for markdown attributes",
+                    "solution": "Add space: { {{{btn-class}}} } instead of {{{{{btn_class}}}}}"
                 }
             },
             "basic_syntax": {
                 "variable_output": {
-                    "raw": "{{{column_name}}}",
-                    "escaped": "{{column_name}}",
+                    "raw": "{{{column_name}}} - Triple braces for raw output (no HTML escaping)",
+                    "escaped": "{{column_name}} - Double braces for HTML-escaped output",
                     "recommendation": "Use triple braces {{{...}}} for most Deriva use cases"
                 },
-                "accessing_values": {
-                    "current_column": "{{{_value}}} or {{{value}}}",
-                    "other_column": "{{{column_name}}}",
-                    "nested_property": "{{{object.property}}}",
-                    "array_element": "{{{array.0}}}"
+                "nested_paths": {
+                    "example": "{{author.name}} - Access nested properties",
+                    "parent_context": "../ - Access parent context in nested blocks"
+                },
+                "raw_values": {
+                    "syntax": "{{{_COLUMN_NAME}}} - Prepend underscore for raw ERMrest values",
+                    "jsonb": "{{{_col.name}}} - Access fields in jsonb columns via raw value"
+                },
+                "array_access": {
+                    "by_index": "{{{arr.0.value}}} - Access array element by index (0-based)"
+                },
+                "escaping": {
+                    "syntax": "\\\\{{{escaped}}} - Prefix with \\\\ to output literal handlebars"
+                },
+                "special_characters": {
+                    "syntax": "{{[str with a space]}} - Square brackets for keys with spaces/special chars",
+                    "nested": "{{{values.[power (uW)]}}}"
+                },
+                "subexpressions": {
+                    "syntax": "{{#escape (encode arg1) arg2}}{{/escape}}",
+                    "description": "Nest helpers using parentheses"
                 }
             },
-            "deriva_specific_variables": {
-                "row_context": {
-                    "_value": "Current column/field value",
-                    "_row": "Object with all columns in current row",
-                    "_row.RID": "RID of current row",
-                    "_row.column_name": "Any column value from current row"
+            "predefined_variables": {
+                "$moment": {
+                    "description": "Datetime object with current app load time",
+                    "properties": {
+                        "date": "Day of month (e.g., 19)",
+                        "day": "Day of week (e.g., 4)",
+                        "month": "Month number (e.g., 10)",
+                        "year": "Year (e.g., 2017)",
+                        "dateString": "e.g., Thu Oct 19 2017",
+                        "hours": "24-hour format",
+                        "minutes": "Minutes",
+                        "seconds": "Seconds",
+                        "milliseconds": "Milliseconds",
+                        "ISOString": "ISO 8601 format",
+                        "UTCString": "UTC format",
+                        "LocaleString": "Locale-specific format"
+                    },
+                    "examples": [
+                        "{{formatDatetime $moment.ISOString 'YYYY/M/D'}}",
+                        "{{{$moment.month}}}/{{{$moment.date}}}/{{{$moment.year}}}"
+                    ]
                 },
-                "foreign_key_values": {
-                    "$fkeys": "Object containing FK-related data",
-                    "$fkeys.schema.constraint.values": "Values from related table via FK",
-                    "$fkeys.schema.constraint.values.column_name": "Specific column from related row",
-                    "$fkeys.schema.constraint.rowName": "Row name of related record"
+                "$catalog": {
+                    "description": "Catalog information object",
+                    "properties": {
+                        "id": "Catalog identifier without version",
+                        "snapshot": "Catalog ID with version if present",
+                        "version": "Version string if present"
+                    }
                 },
-                "system_values": {
-                    "$moment": "Moment.js for date formatting",
-                    "$catalog": "Catalog information object",
-                    "$catalog.id": "Catalog ID",
-                    "$catalog.snapshot": "Current snapshot ID"
+                "$dcctx": {
+                    "description": "Current page/context IDs for generating links with ppid/pcid",
+                    "properties": {
+                        "pid": "Page ID",
+                        "cid": "Context ID (app name)"
+                    }
                 },
-                "url_encoding": {
-                    "$uri_path": "URI path component (for paths)",
-                    "$uri_component": "URI component (for query params)"
+                "$location": {
+                    "description": "Current document location from URL",
+                    "properties": {
+                        "origin": "URL origin",
+                        "host": "Hostname with port",
+                        "hostname": "Hostname only",
+                        "chaise_path": "Path to Chaise install (default: /chaise/)"
+                    }
+                },
+                "$session": {
+                    "description": "Current user session from webauthn",
+                    "properties": {
+                        "attributes": "Array of groups/identities with id, display_name, type, webpage",
+                        "client.display_name": "User display name",
+                        "client.email": "User email",
+                        "client.full_name": "User full name",
+                        "client.id": "User ID",
+                        "client.identities": "User identities array",
+                        "client.extensions": "Additional permissions (e.g., ras_dbgap_permissions)"
+                    }
+                },
+                "$fkeys": {
+                    "description": "Access outbound foreign key data",
+                    "syntax": "$fkey_schema_constraint (preferred) or $fkeys.schema.constraint",
+                    "attributes": {
+                        "values": "Object with column values from related table",
+                        "values.col1": "Formatted value, values._col1 for unformatted",
+                        "rowName": "Row name of foreign key record",
+                        "uri.detailed": "URI to FK in record app"
+                    },
+                    "example": "{{#with $fkey_schema_constraint}}[{{rowName}}]({{{uri.detailed}}}){{/with}}",
+                    "limitation": "Only accesses tables one level away; use for column-display annotation"
                 }
             },
-            "handlebars_helpers": {
-                "conditionals": {
-                    "#if": {
-                        "syntax": "{{#if value}}...{{/if}}",
-                        "example": "{{#if Description}}{{{Description}}}{{else}}No description{{/if}}",
-                        "note": "Tests for truthiness (false, null, undefined, '', 0, [] are falsy)"
-                    },
-                    "#unless": {
-                        "syntax": "{{#unless value}}...{{/unless}}",
-                        "example": "{{#unless Active}}(Inactive){{/unless}}"
-                    },
-                    "if_else": {
-                        "syntax": "{{#if cond}}...{{else}}...{{/if}}",
-                        "example": "{{#if URL}}[Link]({{{URL}}}){{else}}No link{{/if}}"
-                    }
+            "helpers": {
+                "printf": {
+                    "description": "Format values using PreFormat syntax",
+                    "syntax": "{{printf value format}}",
+                    "examples": [
+                        "{{printf 3.1415 '%.1f'}} → 3.1",
+                        "{{printf 43 '%4d'}} → '  43'"
+                    ]
                 },
-                "iteration": {
-                    "#each": {
-                        "syntax": "{{#each array}}...{{/each}}",
-                        "example": "{{#each Tags}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}",
-                        "variables": {
-                            "this": "Current item",
-                            "@index": "Current index (0-based)",
-                            "@first": "Boolean - is first item",
-                            "@last": "Boolean - is last item",
-                            "@key": "Current key (for objects)"
-                        }
-                    }
+                "formatDatetime": {
+                    "description": "Format date/timestamp/timestamptz values",
+                    "syntax": "{{formatDatetime value format}}",
+                    "examples": [
+                        "{{formatDatetime '30-08-2018' 'YYYY'}} → 2018",
+                        "{{formatDatetime '30-08-2018' 'YYYY-MM-DD'}} → 2018-08-30",
+                        "{{formatDatetime '2018-09-25T00:12:34.00-07:00' 'MM/DD/YYYY HH:mm A'}} → 09/25/2018 03:12 AM"
+                    ],
+                    "note": "Previously called formatDate (still works but deprecated)"
                 },
+                "datetimeToSnapshot": {
+                    "description": "Encode datetime to snapshot ID for catalog versioning",
+                    "syntax": "{{datetimeToSnapshot value}}",
+                    "example": "{{datetimeToSnapshot '2025-07-26T19:20:30Z'}} → 33N-PFKM-4DR0"
+                },
+                "snapshotToDatetime": {
+                    "description": "Decode snapshot ID to datetime",
+                    "syntax": "{{snapshotToDatetime value}} or {{snapshotToDatetime value format}}",
+                    "examples": [
+                        "{{snapshotToDatetime '33N-PFKM-4DR0'}} → 2025-07-26T19:20:30.000000+00:00",
+                        "{{snapshotToDatetime '33N-PFKM-4DR0' 'YYYY-MM-DD'}} → 2025-07-26"
+                    ]
+                },
+                "humanizeBytes": {
+                    "description": "Convert byte count to human-readable format",
+                    "syntax": "{{humanizeBytes value}} with optional named arguments",
+                    "arguments": {
+                        "mode": "'si' (default) or 'binary' (MiB instead of MB)",
+                        "precision": "Number of digits (min 3 for si, 4 for binary)",
+                        "tooltip": "true to include tooltip with exact bytes"
+                    },
+                    "examples": [
+                        "{{humanizeBytes 41235532}} → 41.2 MB",
+                        "{{humanizeBytes 41235532 precision=4}} → 41.23 MB",
+                        "{{humanizeBytes 41235532 mode='binary'}} → 39.32 MiB",
+                        "{{humanizeBytes 41235532 mode='binary' tooltip=true}} → span with tooltip"
+                    ]
+                },
+                "stringLength": {
+                    "description": "Get length of a string",
+                    "syntax": "{{stringLength value}}",
+                    "example": "{{stringLength '123123'}} → 6"
+                },
+                "add": {
+                    "description": "Add two numbers",
+                    "syntax": "{{add value1 value2}}",
+                    "note": "Converts strings to numbers to avoid concatenation"
+                },
+                "subtract": {
+                    "description": "Subtract value2 from value1",
+                    "syntax": "{{subtract value1 value2}}"
+                }
+            },
+            "block_helpers": {
+                "if": {
+                    "description": "Conditionally render content",
+                    "syntax": "{{#if value}}...{{/if}} or {{#if value}}...{{else}}...{{/if}}",
+                    "falsy_values": "false, undefined, null, '', 0, []",
+                    "else_if": "{{#if val1}}...{{else if val2}}...{{else}}...{{/if}}",
+                    "note": "Does NOT change context - use #with for context change"
+                },
+                "unless": {
+                    "description": "Inverse of if - renders when falsy",
+                    "syntax": "{{#unless value}}...{{/unless}}"
+                },
+                "each": {
+                    "description": "Iterate over arrays or objects",
+                    "syntax": "{{#each array}}...{{/each}}",
+                    "variables": {
+                        "this": "Current item",
+                        "@index": "Current loop index (0-based)",
+                        "@key": "Current key (for objects)",
+                        "@first": "Boolean - is first item",
+                        "@last": "Boolean - is last item"
+                    },
+                    "parent_access": "{{../array.length}} - Access parent context",
+                    "block_params": "{{#each array as |value key|}}...{{/each}}",
+                    "else": "{{#each items}}...{{else}}No items{{/each}}"
+                },
+                "with": {
+                    "description": "Shift context to a value (also does truthy check)",
+                    "syntax": "{{#with value}}...{{/with}}",
+                    "current_value": "{{#with column}}{{{.}}}{{/with}} - Use . for current value",
+                    "parent_access": "{{#with author}}{{{../title}}}{{/with}}",
+                    "block_params": "{{#with author as |myAuthor|}}...{{/with}}",
+                    "else": "{{#with author}}{{name}}{{else}}No author{{/with}}"
+                },
+                "lookup": {
+                    "description": "Dynamic parameter resolution",
+                    "syntax": "{{lookup map key}}",
+                    "example": "{{lookup $session.client.extensions.ras_dbgap_phs_ids dbgap_study_id}}",
+                    "note": "Returns null if value is null, undefined if key not present"
+                },
+                "encode": {
+                    "description": "URL encode strings",
+                    "syntax": "{{#encode value}}{{/encode}} or {{#encode key '=' value}}{{/encode}}",
+                    "example": "age={{#encode ageVar}}{{/encode}} → age%3D10"
+                },
+                "escape": {
+                    "description": "Escape special characters (hyphens, brackets, etc.)",
+                    "syntax": "{{#escape value}}{{/escape}}",
+                    "example": "{{#escape '**value ] ! special'}}{{/escape}} → \\*\\*value \\] \\! special"
+                },
+                "encodeFacet": {
+                    "description": "Compress JSON for facet URLs",
+                    "string_syntax": "{{#encodeFacet}}{JSON string}{{/encodeFacet}}",
+                    "object_syntax": "{{encodeFacet jsonb_column}}",
+                    "example": "[link](example.com/recordset/#1/S:T/*::facets::{{encodeFacet facet_obj}})"
+                },
+                "jsonStringify": {
+                    "description": "Convert JSON object to string (like JSON.stringify)",
+                    "syntax": "{{#jsonStringify column}}{{/jsonStringify}} or {{jsonStringify col}}"
+                },
+                "regexFindFirst": {
+                    "description": "Return first matching substring",
+                    "syntax": "{{#regexFindFirst string pattern}}{{this}}{{/regexFindFirst}}",
+                    "flags": "{{#regexFindFirst str pattern flags='i'}}...{{/regexFindFirst}}",
+                    "example": "{{#regexFindFirst '/var/www/index.html' '[^\\/]+$'}}{{this}}{{/regexFindFirst}} → index.html"
+                },
+                "regexFindAll": {
+                    "description": "Return all matching substrings as array",
+                    "syntax": "{{#each (regexFindAll string pattern)}}{{this}}{{/each}}"
+                },
+                "replace": {
+                    "description": "Replace matches with substring (like String.replace)",
+                    "syntax": "{{#replace pattern replacement}}string{{/replace}}",
+                    "flags": "{{#replace pattern replacement flags=''}}...{{/replace}} - empty flags for first match only",
+                    "example": "{{#replace '_' ' '}}table_name{{/replace}} → table name"
+                },
+                "toTitleCase": {
+                    "description": "Capitalize first letter of each word",
+                    "syntax": "{{#toTitleCase}}string{{/toTitleCase}}",
+                    "example": "{{#toTitleCase}}hello world{{/toTitleCase}} → Hello World"
+                }
+            },
+            "boolean_helpers": {
                 "comparison": {
-                    "#ifCond": {
-                        "syntax": "{{#ifCond val1 op val2}}...{{/ifCond}}",
-                        "operators": ["==", "!=", "<", ">", "<=", ">=", "===", "!==", "&&", "||"],
-                        "example": "{{#ifCond Status '==' 'Active'}}✓{{/ifCond}}"
-                    }
+                    "eq": "{{#if (eq var1 var2)}}...{{/if}} - Equality",
+                    "ne": "{{#if (ne var1 var2)}}...{{/if}} - Inequality",
+                    "lt": "{{#if (lt var1 var2)}}...{{/if}} - Less than",
+                    "gt": "{{#if (gt var1 var2)}}...{{/if}} - Greater than",
+                    "lte": "{{#if (lte var1 var2)}}...{{/if}} - Less than or equal",
+                    "gte": "{{#if (gte var1 var2)}}...{{/if}} - Greater than or equal"
                 },
-                "string_helpers": {
-                    "escape": "{{escape value}} - HTML escape",
-                    "toJSON": "{{toJSON object}} - Convert to JSON string",
-                    "encodeFacet": "{{encodeFacet object}} - Encode for facet URL"
+                "regexMatch": {
+                    "description": "Check if value matches regex",
+                    "syntax": "{{#if (regexMatch value pattern)}}...{{/if}}",
+                    "flags": "{{#if (regexMatch value 'text' flags='i')}}...{{/if}}"
                 },
-                "math_helpers": {
-                    "math": {
-                        "syntax": "{{math val1 op val2}}",
-                        "operators": ["+", "-", "*", "/", "%"],
-                        "example": "{{math Price '*' Quantity}}"
-                    }
+                "isUserInAcl": {
+                    "description": "Check if user is in ACL group(s)",
+                    "syntax": "{{#if (isUserInAcl 'https://group-id')}}...{{/if}}",
+                    "multiple": "{{#if (isUserInAcl 'id1' 'id2')}}...{{/if}}",
+                    "array": "{{#if (isUserInAcl groupArray)}}...{{/if}}"
                 },
-                "date_helpers": {
-                    "formatDate": {
-                        "syntax": "{{formatDate date format}}",
-                        "formats": ["YYYY-MM-DD", "MM/DD/YYYY", "MMMM D, YYYY", "relative"],
-                        "example": "{{formatDate RCT 'MMMM D, YYYY'}}"
-                    },
-                    "humanizeBytes": {
-                        "syntax": "{{humanizeBytes bytes}}",
-                        "example": "{{humanizeBytes Length}} → '1.5 MB'"
-                    }
+                "logical": {
+                    "and": "{{#if (and var1 var2)}}...{{/if}}",
+                    "or": "{{#if (or var1 var2)}}...{{/if}}",
+                    "not": "{{#if (not var1)}}...{{/if}}",
+                    "nested": "{{#if (or (eq a 1) (and (gt b 5) (lt b 10)))}}...{{/if}}",
+                    "multiple": "{{#if (or cond1 cond2 cond3)}}...{{/if}}"
                 }
+            },
+            "automatic_null_detection": {
+                "description": "If any column in markdown_pattern is null/empty, falls back to show_null",
+                "limitations": [
+                    "Disabled when block syntax ({{#) is used anywhere in template",
+                    "Column names with # character may break detection"
+                ],
+                "workaround": "Use {{#with [# Column]}}{{{.}}}{{/with}} for special column names"
             },
             "common_patterns": {
-                "row_name_patterns": [
-                    {
-                        "description": "Simple column value",
-                        "pattern": "{{{Name}}}"
-                    },
-                    {
-                        "description": "Multiple columns",
-                        "pattern": "{{{First_Name}}} {{{Last_Name}}}"
-                    },
-                    {
-                        "description": "With conditional",
-                        "pattern": "{{{Name}}}{{#if Nickname}} ({{{Nickname}}}){{/if}}"
-                    },
-                    {
-                        "description": "With FK value",
-                        "pattern": "{{{Filename}}} - {{{$fkeys.domain.Image_Subject_fkey.rowName}}}"
-                    }
+                "row_name": [
+                    {"description": "Simple", "pattern": "{{{Name}}}"},
+                    {"description": "Composite", "pattern": "{{{Last_Name}}}, {{{First_Name}}}"},
+                    {"description": "With FK", "pattern": "{{{Filename}}} ({{{$fkey_domain_fk.rowName}}})"},
+                    {"description": "Conditional", "pattern": "{{{Name}}}{{#if Nickname}} ({{{Nickname}}}){{/if}}"}
                 ],
-                "column_display_patterns": [
-                    {
-                        "description": "Link from URL column",
-                        "pattern": "[{{{_value}}}]({{{_value}}})"
-                    },
-                    {
-                        "description": "Image thumbnail",
-                        "pattern": "[![Thumbnail]({{{_value}}}?h=100)]({{{_value}}})"
-                    },
-                    {
-                        "description": "Email link",
-                        "pattern": "[{{{_value}}}](mailto:{{{_value}}})"
-                    },
-                    {
-                        "description": "Badge/status",
-                        "pattern": "**{{{_value}}}**"
-                    },
-                    {
-                        "description": "Conditional formatting",
-                        "pattern": "{{#ifCond _value '>' 0}}+{{{_value}}}{{else}}{{{_value}}}{{/ifCond}}"
-                    }
+                "column_display": [
+                    {"description": "URL as link", "pattern": "[Download]({{{_value}}})"},
+                    {"description": "Email link", "pattern": "[{{{_value}}}](mailto:{{{_value}}})"},
+                    {"description": "Image thumbnail", "pattern": "[![]({{{_value}}}?h=80)]({{{_value}}})"},
+                    {"description": "Conditional", "pattern": "{{#if _value}}✓ Active{{else}}✗ Inactive{{/if}}"}
                 ],
-                "pseudo_column_patterns": [
-                    {
-                        "description": "Count related items",
-                        "pattern": "{{{$self.values.length}}} items"
-                    },
-                    {
-                        "description": "List with separator",
-                        "pattern": "{{#each $self.values}}{{{this.Name}}}{{#unless @last}}, {{/unless}}{{/each}}"
-                    }
-                ]
-            },
-            "debugging_tips": [
-                "Use {{toJSON variable}} to inspect complex objects",
-                "Start simple and add complexity incrementally",
-                "Check browser console for template rendering errors",
-                "Test with sample data using preview_handlebars_template tool",
-                "Triple braces {{{...}}} prevent HTML escaping issues"
-            ],
-            "examples": {
-                "row_name": {
-                    "simple": {
-                        "pattern": "{{{Name}}}",
-                        "output": "John Smith"
-                    },
-                    "composite": {
-                        "pattern": "{{{Last_Name}}}, {{{First_Name}}}",
-                        "output": "Smith, John"
-                    },
-                    "with_fk": {
-                        "pattern": "{{{Filename}}} ({{{$fkeys.domain.Image_Subject_fkey.rowName}}})",
-                        "output": "scan001.jpg (Patient A)"
-                    }
+                "foreign_key_link": {
+                    "pattern": "{{#with $fkey_schema_constraint}}[{{rowName}}]({{{uri.detailed}}}){{/with}}"
                 },
-                "column_display": {
-                    "url_as_link": {
-                        "pattern": "[Download]({{{_value}}})",
-                        "input": "https://example.com/file.pdf",
-                        "output": "[Download](https://example.com/file.pdf)"
-                    },
-                    "image_thumbnail": {
-                        "pattern": "[![]({{{_value}}}?h=80)]({{{_value}}})",
-                        "note": "Creates clickable thumbnail"
-                    },
-                    "conditional_status": {
-                        "pattern": "{{#if _value}}✓ Active{{else}}✗ Inactive{{/if}}",
-                        "input_true": True,
-                        "output_true": "✓ Active"
-                    }
+                "array_with_separator": {
+                    "pattern": "{{#each items}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}"
+                },
+                "facet_url": {
+                    "pattern": "[View](url/*::facets::{{encodeFacet facet_obj}})"
                 }
             },
-            "tools_for_templates": {
-                "preview_handlebars_template": "Test a template with sample data",
-                "get_table_sample_data": "Get sample row data for template testing",
-                "get_handlebars_template_variables": "List available variables for a table"
-            }
+            "debugging_tips": [
+                "Use {{jsonStringify variable}} to inspect complex objects",
+                "Start simple and add complexity incrementally",
+                "Check browser console for template rendering errors",
+                "Triple braces {{{...}}} prevent HTML escaping issues",
+                "Use {{#if true}}...{{/if}} to disable automatic null detection without side effects"
+            ]
         }, indent=2)
 
     # =========================================================================
