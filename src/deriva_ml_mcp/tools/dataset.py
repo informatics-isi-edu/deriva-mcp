@@ -92,9 +92,9 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         dataset_types: list[str] | None = None,
         version: str | None = None,
     ) -> str:
-        """Create a new empty dataset within the MCP execution context.
+        """Create a new empty dataset within an execution context.
 
-        The dataset is created through the MCP execution for proper provenance
+        The dataset is created through an execution for proper provenance
         tracking. Use add_dataset_members() to populate it after creation.
 
         Assign Dataset_Type labels to categorize the dataset's role
@@ -112,11 +112,24 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             create_dataset("Training images for model v2", ["Training"])
         """
         try:
-            execution = conn_manager.get_active_execution()
+            from deriva_ml_mcp.tools.execution import _active_executions
+
+            ml = conn_manager.get_active_or_raise()
+
+            # Get execution: user-created execution takes priority over MCP connection execution
+            execution = None
+            key = f"{ml.host_name}:{ml.catalog_id}"
+            if key in _active_executions:
+                execution = _active_executions[key]
+
+            # Fallback to MCP connection execution
+            if execution is None:
+                execution = conn_manager.get_active_execution()
+
             if execution is None:
                 return json.dumps({
                     "status": "error",
-                    "message": "No active execution context. Connect to a catalog first.",
+                    "message": "No active execution context. Connect to a catalog or use create_execution first.",
                 })
 
             # Create dataset through execution for provenance

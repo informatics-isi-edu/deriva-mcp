@@ -340,16 +340,23 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
 
             # Get execution RID from active execution or parameter
+            # Priority: explicit parameter > user-created execution > MCP connection execution
             exe_rid = execution_rid
             if not exe_rid:
                 key = f"{ml.host_name}:{ml.catalog_id}"
                 if key in _active_executions:
                     exe_rid = _active_executions[key].execution_rid
 
+            # Fallback to MCP connection execution
+            if not exe_rid:
+                mcp_execution = conn_manager.get_active_execution()
+                if mcp_execution:
+                    exe_rid = mcp_execution.execution_rid
+
             if not exe_rid:
                 return json.dumps({
                     "status": "error",
-                    "message": "No active execution. Provide execution_rid or create_execution first.",
+                    "message": "No active execution. Connect to a catalog or use create_execution first.",
                 })
 
             # Look up the feature to get its structure
@@ -446,16 +453,23 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
 
             # Get execution RID from active execution or parameter
+            # Priority: explicit parameter > user-created execution > MCP connection execution
             exe_rid = execution_rid
             if not exe_rid:
                 key = f"{ml.host_name}:{ml.catalog_id}"
                 if key in _active_executions:
                     exe_rid = _active_executions[key].execution_rid
 
+            # Fallback to MCP connection execution
+            if not exe_rid:
+                mcp_execution = conn_manager.get_active_execution()
+                if mcp_execution:
+                    exe_rid = mcp_execution.execution_rid
+
             if not exe_rid:
                 return json.dumps({
                     "status": "error",
-                    "message": "No active execution. Provide execution_rid or create_execution first.",
+                    "message": "No active execution. Connect to a catalog or use create_execution first.",
                 })
 
             # Look up the feature

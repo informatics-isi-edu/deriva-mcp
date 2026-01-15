@@ -25,17 +25,17 @@ logger = logging.getLogger("deriva-ml-mcp")
 MCP_WORKFLOW_TYPE = "DerivaML MCP"
 
 
-def get_mcp_workflow_info() -> dict[str, str]:
+def get_mcp_workflow_info() -> dict[str, str | bool]:
     """Get workflow metadata from environment variables.
 
     Returns:
-        Dictionary with workflow_name, workflow_type, version, container_id.
+        Dictionary with workflow_name, workflow_type, version, git_commit, in_docker.
     """
     return {
         "workflow_name": os.environ.get("DERIVAML_MCP_WORKFLOW_NAME", "DerivaML MCP Server"),
         "workflow_type": os.environ.get("DERIVAML_MCP_WORKFLOW_TYPE", MCP_WORKFLOW_TYPE),
         "version": os.environ.get("DERIVAML_MCP_VERSION", ""),
-        "container_id": os.environ.get("DERIVAML_MCP_CONTAINER_ID", ""),
+        "git_commit": os.environ.get("DERIVAML_MCP_GIT_COMMIT", ""),
         "in_docker": os.environ.get("DERIVAML_MCP_IN_DOCKER", "false").lower() == "true",
     }
 
@@ -111,8 +111,8 @@ class ConnectionManager:
                 description_parts.append("(Docker)")
             if workflow_info["version"]:
                 description_parts.append(f"v{workflow_info['version']}")
-            if workflow_info["container_id"]:
-                description_parts.append(f"[{workflow_info['container_id'][:12]}]")
+            if workflow_info["git_commit"]:
+                description_parts.append(f"[{workflow_info['git_commit'][:12]}]")
 
             description = " ".join(description_parts)
 
