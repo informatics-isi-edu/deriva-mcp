@@ -3033,3 +3033,544 @@ model.apply()
 - Deriva Workbench - GUI annotation editor
 - Chaise documentation: https://docs.derivacloud.org/
 """
+
+    # =========================================================================
+    # DerivaML Conceptual Documentation Resources
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://docs/data-model",
+        name="DerivaML Data Model",
+        description="Conceptual overview of DerivaML entities and their relationships",
+        mime_type="application/json",
+    )
+    def get_data_model_docs() -> str:
+        """Return conceptual documentation for DerivaML data model."""
+        return json.dumps({
+            "title": "DerivaML Data Model",
+            "description": "Understanding the core entities and their relationships in DerivaML",
+            "core_concepts": {
+                "dataset": {
+                    "definition": "A versioned collection of records for reproducible ML experiments",
+                    "key_properties": [
+                        "Semantic versioning (major.minor.patch)",
+                        "Contains records from domain tables (e.g., Image, Subject)",
+                        "Can be nested (parent/child relationships for train/test splits)",
+                        "Immutable snapshots via catalog versioning"
+                    ],
+                    "created_by": "Execution (datasets are always created within an execution context)",
+                    "relationships": {
+                        "contains": "Records from registered dataset element types",
+                        "created_by": "Execution that produced this dataset",
+                        "nested_in": "Optional parent dataset (for train/test partitioning)"
+                    }
+                },
+                "execution": {
+                    "definition": "A single run of an ML workflow with full provenance tracking",
+                    "key_properties": [
+                        "Links to input datasets and assets",
+                        "Tracks output datasets, assets, and feature values",
+                        "Records timing (start/stop) and status",
+                        "Provides working directory for file staging"
+                    ],
+                    "lifecycle": [
+                        "1. create_execution() - Initialize with workflow and inputs",
+                        "2. start_execution() - Begin timing",
+                        "3. [Perform ML operations]",
+                        "4. asset_file_path() - Register output files",
+                        "5. stop_execution() - End timing",
+                        "6. upload_execution_outputs() - REQUIRED: Upload files to catalog"
+                    ],
+                    "relationships": {
+                        "runs": "Workflow definition",
+                        "consumes": "Input datasets and assets",
+                        "produces": "Output datasets, assets, and feature values"
+                    }
+                },
+                "workflow": {
+                    "definition": "A registered computational process or analysis pipeline",
+                    "key_properties": [
+                        "Has a unique URL (typically git repository)",
+                        "Has a checksum for version tracking",
+                        "Categorized by workflow_type vocabulary"
+                    ],
+                    "purpose": "Enables reproducibility by tracking which code produced which results"
+                },
+                "feature": {
+                    "definition": "Metadata, labels, or annotations associated with domain objects",
+                    "key_properties": [
+                        "Attached to a target table (e.g., 'Diagnosis' feature on 'Image')",
+                        "Values come from controlled vocabularies or assets",
+                        "Every value records which execution produced it (provenance)"
+                    ],
+                    "types": {
+                        "term_based": "Values from vocabulary tables (e.g., diagnosis labels)",
+                        "asset_based": "Values reference asset files (e.g., segmentation masks)",
+                        "mixed": "Can have multiple columns of different types"
+                    },
+                    "relationships": {
+                        "targets": "Domain table records (via foreign key)",
+                        "produced_by": "Execution that created this value"
+                    }
+                },
+                "vocabulary": {
+                    "definition": "A controlled set of terms (like an enum) for standardized values",
+                    "key_properties": [
+                        "Terms have names, descriptions, and optional synonyms",
+                        "Used by features, dataset types, workflow types, asset types"
+                    ],
+                    "examples": [
+                        "Dataset_Type: Training, Testing, Validation",
+                        "Workflow_Type: Training, Inference, Data Preparation",
+                        "Asset_Type: Model_File, Checkpoint, Segmentation_Mask"
+                    ]
+                },
+                "asset": {
+                    "definition": "A file with URL, checksum, and provenance metadata",
+                    "key_properties": [
+                        "Automatic URL and MD5 checksum tracking",
+                        "Categorized by Asset_Type vocabulary",
+                        "Can be inputs or outputs of executions"
+                    ],
+                    "tables": {
+                        "Execution_Asset": "General execution outputs",
+                        "Execution_Metadata": "Configuration and log files",
+                        "Custom asset tables": "Domain-specific files (e.g., Image, Model)"
+                    }
+                }
+            },
+            "relationship_diagram": {
+                "description": "How entities connect",
+                "flows": [
+                    "Workflow → defines → Execution",
+                    "Execution → consumes → Dataset (input)",
+                    "Execution → produces → Dataset (output)",
+                    "Execution → produces → Asset (output)",
+                    "Execution → produces → Feature Value",
+                    "Dataset → contains → Domain Records (Image, Subject, etc.)",
+                    "Feature → targets → Domain Table",
+                    "Feature Value → references → Vocabulary Term or Asset"
+                ]
+            },
+            "provenance_chain": {
+                "description": "Complete traceability from results back to source",
+                "example": [
+                    "Feature value 'Diagnosis=Normal' on Image 'IMG-001'",
+                    "← produced by Execution 'EXE-123'",
+                    "← which ran Workflow 'Classification Pipeline v1.2'",
+                    "← using Dataset 'Training Set v2.0.0'",
+                    "← containing 1000 images from domain table"
+                ]
+            }
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://docs/python-api",
+        name="DerivaML Python API Reference",
+        description="Python API patterns for writing deriva-ml programs",
+        mime_type="application/json",
+    )
+    def get_python_api_docs() -> str:
+        """Return Python API reference documentation."""
+        return json.dumps({
+            "title": "DerivaML Python API Reference",
+            "description": "Patterns and examples for writing Python programs using deriva-ml",
+            "connection": {
+                "basic": {
+                    "code": "from deriva_ml import DerivaML\\nml = DerivaML(hostname='example.org', catalog_id='1')",
+                    "note": "Creates connection with automatic credential lookup from ~/.deriva"
+                },
+                "with_working_dir": {
+                    "code": "ml = DerivaML(hostname='example.org', catalog_id='1', working_dir='/tmp/ml_work')",
+                    "note": "Specify directory for dataset downloads and execution outputs"
+                }
+            },
+            "execution_configuration": {
+                "class": "ExecutionConfiguration",
+                "import": "from deriva_ml.execution import ExecutionConfiguration",
+                "required_fields": {
+                    "workflow": "Workflow object (from ml.create_workflow())",
+                    "description": "Human-readable description of this execution"
+                },
+                "optional_fields": {
+                    "datasets": "List[DatasetSpec] - Input datasets to consume",
+                    "assets": "List[str] - Input asset RIDs"
+                },
+                "example": """from deriva_ml.execution import ExecutionConfiguration
+from deriva_ml.dataset.aux_classes import DatasetSpec
+
+config = ExecutionConfiguration(
+    workflow=workflow,
+    description="Training run with augmented data",
+    datasets=[
+        DatasetSpec(rid="1-ABC", version="2.0.0", materialize=True),
+    ],
+)"""
+            },
+            "execution_context_manager": {
+                "description": "Recommended pattern for running executions",
+                "pattern": """# Create execution
+execution = ml.create_execution(config)
+
+# Use context manager for automatic timing
+with execution.execute() as exe:
+    # Download input datasets
+    for ds in exe.datasets:
+        bag_path = exe.download_dataset_bag(ds)
+        # Process data from bag_path...
+
+    # Register output files
+    model_path = exe.asset_file_path("Model", "trained_model.pt")
+    # Save model to model_path...
+
+    # Create output dataset
+    output_ds = exe.create_dataset(
+        dataset_types=["Training"],
+        description="Processed training data"
+    )
+
+# IMPORTANT: Upload outputs AFTER context manager exits
+execution.upload_execution_outputs()""",
+                "timing_notes": [
+                    "Context manager automatically calls execution_start() on enter",
+                    "Context manager automatically calls execution_stop() on exit",
+                    "upload_execution_outputs() must be called AFTER exiting context"
+                ]
+            },
+            "workflow_creation": {
+                "description": "Register a workflow for provenance tracking",
+                "pattern": """# Ensure workflow type exists
+ml.add_term('Workflow_Type', 'Training', description='Model training workflow')
+
+# Create workflow object
+workflow = ml.create_workflow(
+    name="ResNet50 Training",
+    workflow_type="Training",
+    description="Train ResNet50 classifier on image data"
+)
+
+# Register in catalog (returns RID, or existing RID if same URL/checksum)
+workflow_rid = ml.add_workflow(workflow)""",
+                "notes": [
+                    "Workflow URL and checksum are auto-detected from git repository",
+                    "Same workflow code will return same RID (idempotent)"
+                ]
+            },
+            "dataset_creation": {
+                "description": "Create datasets within execution context",
+                "pattern": """with execution.execute() as exe:
+    # Create a new dataset
+    dataset = exe.create_dataset(
+        dataset_types=["Training", "Augmented"],
+        description="Augmented training images"
+    )
+
+    # Add members from domain tables
+    # First ensure table is registered as element type
+    ml.add_dataset_element_type("Image")
+
+    # Add records by RID
+    image_rids = ["2-ABC", "2-DEF", "2-GHI"]
+    dataset.add_elements({"Image": image_rids})""",
+                "version_notes": [
+                    "Adding elements auto-increments minor version",
+                    "Manual version bump: dataset.increment_version('major', 'Schema change')"
+                ]
+            },
+            "feature_creation": {
+                "description": "Define and populate features for ML labeling",
+                "pattern": """# Create vocabulary for feature values
+ml.create_vocabulary("Diagnosis_Type", comment="Medical diagnosis categories")
+ml.add_term("Diagnosis_Type", "Normal", description="No abnormality")
+ml.add_term("Diagnosis_Type", "Abnormal", description="Abnormality detected")
+
+# Create feature definition
+ml.create_feature(
+    table_name="Image",
+    feature_name="Diagnosis",
+    comment="Clinical diagnosis label",
+    terms=["Diagnosis_Type"]  # Values from this vocabulary
+)
+
+# Add feature values (within execution context)
+with execution.execute() as exe:
+    # Get the dynamically generated feature record class
+    DiagnosisFeature = ml.feature_record_class("Image", "Diagnosis")
+
+    # Create feature records
+    features = [
+        DiagnosisFeature(Image="2-ABC", Diagnosis_Type="Normal"),
+        DiagnosisFeature(Image="2-DEF", Diagnosis_Type="Abnormal"),
+    ]
+
+    # Add to catalog with provenance
+    exe.add_features(features)""",
+                "notes": [
+                    "feature_record_class() returns a Pydantic model with validation",
+                    "Feature values automatically link to the execution for provenance"
+                ]
+            },
+            "asset_handling": {
+                "description": "Register and upload output files",
+                "pattern": """with execution.execute() as exe:
+    # Get path to save file (creates staging directory)
+    model_path = exe.asset_file_path(
+        asset_name="Execution_Asset",  # Target asset table
+        file_name="model.pt",
+        asset_types=["Model_File"]  # Asset_Type vocabulary terms
+    )
+
+    # Save your file to this path
+    torch.save(model.state_dict(), model_path)
+
+    # For existing files, copy/link them
+    config_path = exe.asset_file_path(
+        "Execution_Metadata",
+        "/path/to/config.json",
+        copy_file=True  # Copy instead of symlink
+    )
+
+# Upload all registered files
+uploaded = execution.upload_execution_outputs()
+# Returns: {"Execution_Asset": [AssetInfo(rid=..., url=...)], ...}"""
+            },
+            "querying_data": {
+                "description": "Query records from domain tables",
+                "pattern": """# Find datasets
+datasets = list(ml.find_datasets())
+for ds in datasets:
+    print(f"{ds.dataset_rid}: {ds.description}")
+
+# Query domain table
+pb = ml.pathBuilder()
+images = list(pb.schemas['domain'].Image.entities().fetch())
+
+# Get dataset contents
+members = ml.list_dataset_members(dataset_rid)
+# Returns: {"Image": [{"RID": "2-ABC"}, ...], "Subject": [...]}"""
+            },
+            "denormalization": {
+                "description": "Join tables for ML training data",
+                "pattern": """# Get flat/wide view of dataset
+flat_data = ml.denormalize_dataset(
+    dataset_rid="1-ABC",
+    include_tables=["Image", "Subject", "Diagnosis"]
+)
+# Returns: {
+#   "columns": ["Image.RID", "Image.Filename", "Subject.Name", "Diagnosis.Label"],
+#   "rows": [[...], [...], ...]
+# }
+
+# Convert to pandas DataFrame
+import pandas as pd
+df = pd.DataFrame(flat_data["rows"], columns=flat_data["columns"])"""
+            }
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://docs/tool-sequences",
+        name="MCP Tool Sequences",
+        description="Correct ordering of MCP tool calls for common workflows",
+        mime_type="application/json",
+    )
+    def get_tool_sequences_docs() -> str:
+        """Return documentation for proper MCP tool call sequences."""
+        return json.dumps({
+            "title": "MCP Tool Call Sequences",
+            "description": "Proper ordering of tool calls for common DerivaML workflows",
+            "important_notes": [
+                "MCP tools do NOT use Python context managers - you must manually sequence calls",
+                "upload_execution_outputs() is REQUIRED after any execution - files are not saved without it",
+                "Most operations require an active catalog connection first"
+            ],
+            "sequences": {
+                "connect_and_explore": {
+                    "description": "Connect to catalog and explore its contents",
+                    "steps": [
+                        {"tool": "connect_catalog", "params": {"hostname": "example.org", "catalog_id": "1"}, "note": "Establishes connection and creates MCP tracking execution"},
+                        {"tool": "get_catalog_info", "params": {}, "note": "View catalog details including schema names"},
+                        {"tool": "list_tables", "params": {}, "note": "See all domain tables"},
+                        {"tool": "list_vocabularies", "params": {}, "note": "See all vocabulary tables"},
+                        {"tool": "list_datasets", "params": {}, "note": "See all datasets"}
+                    ]
+                },
+                "create_dataset_with_members": {
+                    "description": "Create a new dataset and populate it with records",
+                    "prerequisites": ["Active catalog connection"],
+                    "steps": [
+                        {"tool": "create_execution", "params": {"workflow_name": "Data Curation", "workflow_type": "Data Preparation", "description": "Creating training dataset"}, "note": "Start execution for provenance"},
+                        {"tool": "start_execution", "params": {}, "note": "Begin timing"},
+                        {"tool": "create_execution_dataset", "params": {"description": "Training images", "dataset_types": ["Training"]}, "note": "Create empty dataset"},
+                        {"tool": "add_dataset_element_type", "params": {"table_name": "Image"}, "note": "Register Image as valid element type (if not already)"},
+                        {"tool": "add_dataset_members", "params": {"dataset_rid": "<from step 3>", "member_rids": ["2-ABC", "2-DEF"]}, "note": "Add records to dataset"},
+                        {"tool": "stop_execution", "params": {}, "note": "End timing"},
+                        {"tool": "upload_execution_outputs", "params": {}, "note": "REQUIRED: Finalize execution"}
+                    ]
+                },
+                "add_feature_values": {
+                    "description": "Add labels/annotations to domain objects",
+                    "prerequisites": ["Active catalog connection", "Feature definition exists", "Vocabulary terms exist"],
+                    "steps": [
+                        {"tool": "create_execution", "params": {"workflow_name": "Labeling", "workflow_type": "Annotation", "description": "Adding diagnosis labels"}, "note": "Start execution"},
+                        {"tool": "start_execution", "params": {}, "note": "Begin timing"},
+                        {"tool": "lookup_feature", "params": {"table_name": "Image", "feature_name": "Diagnosis"}, "note": "Get feature structure to know what fields to provide"},
+                        {"tool": "add_feature_value", "params": {"table_name": "Image", "feature_name": "Diagnosis", "target_rid": "2-ABC", "value": "Normal"}, "note": "Add value for one record"},
+                        {"tool": "stop_execution", "params": {}, "note": "End timing"},
+                        {"tool": "upload_execution_outputs", "params": {}, "note": "REQUIRED: Finalize"}
+                    ],
+                    "alternative": "Use add_feature_value_record for features with multiple fields"
+                },
+                "create_feature_definition": {
+                    "description": "Define a new feature for labeling domain objects",
+                    "prerequisites": ["Active catalog connection"],
+                    "steps": [
+                        {"tool": "create_vocabulary", "params": {"vocabulary_name": "Diagnosis_Type", "comment": "Diagnosis categories"}, "note": "Create vocabulary for values (if needed)"},
+                        {"tool": "add_term", "params": {"vocabulary_name": "Diagnosis_Type", "term_name": "Normal", "description": "No abnormality"}, "note": "Add vocabulary terms"},
+                        {"tool": "add_term", "params": {"vocabulary_name": "Diagnosis_Type", "term_name": "Abnormal", "description": "Abnormality detected"}, "note": "Add more terms"},
+                        {"tool": "create_feature", "params": {"table_name": "Image", "feature_name": "Diagnosis", "comment": "Clinical diagnosis", "terms": ["Diagnosis_Type"]}, "note": "Create feature definition"}
+                    ]
+                },
+                "run_ml_execution": {
+                    "description": "Run an ML workflow with input datasets and output assets",
+                    "prerequisites": ["Active catalog connection", "Input datasets exist"],
+                    "steps": [
+                        {"tool": "create_execution", "params": {"workflow_name": "Model Training", "workflow_type": "Training", "description": "Train classifier", "dataset_rids": ["1-ABC"]}, "note": "Create with input datasets"},
+                        {"tool": "start_execution", "params": {}, "note": "Begin timing"},
+                        {"tool": "download_execution_dataset", "params": {"dataset_rid": "1-ABC"}, "note": "Download input data"},
+                        {"tool": "get_execution_working_dir", "params": {}, "note": "Get path for outputs"},
+                        {"tool": "asset_file_path", "params": {"asset_name": "Execution_Asset", "file_name": "model.pt", "asset_types": ["Model_File"]}, "note": "Register output file"},
+                        {"tool": "stop_execution", "params": {}, "note": "End timing"},
+                        {"tool": "upload_execution_outputs", "params": {}, "note": "REQUIRED: Upload files"}
+                    ],
+                    "note": "Between steps 5 and 6, you would actually save your model file to the path returned by asset_file_path"
+                },
+                "create_schema_elements": {
+                    "description": "Create tables, vocabularies, and features for a new domain",
+                    "prerequisites": ["Active catalog connection (to a new or existing catalog)"],
+                    "steps": [
+                        {"tool": "create_vocabulary", "params": {"vocabulary_name": "Species", "comment": "Animal species"}, "note": "Create vocabulary"},
+                        {"tool": "add_term", "params": {"vocabulary_name": "Species", "term_name": "Human", "description": "Homo sapiens"}, "note": "Populate vocabulary"},
+                        {"tool": "create_table", "params": {"table_name": "Subject", "columns": [{"name": "Name", "type": "text"}, {"name": "Age", "type": "int4"}], "comment": "Study subjects"}, "note": "Create domain table"},
+                        {"tool": "create_asset_table", "params": {"asset_name": "Image", "columns": [{"name": "Width", "type": "int4"}], "referenced_tables": ["Subject"], "comment": "Medical images"}, "note": "Create asset table with FK to Subject"},
+                        {"tool": "add_dataset_element_type", "params": {"table_name": "Image"}, "note": "Allow Images in datasets"},
+                        {"tool": "create_feature", "params": {"table_name": "Image", "feature_name": "Quality", "terms": ["Quality_Level"]}, "note": "Create feature for labeling"}
+                    ]
+                }
+            },
+            "common_mistakes": [
+                {
+                    "mistake": "Forgetting to call upload_execution_outputs()",
+                    "consequence": "All registered assets are lost, execution appears incomplete",
+                    "fix": "Always call upload_execution_outputs() after stop_execution()"
+                },
+                {
+                    "mistake": "Adding feature values without an execution context",
+                    "consequence": "Error: 'No active execution'",
+                    "fix": "Create an execution first, or the MCP connection execution will be used"
+                },
+                {
+                    "mistake": "Creating dataset outside execution context",
+                    "consequence": "Error or missing provenance",
+                    "fix": "Use create_execution_dataset() within an execution"
+                },
+                {
+                    "mistake": "Adding members to dataset before registering element type",
+                    "consequence": "Error: table not registered as dataset element type",
+                    "fix": "Call add_dataset_element_type() first"
+                }
+            ]
+        }, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://docs/dataset-versioning",
+        name="Dataset Versioning Policy",
+        description="Semantic versioning policy for DerivaML datasets",
+        mime_type="application/json",
+    )
+    def get_dataset_versioning_docs() -> str:
+        """Return documentation for dataset semantic versioning."""
+        return json.dumps({
+            "title": "Dataset Semantic Versioning Policy",
+            "description": "How DerivaML uses semantic versioning (major.minor.patch) for datasets",
+            "format": {
+                "pattern": "MAJOR.MINOR.PATCH",
+                "example": "2.1.3",
+                "initial": "0.1.0 (default for new datasets)"
+            },
+            "version_components": {
+                "patch": {
+                    "incremented_when": "Metadata-only changes",
+                    "examples": [
+                        "Updating dataset description",
+                        "Changing dataset type labels",
+                        "Fixing typos in metadata"
+                    ],
+                    "data_compatibility": "Fully compatible - same records, same structure"
+                },
+                "minor": {
+                    "incremented_when": "Element changes (additions/removals)",
+                    "examples": [
+                        "Adding new records to dataset",
+                        "Removing records from dataset",
+                        "Changing which records are included"
+                    ],
+                    "data_compatibility": "Forward compatible - may have more/fewer records",
+                    "auto_increment": "Adding members via add_dataset_members() auto-increments minor"
+                },
+                "major": {
+                    "incremented_when": "Schema or structural changes",
+                    "examples": [
+                        "Adding new element types (e.g., adding Subject records to Image-only dataset)",
+                        "Changing the dataset's fundamental structure",
+                        "Breaking changes to how data should be interpreted"
+                    ],
+                    "data_compatibility": "Not compatible - consumers may need code changes"
+                }
+            },
+            "automatic_versioning": {
+                "description": "Some operations auto-increment versions",
+                "rules": [
+                    "add_dataset_members() → increments MINOR",
+                    "Metadata changes via update → increments PATCH (when tracked)",
+                    "Manual increment via increment_dataset_version() for MAJOR changes"
+                ]
+            },
+            "version_history": {
+                "description": "Every version is preserved with a catalog snapshot",
+                "access": "Use get_dataset_version_history() to see all versions",
+                "querying": "Use version parameter in list_dataset_members() to query historical state",
+                "immutability": "Previous versions are immutable - changes create new versions"
+            },
+            "best_practices": [
+                {
+                    "practice": "Start at 0.1.0 for development",
+                    "reason": "Indicates pre-release/experimental status"
+                },
+                {
+                    "practice": "Bump to 1.0.0 when dataset is production-ready",
+                    "reason": "Signals stability to consumers"
+                },
+                {
+                    "practice": "Document version changes in description",
+                    "reason": "Helps track what changed between versions"
+                },
+                {
+                    "practice": "Use nested datasets for train/test splits",
+                    "reason": "Parent dataset versioning encompasses all children"
+                }
+            ],
+            "example_history": [
+                {"version": "0.1.0", "description": "Initial dataset creation"},
+                {"version": "0.2.0", "description": "Added 500 more images"},
+                {"version": "0.3.0", "description": "Removed 50 low-quality images"},
+                {"version": "0.3.1", "description": "Updated description"},
+                {"version": "1.0.0", "description": "Production release - schema finalized"},
+                {"version": "1.1.0", "description": "Added 200 new validation images"},
+                {"version": "2.0.0", "description": "Added Subject records - major structural change"}
+            ],
+            "mcp_tools": {
+                "view_history": "get_dataset_version_history(dataset_rid)",
+                "manual_bump": "increment_dataset_version(dataset_rid, component='minor', description='...')",
+                "query_version": "list_dataset_members(dataset_rid, version='1.0.0')"
+            }
+        }, indent=2)
