@@ -546,7 +546,8 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             materialize: Fetch all referenced asset files (default: True).
 
         Returns:
-            JSON with dataset_rid, version, path (local bag directory).
+            JSON with dataset bag attributes including dataset_rid, version,
+            description, dataset_types, execution_rid, and bag_path.
         """
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec
@@ -565,8 +566,11 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             return json.dumps({
                 "status": "downloaded",
                 "dataset_rid": bag.dataset_rid,
-                "version": bag.version,
-                "path": str(bag.path),
+                "version": str(bag.current_version) if bag.current_version else None,
+                "description": bag.description,
+                "dataset_types": bag.dataset_types,
+                "execution_rid": bag.execution_rid,
+                "bag_path": str(bag.model.bag_path),
             })
         except Exception as e:
             logger.error(f"Failed to download dataset: {e}")
