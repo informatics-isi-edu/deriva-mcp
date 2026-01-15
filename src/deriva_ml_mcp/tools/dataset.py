@@ -576,7 +576,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     async def denormalize_dataset(
         dataset_rid: str,
         include_tables: list[str],
-        version: str,
+        version: str | None = None,
         limit: int = 1000,
     ) -> str:
         """Denormalize dataset tables into a wide table for ML.
@@ -614,8 +614,8 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             include_tables: List of table names to include in the join.
                 Tables are joined based on their foreign key relationships.
                 Order doesn't matter - the join order is determined automatically.
-            version: Semantic version to download (e.g., "1.0.0"). Required.
-                Use get_dataset() to find the current_version if needed.
+            version: Semantic version to query (e.g., "1.0.0"). If not specified,
+                uses the current version.
             limit: Maximum rows to return (default: 1000).
 
         Returns:
@@ -630,15 +630,12 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             -> {"columns": ["Subject.Age", "Subject.Gender", "Image.RID", ...], "rows": [...]}
         """
         try:
-            from deriva_ml.dataset.aux_classes import DatasetSpec
-
             ml = conn_manager.get_active_or_raise()
-            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=False)
-            bag = ml.download_dataset_bag(spec)
+            dataset = ml.lookup_dataset(dataset_rid)
 
             # Get denormalized data as dict
             rows = []
-            for i, row in enumerate(bag.denormalize_as_dict(include_tables)):
+            for i, row in enumerate(dataset.denormalize_as_dict(include_tables, version=version)):
                 if i >= limit:
                     break
                 rows.append(dict(row))
