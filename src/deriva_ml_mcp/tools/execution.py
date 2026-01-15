@@ -531,7 +531,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
     @mcp.tool()
     async def download_execution_dataset(
         dataset_rid: str,
-        version: str | None = None,
+        version: str,
         materialize: bool = True,
     ) -> str:
         """Download a dataset bag for use in this execution.
@@ -541,7 +541,8 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
         Args:
             dataset_rid: RID of the dataset to download.
-            version: Specific version (default: current version).
+            version: Semantic version to download (e.g., "1.0.0"). Required.
+                Use get_dataset() to find the current_version if needed.
             materialize: Fetch all referenced asset files (default: True).
 
         Returns:

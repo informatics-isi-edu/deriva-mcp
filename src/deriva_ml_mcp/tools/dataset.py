@@ -186,7 +186,8 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
         Args:
             dataset_rid: The RID of the dataset.
-            version: Specific version to query (default: current version).
+            version: Semantic version to query (e.g., "1.0.0"). If not specified,
+                uses the current version.
 
         Returns:
             JSON object mapping table names to arrays of {RID} objects.
@@ -197,9 +198,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
-            if version:
-                dataset = dataset.set_version(version)
-            members = dataset.list_dataset_members()
+            members = dataset.list_dataset_members(version=version)
             result = {}
             for table_name, items in members.items():
                 result[table_name] = [{"RID": m["RID"]} for m in items]
@@ -537,7 +536,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     @mcp.tool()
     async def download_dataset(
         dataset_rid: str,
-        version: str | None = None,
+        version: str,
         materialize: bool = True,
     ) -> str:
         """Download a dataset as a BDBag for local processing.
@@ -548,7 +547,8 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
         Args:
             dataset_rid: RID of the dataset to download.
-            version: Specific version (default: current).
+            version: Semantic version to download (e.g., "1.0.0"). Required.
+                Use get_dataset() to find the current_version if needed.
             materialize: Fetch all referenced asset files (default: True).
 
         Returns:
@@ -576,7 +576,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     async def denormalize_dataset(
         dataset_rid: str,
         include_tables: list[str],
-        version: str | None = None,
+        version: str,
         limit: int = 1000,
     ) -> str:
         """Denormalize dataset tables into a wide table for ML.
@@ -614,7 +614,8 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             include_tables: List of table names to include in the join.
                 Tables are joined based on their foreign key relationships.
                 Order doesn't matter - the join order is determined automatically.
-            version: Specific version (default: current).
+            version: Semantic version to download (e.g., "1.0.0"). Required.
+                Use get_dataset() to find the current_version if needed.
             limit: Maximum rows to return (default: 1000).
 
         Returns:
@@ -661,7 +662,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     async def get_dataset_table(
         dataset_rid: str,
         table_name: str,
-        version: str | None = None,
+        version: str,
         limit: int = 1000,
     ) -> str:
         """Get all records from a specific table in a dataset.
@@ -672,14 +673,15 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         Args:
             dataset_rid: RID of the dataset.
             table_name: Name of the table to retrieve.
-            version: Specific version (default: current).
+            version: Semantic version to download (e.g., "1.0.0"). Required.
+                Use get_dataset() to find the current_version if needed.
             limit: Maximum records to return (default: 1000).
 
         Returns:
             JSON with table name and records array.
 
         Example:
-            get_dataset_table("1-ABC", "Image") -> all images in dataset
+            get_dataset_table("1-ABC", "Image", "1.0.0") -> all images in dataset
         """
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec
