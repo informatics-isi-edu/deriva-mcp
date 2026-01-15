@@ -37,20 +37,20 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     """Register feature management tools with the MCP server."""
 
     @mcp.tool()
-    async def list_features(table_name: str) -> str:
-        """List all features defined for a table.
+    async def find_features(table_name: str) -> str:
+        """Find all features defined for a table.
 
         Features associate metadata (labels, scores, assets) with domain objects for ML workflows.
         Each feature tracks provenance via the Execution that produced its values.
 
         Args:
-            table_name: Name of the table to list features for (e.g., "Image", "Subject").
+            table_name: Name of the table to find features for (e.g., "Image", "Subject").
 
         Returns:
             JSON array of {feature_name, target_table, feature_table}.
 
         Example:
-            list_features("Image") -> [{"feature_name": "Diagnosis", ...}, {"feature_name": "Quality", ...}]
+            find_features("Image") -> [{"feature_name": "Diagnosis", ...}, {"feature_name": "Quality", ...}]
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -64,7 +64,7 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 })
             return json.dumps(result)
         except Exception as e:
-            logger.error(f"Failed to list features: {e}")
+            logger.error(f"Failed to find features: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()

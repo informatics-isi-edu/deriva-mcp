@@ -436,7 +436,7 @@ Found configuration files in configs/:
 
 | Tool | Description |
 |------|-------------|
-| `list_workflows` | List all workflows |
+| `find_workflows` | Find all workflows |
 | `lookup_workflow` | Find a workflow by URL/checksum |
 | `create_workflow` | Create and register a workflow |
 | `list_workflow_types` | List available workflow types |
@@ -446,7 +446,7 @@ Found configuration files in configs/:
 
 | Tool | Description |
 |------|-------------|
-| `list_features` | List features for a table |
+| `find_features` | Find features for a table |
 | `lookup_feature` | Get feature details |
 | `list_feature_values` | Get all values for a feature |
 | `create_feature` | Create a feature definition |

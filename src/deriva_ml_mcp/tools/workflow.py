@@ -17,8 +17,8 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
     """Register workflow management tools with the MCP server."""
 
     @mcp.tool()
-    async def list_workflows() -> str:
-        """List all registered workflows with their types and versions.
+    async def find_workflows() -> str:
+        """Find all registered workflows with their types and versions.
 
         Returns:
             JSON array of {rid, name, workflow_type, version, description, url, checksum}.
@@ -39,7 +39,7 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
                 })
             return json.dumps(result)
         except Exception as e:
-            logger.error(f"Failed to list workflows: {e}")
+            logger.error(f"Failed to find workflows: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()

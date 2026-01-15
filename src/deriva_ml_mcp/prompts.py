@@ -456,8 +456,8 @@ A Feature links:
 See what features already exist:
 
 ```
-# List features for a table
-list_features("<table-name>")
+# Find features for a table
+find_features("<table-name>")
 
 # Get details about a specific feature
 lookup_feature("<table-name>", "<feature-name>")
@@ -2405,7 +2405,7 @@ Creating a dataset requires these components:
 If you've created datasets before, you may already have a workflow:
 
 ```
-list_workflows()
+find_workflows()
 ```
 
 If a suitable workflow exists (e.g., "Dataset Curation" with type "Preprocessing"),
@@ -2797,9 +2797,9 @@ lookup_term("Dataset_Type", "train")  # Works with synonyms
 
 ## Step 7: Feature Queries
 
-### List Features for a Table
+### Find Features for a Table
 ```
-list_features("Image")
+find_features("Image")
 ```
 
 ### Get Feature Structure

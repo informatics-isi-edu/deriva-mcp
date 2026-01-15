@@ -72,8 +72,8 @@ def register_*_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 | catalog.py | Connection management | connect_catalog, disconnect_catalog, get_catalog_info |
 | dataset.py | Dataset CRUD | create_dataset, list_datasets, add_dataset_members |
 | vocabulary.py | Controlled vocabularies | list_vocabularies, add_term, lookup_term |
-| workflow.py | Workflow registration | create_workflow, list_workflows |
-| feature.py | Feature definitions | create_feature, list_feature_values |
+| workflow.py | Workflow registration | create_workflow, find_workflows |
+| feature.py | Feature definitions | create_feature, find_features, list_feature_values |
 | schema.py | Schema management | create_table, create_asset_table |
 | execution.py | ML execution lifecycle | create_execution, start_execution, upload_execution_outputs |
 | data.py | Data queries | query_table, insert_records |
