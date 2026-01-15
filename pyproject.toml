@@ -1,6 +1,6 @@
 [project]
 name = "deriva-ml-mcp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "MCP server for DerivaML - Model Context Protocol interface for Deriva ML workflows"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -44,14 +44,14 @@ scripts = [
 deriva-ml-mcp = "deriva_ml_mcp.server:main"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=80", "setuptools_scm[toml]>=8", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.metadata]
-allow-direct-references = true
+[tool.setuptools.packages.find]
+where = ["src"]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/deriva_ml_mcp"]
+[tool.setuptools_scm]
+version_scheme = "post-release"
 
 [tool.ruff]
 line-length = 120

@@ -12,6 +12,9 @@ ARG GIT_COMMIT=""
 # Build stage
 FROM python:3.12-slim AS builder
 
+# Re-declare build arg in this stage
+ARG VERSION
+
 WORKDIR /app
 
 # Install build dependencies
@@ -29,6 +32,9 @@ COPY src/ src/
 # Create virtual environment and install dependencies
 RUN uv venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
+# Use package-specific SETUPTOOLS_SCM_PRETEND_VERSION since .git is not available in Docker build
+# The env var name uses normalized package name (deriva_ml_mcp)
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DERIVA_ML_MCP=${VERSION}
 RUN uv pip install --no-cache .
 
 # Runtime stage
