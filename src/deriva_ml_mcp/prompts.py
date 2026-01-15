@@ -3237,3 +3237,206 @@ After applying annotations:
 - `deriva-ml://docs/ermrest-model-management` - Schema management
 - DERIVA Workbench - GUI annotation editor
 """
+
+    @mcp.prompt(
+        name="pre-execution-checklist",
+        description="REQUIRED checklist before running ML executions - verifies git state and version, requires user confirmation",
+    )
+    def pre_execution_checklist_prompt() -> str:
+        """Pre-execution checklist requiring user confirmation."""
+        return """# Pre-Execution Checklist (REQUIRED)
+
+**IMPORTANT**: This checklist MUST be completed before running any ML execution.
+You MUST get explicit user confirmation before proceeding.
+
+## Why This Matters
+
+For reproducibility, every execution must be traceable to:
+1. A specific **git commit** (exact code version)
+2. A **semantic version tag** (human-readable version)
+3. A **clean working tree** (no uncommitted changes)
+
+Without this, you cannot reproduce results or know what code produced them.
+
+---
+
+## Step 1: Check Git Status
+
+Run this command and report the results to the user:
+
+```bash
+git status --porcelain
+```
+
+### If output is EMPTY (clean):
+✅ Working tree is clean - proceed to Step 2
+
+### If output shows changes:
+⚠️ **STOP** - There are uncommitted changes!
+
+Report to the user:
+- Which files are modified/untracked
+- Ask: "There are uncommitted changes. Should I commit these before proceeding?"
+
+If user confirms, commit the changes:
+```bash
+git add .
+git commit -m "<descriptive message>"
+```
+
+---
+
+## Step 2: Check Current Version
+
+Run this command:
+
+```bash
+git describe --tags --always 2>/dev/null || echo "No tags found"
+```
+
+Report the current version to the user.
+
+### If version ends with `-g<hash>` (e.g., `v1.2.3-5-gabcd123`):
+⚠️ There are commits since the last version tag.
+
+Ask the user: "The current version is `<version>`. Should I bump the version before proceeding?"
+
+If user confirms, bump the version:
+```bash
+# For bug fixes/small changes:
+uv run bump-my-version bump patch
+
+# For new features/config changes:
+uv run bump-my-version bump minor
+
+# For breaking changes:
+uv run bump-my-version bump major
+```
+
+Then push the tag:
+```bash
+git push && git push --tags
+```
+
+### If version is a clean tag (e.g., `v1.2.3`):
+✅ Version is current - proceed to Step 3
+
+---
+
+## Step 3: Verify Lock File
+
+Check that `uv.lock` is committed and current:
+
+```bash
+# Regenerate lock file
+uv lock
+
+# Check if it changed
+git status --porcelain uv.lock
+```
+
+### If `uv.lock` changed:
+⚠️ Lock file was out of date. Commit it:
+```bash
+git add uv.lock
+git commit -m "Update uv.lock"
+```
+
+---
+
+## Step 4: Final Verification
+
+Run these commands and report results:
+
+```bash
+# Show final commit
+git log -1 --oneline
+
+# Show version
+git describe --tags --always
+
+# Confirm clean state
+git status --porcelain
+```
+
+---
+
+## Step 5: USER CONFIRMATION REQUIRED
+
+**You MUST ask the user explicitly:**
+
+> I have verified the repository state:
+> - **Commit**: `<commit hash and message>`
+> - **Version**: `<version tag>`
+> - **Status**: Clean working tree
+>
+> **Is it OK to proceed with the ML execution?**
+
+**Wait for explicit user confirmation** (e.g., "yes", "proceed", "ok").
+
+### If user says NO:
+- Ask what changes they want to make first
+- Do NOT proceed with execution
+
+### If user says YES:
+- ✅ Proceed with the execution
+- The execution will be traceable to this exact code version
+
+---
+
+## Quick Reference
+
+| Check | Command | Expected |
+|-------|---------|----------|
+| Clean tree | `git status --porcelain` | Empty output |
+| Current version | `git describe --tags` | Clean tag (no `-g<hash>`) |
+| Lock file | `git status uv.lock` | Not modified |
+
+## After Execution
+
+After the execution completes, remind the user:
+- The execution is linked to version `<version>`
+- Results can be reproduced by checking out this version
+- Consider tagging successful experiments
+
+---
+
+## Example Interaction
+
+```
+Assistant: Let me verify the repository state before running the execution.
+
+[Runs git status --porcelain]
+Output: M src/model.py
+
+There are uncommitted changes:
+- Modified: src/model.py
+
+Should I commit these changes before proceeding?
+
+User: Yes, commit them with message "Fix learning rate bug"
+
+[Commits changes]
+[Runs git describe --tags]
+Output: v1.2.3-1-gabcd123
+
+The version is v1.2.3-1-gabcd123, which indicates 1 commit since v1.2.3.
+Should I bump the version? (patch/minor/major)
+
+User: Bump patch
+
+[Runs bump-my-version bump patch]
+[Pushes tags]
+
+I have verified the repository state:
+- Commit: abcd123 Fix learning rate bug
+- Version: v1.2.4
+- Status: Clean working tree
+
+Is it OK to proceed with the ML execution?
+
+User: Yes, proceed
+
+[Proceeds with execution]
+```
+"""
