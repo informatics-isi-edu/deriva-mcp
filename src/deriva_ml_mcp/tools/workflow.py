@@ -25,7 +25,7 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            workflows = ml.list_workflows()
+            workflows = ml.find_workflows()
             result = []
             for w in workflows:
                 result.append({

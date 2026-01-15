@@ -301,13 +301,13 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
 
         try:
             workflows = []
-            for wf in ml.list_workflows():
+            for wf in ml.find_workflows():
                 workflows.append({
-                    "rid": wf.get("RID"),
-                    "name": wf.get("Name"),
-                    "url": wf.get("URL"),
-                    "workflow_type": wf.get("Workflow_Type"),
-                    "description": wf.get("Description"),
+                    "rid": wf.rid,
+                    "name": wf.name,
+                    "url": wf.url,
+                    "workflow_type": wf.workflow_type,
+                    "description": wf.description,
                 })
             return json.dumps(workflows, indent=2)
         except Exception as e:
