@@ -553,6 +553,7 @@ dependencies = [
 name = "deriva-ml-mcp"
 source = { editable = "." }
 dependencies = [
+    { name = "bump-my-version" },
     { name = "deriva-ml" },
     { name = "kaggle" },
     { name = "mcp" },
@@ -580,6 +581,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "bump-my-version" },
     { name = "deriva-ml", git = "https://github.com/informatics-isi-edu/deriva-ml.git" },
     { name = "kaggle", specifier = ">=1.8.3" },
     { name = "kaggle", marker = "extra == 'scripts'", specifier = ">=1.5.0" },
