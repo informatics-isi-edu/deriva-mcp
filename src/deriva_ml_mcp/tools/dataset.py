@@ -655,55 +655,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             logger.error(f"Failed to denormalize dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    @mcp.tool()
-    async def get_dataset_table(
-        dataset_rid: str,
-        table_name: str,
-        version: str,
-        limit: int = 1000,
-    ) -> str:
-        """Get all records from a specific table in a dataset.
-
-        Returns records from the specified table that are part of this dataset.
-        Useful for accessing raw table data before denormalization.
-
-        Args:
-            dataset_rid: RID of the dataset.
-            table_name: Name of the table to retrieve.
-            version: Semantic version to download (e.g., "1.0.0"). Required.
-                Use get_dataset() to find the current_version if needed.
-            limit: Maximum records to return (default: 1000).
-
-        Returns:
-            JSON with table name and records array.
-
-        Example:
-            get_dataset_table("1-ABC", "Image", "1.0.0") -> all images in dataset
-        """
-        try:
-            from deriva_ml.dataset.aux_classes import DatasetSpec
-
-            ml = conn_manager.get_active_or_raise()
-            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=False)
-            bag = ml.download_dataset_bag(spec)
-
-            # Get table data
-            rows = []
-            for i, row in enumerate(bag.get_table_as_dict(table_name)):
-                if i >= limit:
-                    break
-                rows.append(row)
-
-            return json.dumps({
-                "dataset_rid": dataset_rid,
-                "table": table_name,
-                "records": rows,
-                "count": len(rows),
-                "limit": limit,
-            })
-        except Exception as e:
-            logger.error(f"Failed to get dataset table: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
 
     # ========================================================================
     # Dataset Type convenience tools

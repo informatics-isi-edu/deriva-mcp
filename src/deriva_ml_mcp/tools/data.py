@@ -4,6 +4,7 @@ These tools enable querying and inserting records in catalog tables.
 Use these to explore data, find specific records, and add new entries.
 
 **Querying Data**:
+- get_table(): Get all records from a table (simple, no filtering)
 - query_table(): Fetch records from any table with optional filtering
 - count_table(): Count records in a table
 
@@ -52,6 +53,48 @@ _MANAGED_TABLE_PATTERNS = [
 
 def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     """Register data query and manipulation tools with the MCP server."""
+
+    @mcp.tool()
+    async def get_table(
+        table_name: str,
+        limit: int = 1000,
+    ) -> str:
+        """Get all records from a catalog table.
+
+        Retrieves all contents of a table from the catalog. This is a simple
+        way to get table data without filtering. For filtered queries, use
+        query_table() instead.
+
+        Args:
+            table_name: Name of the table to retrieve (e.g., "Image", "Subject").
+            limit: Maximum records to return (default: 1000).
+
+        Returns:
+            JSON with table name and records array.
+
+        Example:
+            get_table("Image") -> all images in catalog
+            get_table("Subject", limit=100) -> first 100 subjects
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+
+            # Get table data using the deriva-ml API
+            rows = []
+            for i, row in enumerate(ml.get_table_as_dict(table_name)):
+                if i >= limit:
+                    break
+                rows.append(row)
+
+            return json.dumps({
+                "table": table_name,
+                "records": rows,
+                "count": len(rows),
+                "limit": limit,
+            })
+        except Exception as e:
+            logger.error(f"Failed to get table: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def query_table(
