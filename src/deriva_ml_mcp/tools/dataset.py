@@ -51,6 +51,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger("deriva-ml-mcp")
 
 
+def _serialize_dataset(dataset) -> dict:
+    """Serialize a Dataset object to a JSON-compatible dictionary."""
+    return {
+        "rid": dataset.dataset_rid,
+        "description": dataset.description,
+        "dataset_types": dataset.dataset_types,
+        "current_version": str(dataset.current_version) if dataset.current_version else None,
+    }
+
+
 def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     """Register dataset management tools with the MCP server."""
 
@@ -71,15 +81,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             ml = conn_manager.get_active_or_raise()
             datasets = ml.find_datasets(deleted=include_deleted)
-            result = []
-            for ds in datasets:
-                result.append({
-                    "rid": ds.dataset_rid,
-                    "description": ds.description,
-                    "dataset_types": ds.dataset_types,
-                    "current_version": str(ds.current_version) if ds.current_version else None,
-                })
-            return json.dumps(result)
+            return json.dumps([_serialize_dataset(ds) for ds in datasets])
         except Exception as e:
             logger.error(f"Failed to list datasets: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -101,14 +103,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
-            return json.dumps({
-                "rid": dataset.dataset_rid,
-                "description": dataset.description,
-                "dataset_types": dataset.dataset_types,
-                "current_version": str(dataset.current_version) if dataset.current_version else None,
-                "children": dataset.list_dataset_children(),
-                "parents": dataset.list_dataset_parents(),
-            })
+            result = _serialize_dataset(dataset)
+            # Add children and parents as serialized datasets
+            result["children"] = [_serialize_dataset(c) for c in dataset.list_dataset_children()]
+            result["parents"] = [_serialize_dataset(p) for p in dataset.list_dataset_parents()]
+            return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to get dataset {dataset_rid}: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -441,16 +440,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             dataset_rid: RID of the parent dataset.
 
         Returns:
-            JSON array of child dataset RIDs.
+            JSON array of child datasets with {rid, description, dataset_types, current_version}.
         """
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             children = dataset.list_dataset_children()
-            return json.dumps({
-                "dataset_rid": dataset_rid,
-                "children": children,
-            })
+            return json.dumps([_serialize_dataset(c) for c in children])
         except Exception as e:
             logger.error(f"Failed to list dataset children: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -463,16 +459,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             dataset_rid: RID of the child dataset.
 
         Returns:
-            JSON array of parent dataset RIDs.
+            JSON array of parent datasets with {rid, description, dataset_types, current_version}.
         """
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             parents = dataset.list_dataset_parents()
-            return json.dumps({
-                "dataset_rid": dataset_rid,
-                "parents": parents,
-            })
+            return json.dumps([_serialize_dataset(p) for p in parents])
         except Exception as e:
             logger.error(f"Failed to list dataset parents: {e}")
             return json.dumps({"status": "error", "message": str(e)})
