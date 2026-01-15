@@ -20,43 +20,79 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
     async def create_table(
         table_name: str,
         columns: list[dict] | None = None,
+        foreign_keys: list[dict] | None = None,
         comment: str = "",
     ) -> str:
         """Create a new table in the domain schema.
 
+        This tool creates a standard table (not an asset table). For tables that store
+        files with automatic URL/checksum tracking, use create_asset_table instead.
+
+        **Process Overview**:
+        1. Define columns with names, types, and constraints
+        2. Optionally define foreign keys to reference other tables
+        3. The table is created in the domain schema
+        4. The navigation bar is automatically updated
+
         Args:
-            table_name: Name for the new table.
-            columns: Column definitions, each with:
-                - name: Column name (required)
-                - type: One of "text", "int4", "int8", "float4", "float8", "boolean", "date", "timestamptz", "jsonb"
-                - nullok: Allow nulls (default: True)
-                - comment: Column description
+            table_name: Name for the new table (e.g., "Subject", "Experiment", "Protocol").
+            columns: Column definitions, each dict with:
+                - name (str, required): Column name
+                - type (str): One of "text", "int2", "int4", "int8", "float4", "float8",
+                  "boolean", "date", "timestamp", "timestamptz", "json", "jsonb", "markdown"
+                  (default: "text")
+                - nullok (bool): Allow null values (default: True)
+                - comment (str): Column description
+            foreign_keys: Foreign key definitions, each dict with:
+                - column (str, required): Column name in this table (must also be in columns list)
+                - referenced_table (str, required): Name of the table to reference
+                - referenced_column (str): Column in referenced table (default: "RID")
+                - on_delete (str): Action on delete - "NO ACTION", "CASCADE", "SET NULL" (default: "NO ACTION")
             comment: Description of the table's purpose.
 
         Returns:
             JSON with status, table_name, schema, columns.
 
-        Example:
-            create_table("Subject", [{"name": "Name", "type": "text"}, {"name": "Age", "type": "int4"}])
+        Examples:
+            Simple table:
+                create_table("Subject", [
+                    {"name": "Name", "type": "text", "nullok": false},
+                    {"name": "Age", "type": "int4"},
+                    {"name": "Notes", "type": "markdown"}
+                ])
+
+            Table with foreign key:
+                create_table("Sample", [
+                    {"name": "Name", "type": "text", "nullok": false},
+                    {"name": "Subject", "type": "text", "nullok": false},
+                    {"name": "Collection_Date", "type": "date"}
+                ], foreign_keys=[
+                    {"column": "Subject", "referenced_table": "Subject", "on_delete": "CASCADE"}
+                ])
         """
         try:
-            from deriva_ml import TableDefinition, ColumnDefinition, BuiltinTypes
+            from deriva_ml import TableDefinition, ColumnDefinition, ForeignKeyDefinition, BuiltinTypes
 
             ml = conn_manager.get_active_or_raise()
 
+            type_map = {
+                "text": BuiltinTypes.text,
+                "int2": BuiltinTypes.int2,
+                "int4": BuiltinTypes.int4,
+                "int8": BuiltinTypes.int8,
+                "float4": BuiltinTypes.float4,
+                "float8": BuiltinTypes.float8,
+                "boolean": BuiltinTypes.boolean,
+                "date": BuiltinTypes.date,
+                "timestamp": BuiltinTypes.timestamp,
+                "timestamptz": BuiltinTypes.timestamptz,
+                "json": BuiltinTypes.json,
+                "jsonb": BuiltinTypes.jsonb,
+                "markdown": BuiltinTypes.markdown,
+            }
+
             col_defs = []
             if columns:
-                type_map = {
-                    "text": BuiltinTypes.text,
-                    "int4": BuiltinTypes.int4,
-                    "int8": BuiltinTypes.int8,
-                    "float4": BuiltinTypes.float4,
-                    "float8": BuiltinTypes.float8,
-                    "boolean": BuiltinTypes.boolean,
-                    "date": BuiltinTypes.date,
-                    "timestamptz": BuiltinTypes.timestamptz,
-                    "jsonb": BuiltinTypes.jsonb,
-                }
                 for col in columns:
                     col_type = type_map.get(col.get("type", "text"), BuiltinTypes.text)
                     col_defs.append(ColumnDefinition(
@@ -66,9 +102,21 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                         comment=col.get("comment", ""),
                     ))
 
+            fkey_defs = []
+            if foreign_keys:
+                for fk in foreign_keys:
+                    fkey_defs.append(ForeignKeyDefinition(
+                        colnames=[fk["column"]],
+                        pk_sname=ml.domain_schema,
+                        pk_tname=fk["referenced_table"],
+                        pk_colnames=[fk.get("referenced_column", "RID")],
+                        on_delete=fk.get("on_delete", "NO ACTION"),
+                    ))
+
             table_def = TableDefinition(
-                table_name=table_name,
+                name=table_name,
                 column_defs=col_defs,
+                fkey_defs=fkey_defs,
                 comment=comment,
             )
             table = ml.create_table(table_def)

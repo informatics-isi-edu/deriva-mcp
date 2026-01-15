@@ -629,6 +629,199 @@ list_feature_values("Image", "Classification")
 """
 
     @mcp.prompt(
+        name="create-table",
+        description="Step-by-step guide to create domain tables with columns and foreign keys",
+    )
+    def create_table_prompt() -> str:
+        """Guide for creating tables in the domain schema."""
+        return """# Creating Tables in DerivaML
+
+Tables store your domain data (subjects, samples, experiments, etc.). Follow this
+guide to create tables with proper column types and relationships.
+
+## Prerequisites
+- Connected to a DerivaML catalog (use `connect_catalog` if not connected)
+- Know what data you want to store and how tables relate
+
+## Table Types
+
+DerivaML has two main table types:
+
+1. **Standard Tables** (`create_table`): For storing structured data like subjects,
+   experiments, protocols
+2. **Asset Tables** (`create_asset_table`): For files with automatic URL, checksum,
+   and provenance tracking (images, models, etc.)
+
+This guide covers standard tables. See `create_asset_table` for file storage.
+
+## Step 1: Plan Your Table Structure
+
+Before creating a table, determine:
+- **Table name**: Use singular nouns with underscores (e.g., "Subject", "Tissue_Sample")
+- **Columns**: What data fields do you need?
+- **Foreign keys**: Does this table reference other tables?
+
+## Step 2: Choose Column Types
+
+Available column types:
+
+| Type | Use For | Example |
+|------|---------|---------|
+| `text` | Names, identifiers, short strings | Name, ID, Code |
+| `markdown` | Long text with formatting | Description, Notes |
+| `int2` | Small integers (-32768 to 32767) | Age, Count |
+| `int4` | Standard integers | Quantity, Score |
+| `int8` | Large integers | File size, timestamps |
+| `float4` | Single precision decimals | Temperature, Weight |
+| `float8` | Double precision decimals | Precise measurements |
+| `boolean` | True/False values | Is_Active, Has_Consent |
+| `date` | Dates only | Birth_Date, Collection_Date |
+| `timestamp` | Date and time (no timezone) | Created_At |
+| `timestamptz` | Date and time with timezone | Event_Time |
+| `json` / `jsonb` | Structured data | Metadata, Config |
+
+## Step 3: Create a Simple Table
+
+Create a table with basic columns:
+
+```
+create_table(
+    "Subject",
+    columns=[
+        {"name": "Name", "type": "text", "nullok": false},
+        {"name": "Age", "type": "int4"},
+        {"name": "Notes", "type": "markdown"}
+    ],
+    comment="Research subjects in the study"
+)
+```
+
+**Column options:**
+- `name` (required): Column name
+- `type`: Data type (default: "text")
+- `nullok`: Allow NULL values (default: true)
+- `comment`: Description of the column
+
+## Step 4: Create Tables with Foreign Keys
+
+To link tables together, use foreign keys:
+
+```
+# First, create the parent table
+create_table(
+    "Subject",
+    columns=[
+        {"name": "Name", "type": "text", "nullok": false},
+        {"name": "Species", "type": "text"}
+    ],
+    comment="Research subjects"
+)
+
+# Then create a child table that references it
+create_table(
+    "Sample",
+    columns=[
+        {"name": "Name", "type": "text", "nullok": false},
+        {"name": "Subject", "type": "text", "nullok": false},
+        {"name": "Collection_Date", "type": "date"},
+        {"name": "Tissue_Type", "type": "text"}
+    ],
+    foreign_keys=[
+        {
+            "column": "Subject",
+            "referenced_table": "Subject",
+            "on_delete": "CASCADE"
+        }
+    ],
+    comment="Biological samples collected from subjects"
+)
+```
+
+**Foreign key options:**
+- `column` (required): Column in this table
+- `referenced_table` (required): Table to reference
+- `referenced_column`: Column in referenced table (default: "RID")
+- `on_delete`: What happens when referenced row is deleted
+  - `"NO ACTION"` (default): Prevent deletion if references exist
+  - `"CASCADE"`: Delete this row too
+  - `"SET NULL"`: Set the foreign key column to NULL
+
+## Step 5: Verify Your Table
+
+After creation, verify the table structure:
+
+```
+# List all tables
+list_tables()
+
+# Get detailed schema
+get_table_schema("Subject")
+
+# Get Chaise URL to view in browser
+get_chaise_url("Subject")
+```
+
+## Common Patterns
+
+### Subject -> Sample -> Measurement Hierarchy
+
+```
+# Subject (top level)
+create_table("Subject", columns=[
+    {"name": "Name", "type": "text", "nullok": false},
+    {"name": "Age", "type": "int4"}
+])
+
+# Sample references Subject
+create_table("Sample", columns=[
+    {"name": "Name", "type": "text", "nullok": false},
+    {"name": "Subject", "type": "text", "nullok": false},
+    {"name": "Collection_Date", "type": "date"}
+], foreign_keys=[
+    {"column": "Subject", "referenced_table": "Subject", "on_delete": "CASCADE"}
+])
+
+# Measurement references Sample
+create_table("Measurement", columns=[
+    {"name": "Sample", "type": "text", "nullok": false},
+    {"name": "Value", "type": "float8", "nullok": false},
+    {"name": "Unit", "type": "text"},
+    {"name": "Measured_At", "type": "timestamptz"}
+], foreign_keys=[
+    {"column": "Sample", "referenced_table": "Sample", "on_delete": "CASCADE"}
+])
+```
+
+### Protocol with Versioning
+
+```
+create_table("Protocol", columns=[
+    {"name": "Name", "type": "text", "nullok": false},
+    {"name": "Version", "type": "text", "nullok": false},
+    {"name": "Description", "type": "markdown"},
+    {"name": "Is_Active", "type": "boolean"}
+], comment="Experimental protocols with version tracking")
+```
+
+## Tips
+
+- **Naming conventions**: Use singular nouns (Subject, not Subjects)
+- **RID column**: Every table automatically gets an RID (unique identifier)
+- **Required fields**: Set `nullok: false` for required columns
+- **Descriptions**: Add comments to tables and columns for documentation
+- **Foreign keys**: The referenced table must exist before creating the foreign key
+- **Navbar update**: Tables are automatically added to the navigation bar
+
+## Next Steps
+
+After creating tables:
+1. **Add data**: Use `insert_records` to add rows
+2. **Create vocabularies**: Use `create_vocabulary` for controlled terms
+3. **Add features**: Use `create_feature` to add ML labels/annotations
+4. **Create asset tables**: Use `create_asset_table` for file storage
+"""
+
+    @mcp.prompt(
         name="create-dataset",
         description="Step-by-step guide to create and populate a dataset for ML workflows",
     )
