@@ -769,3 +769,117 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         except Exception as e:
             logger.error(f"Failed to delete dataset type term: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def restructure_assets(
+        dataset_rid: str,
+        asset_table: str,
+        output_dir: str,
+        group_by: list[str] | None = None,
+        use_symlinks: bool = True,
+        enforce_vocabulary: bool = True,
+        version: str | None = None,
+        materialize: bool = True,
+    ) -> str:
+        """Restructure dataset assets into a directory hierarchy for ML workflows.
+
+        Downloads a dataset and reorganizes its assets into a folder structure
+        suitable for ML frameworks like PyTorch ImageFolder. Assets are organized
+        first by dataset type (from nested dataset hierarchy), then by grouping values.
+
+        The `group_by` parameter specifies how to create subdirectories. Each name
+        can be either:
+
+        - **Column name**: A column on the asset table (e.g., "label", "modality").
+          The column's value becomes the subdirectory name.
+        - **Feature name**: A feature defined on the asset table. The feature's
+          controlled vocabulary term value becomes the subdirectory name.
+
+        Column names are checked first, then feature names.
+
+        Args:
+            dataset_rid: RID of the dataset to restructure.
+            asset_table: Name of the asset table (e.g., "Image").
+            output_dir: Base directory for restructured assets.
+            group_by: Column names or feature names to group by. Creates nested
+                subdirectories in the order specified. For example,
+                ["modality", "Diagnosis"] creates paths like
+                "output/training/MRI/Normal/image.jpg".
+            use_symlinks: If True (default), create symlinks to downloaded files.
+                If False, copy files. Symlinks save disk space but require the
+                downloaded dataset to remain in place.
+            enforce_vocabulary: If True (default), only allow features with
+                controlled vocabulary terms for grouping, and raise an error if
+                an asset has multiple different values for the same feature.
+                If False, allow any feature type and use the first value found.
+            version: Specific dataset version to download (default: current).
+            materialize: If True (default), download all asset files. If False,
+                only download metadata (assets won't be available for restructuring).
+
+        Returns:
+            JSON with status, output_dir path, and count of restructured assets.
+
+        Raises:
+            Error if enforce_vocabulary is True and a feature is not vocabulary-based
+            or has multiple values for an asset.
+
+        Examples:
+            Organize images by a "Diagnosis" feature::
+
+                restructure_assets(
+                    dataset_rid="1-ABC",
+                    asset_table="Image",
+                    output_dir="./ml_data",
+                    group_by=["Diagnosis"]
+                )
+                # Creates: ./ml_data/training/Normal/img1.jpg
+                #          ./ml_data/training/Abnormal/img2.jpg
+                #          ./ml_data/testing/Normal/img3.jpg
+
+            Organize by column then feature::
+
+                restructure_assets(
+                    dataset_rid="1-ABC",
+                    asset_table="Image",
+                    output_dir="./ml_data",
+                    group_by=["modality", "Diagnosis"]
+                )
+                # Creates: ./ml_data/training/MRI/Normal/img1.jpg
+                #          ./ml_data/training/CT/Abnormal/img2.jpg
+        """
+        from pathlib import Path
+
+        try:
+            ml = conn_manager.get_active_or_raise()
+
+            # Download the dataset as a bag
+            dataset = ml.find_dataset(dataset_rid)
+            if version:
+                dataset = dataset.set_version(version)
+
+            bag = dataset.to_bag(materialize=materialize)
+
+            # Restructure the assets
+            result_path = bag.restructure_assets(
+                asset_table=asset_table,
+                output_dir=Path(output_dir),
+                group_by=group_by or [],
+                use_symlinks=use_symlinks,
+                enforce_vocabulary=enforce_vocabulary,
+            )
+
+            # Count the files created
+            file_count = sum(1 for _ in result_path.rglob("*") if _.is_file() or _.is_symlink())
+
+            return json.dumps({
+                "status": "success",
+                "dataset_rid": dataset_rid,
+                "version": dataset.current_version,
+                "output_dir": str(result_path),
+                "asset_table": asset_table,
+                "group_by": group_by or [],
+                "file_count": file_count,
+            })
+        except Exception as e:
+            logger.error(f"Failed to restructure assets: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
