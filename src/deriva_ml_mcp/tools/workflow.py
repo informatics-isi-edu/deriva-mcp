@@ -29,7 +29,7 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             result = []
             for w in workflows:
                 result.append({
-                    "rid": w.rid,
+                    "workflow_rid": w.rid,
                     "name": w.name,
                     "workflow_type": w.workflow_type,
                     "version": w.version,

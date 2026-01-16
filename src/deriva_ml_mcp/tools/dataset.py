@@ -54,7 +54,7 @@ logger = logging.getLogger("deriva-ml-mcp")
 def _serialize_dataset(dataset) -> dict:
     """Serialize a Dataset object to a JSON-compatible dictionary."""
     return {
-        "rid": dataset.dataset_rid,
+        "dataset_rid": dataset.dataset_rid,
         "description": dataset.description,
         "dataset_types": dataset.dataset_types,
         "current_version": str(dataset.current_version) if dataset.current_version else None,
@@ -884,7 +884,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({
                 "status": "success",
                 "dataset_rid": dataset_rid,
-                "version": dataset.current_version,
+                "version": str(dataset.current_version) if dataset.current_version else None,
                 "output_dir": str(result_path),
                 "asset_table": asset_table,
                 "group_by": group_by or [],

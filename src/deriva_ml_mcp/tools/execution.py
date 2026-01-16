@@ -473,7 +473,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             result = []
             for exe in executions:
                 result.append({
-                    "rid": exe.get("RID"),
+                    "execution_rid": exe.get("RID"),
                     "workflow": exe.get("Workflow"),
                     "status": exe.get("Status"),
                     "status_detail": exe.get("Status_Detail"),
