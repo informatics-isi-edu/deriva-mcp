@@ -121,7 +121,7 @@ Uses the published Docker image. No local setup required.
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -v $HOME/.deriva:/home/mcpuser/.deriva:ro -v $HOME/.bdbag:/home/mcpuser/.bdbag -v $HOME/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -v $HOME/.deriva:/home/mcpuser/.deriva:ro -v $HOME/.bdbag:/home/mcpuser/.bdbag -v $HOME/.deriva-ml:/home/mcpuser/.deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ],
       "env": {}
     }
@@ -139,7 +139,7 @@ Uses the published Docker image. No local setup required.
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -v $HOME/.deriva:/home/mcpuser/.deriva:ro -v $HOME/.bdbag:/home/mcpuser/.bdbag -v $HOME/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -v $HOME/.deriva:/home/mcpuser/.deriva:ro -v $HOME/.bdbag:/home/mcpuser/.bdbag -v $HOME/.deriva-ml:/home/mcpuser/.deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
       ],
       "env": {}
     }
@@ -155,11 +155,11 @@ Uses the published Docker image. No local setup required.
 **Volume mounts:**
 - `$HOME/.deriva:/home/mcpuser/.deriva:ro` - Deriva credentials (read-only)
 - `$HOME/.bdbag:/home/mcpuser/.bdbag` - bdbag keychain for dataset download authentication (writable)
-- `$HOME/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml` - Working directory for execution outputs (writable)
+- `$HOME/.deriva-ml:/home/mcpuser/.deriva-ml` - Working directory for execution outputs (writable)
 
 **Note:** If using the workspace volume, create the directory first:
 ```bash
-mkdir -p ~/.deriva/deriva-ml
+mkdir -p ~/.deriva-ml
 ```
 If the directory doesn't exist, Docker creates it as root, causing permission issues.
 
@@ -179,7 +179,7 @@ If Deriva runs directly on the host (not in Docker), use `host-gateway`:
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -v $HOME/.deriva:/home/mcpuser/.deriva:ro -v $HOME/.bdbag:/home/mcpuser/.bdbag -v $HOME/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -v $HOME/.deriva:/home/mcpuser/.deriva:ro -v $HOME/.bdbag:/home/mcpuser/.bdbag -v $HOME/.deriva-ml:/home/mcpuser/.deriva-ml deriva-ml-mcp:latest"
       ],
       "env": {}
     }
@@ -199,7 +199,7 @@ If Deriva runs in Docker (e.g., deriva-localhost), join the same network and map
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --network deriva-localhost_internal_network --add-host localhost:172.28.3.15 -v $HOME/.deriva:/home/mcpuser/.deriva:ro -v $HOME/.bdbag:/home/mcpuser/.bdbag -v $HOME/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml deriva-ml-mcp:latest"
+        "docker run -i --rm --network deriva-localhost_internal_network --add-host localhost:172.28.3.15 -v $HOME/.deriva:/home/mcpuser/.deriva:ro -v $HOME/.bdbag:/home/mcpuser/.bdbag -v $HOME/.deriva-ml:/home/mcpuser/.deriva-ml deriva-ml-mcp:latest"
       ],
       "env": {}
     }
