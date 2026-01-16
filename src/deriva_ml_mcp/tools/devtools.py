@@ -31,44 +31,61 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     @mcp.tool()
     def bump_version(
         bump_type: str = "patch",
-        start_version: str = "0.1.0",
-        prefix: str = "v",
+        project_path: str | None = None,
     ) -> str:
-        """Bump the semantic version of the current repository and push to remote.
+        """Bump the semantic version of a DerivaML project and push to remote.
 
-        This tool manages semantic versioning using git tags. It either seeds an
-        initial version tag if none exists, or bumps the existing version using
-        bump-my-version.
+        Runs the `bump-version` CLI from deriva-ml to manage semantic versioning
+        using git tags. This is the recommended way to version DerivaML projects
+        before running significant experiments.
 
-        **Semantic Versioning:**
-        - **major**: Breaking changes (1.0.0 -> 2.0.0)
-        - **minor**: New features, backward-compatible (1.0.0 -> 1.1.0)
-        - **patch**: Bug fixes, backward-compatible (1.0.0 -> 1.0.1)
+        **Semantic Versioning (semver.org):**
 
-        **Requirements:**
-        - Must be run from within a git repository
-        - Repository must have at least one commit
-        - `uv` and `git` must be available on PATH
-        - `bump-my-version` should be configured in pyproject.toml
+        Version format: MAJOR.MINOR.PATCH (e.g., v1.2.3)
+
+        - **major**: Increment for incompatible/breaking API changes
+          - Example: v1.0.0 → v2.0.0
+          - Use when: Removing features, changing interfaces, breaking backwards compatibility
+
+        - **minor**: Increment for new functionality in a backward-compatible manner
+          - Example: v1.0.0 → v1.1.0
+          - Use when: Adding new features, new model configs, new experiments
+
+        - **patch**: Increment for backward-compatible bug fixes
+          - Example: v1.0.0 → v1.0.1
+          - Use when: Bug fixes, documentation updates, small tweaks
+
+        **Dynamic Versioning with setuptools_scm:**
+
+        DerivaML projects use setuptools_scm to derive versions from git tags:
+        - At a tag: Version is clean (e.g., "1.2.3")
+        - After a tag: Version includes distance (e.g., "1.2.3.post2+gabcdef")
+        - Dirty tree: Adds ".dirty" suffix for uncommitted changes
 
         **What it does:**
         1. Fetches existing tags from remote
-        2. If no semver tag exists, creates initial tag (e.g., v0.1.0)
-        3. If a tag exists, bumps the specified component
+        2. If no semver tag exists, creates initial tag (default: v0.1.0)
+        3. If a tag exists, bumps the specified component using bump-my-version
         4. Pushes the new tag and commits to remote
+
+        **Requirements:**
+        - Project must have deriva-ml installed
+        - Must be a git repository with at least one commit
+        - `uv` must be available on PATH
 
         Args:
             bump_type: Which version component to bump: "patch", "minor", or "major".
-            start_version: Initial version if no tag exists (default: "0.1.0").
-            prefix: Tag prefix (default: "v").
+            project_path: Path to the project directory. If not provided, uses
+                the current working directory.
 
         Returns:
-            JSON with status, previous_version, new_version, and any messages.
+            JSON with status, previous_version, new_version, and command output.
 
         Example:
-            bump_version("patch")  # v1.0.0 -> v1.0.1
-            bump_version("minor")  # v1.0.0 -> v1.1.0
-            bump_version("major")  # v1.0.0 -> v2.0.0
+            bump_version("patch")  # v1.0.0 -> v1.0.1 (bug fix)
+            bump_version("minor")  # v1.0.0 -> v1.1.0 (new feature)
+            bump_version("major")  # v1.0.0 -> v2.0.0 (breaking change)
+            bump_version("patch", "/path/to/project")  # Bump specific project
         """
         if bump_type not in ("patch", "minor", "major"):
             return json.dumps({
@@ -76,124 +93,102 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                 "error": f"Invalid bump_type: {bump_type}. Must be 'patch', 'minor', or 'major'."
             })
 
-        # Check required tools
-        for tool in ("git", "uv"):
-            if shutil.which(tool) is None:
+        # Check for uv
+        if shutil.which("uv") is None:
+            return json.dumps({
+                "status": "error",
+                "error": "Required tool 'uv' not found on PATH."
+            })
+
+        # Determine project directory
+        if project_path:
+            project_dir = Path(project_path).resolve()
+            if not project_dir.exists():
                 return json.dumps({
                     "status": "error",
-                    "error": f"Required tool '{tool}' not found on PATH."
+                    "error": f"Project directory not found: {project_path}"
                 })
+        else:
+            project_dir = Path.cwd()
+
+        # Check for venv
+        venv_path = project_dir / ".venv"
+        if not venv_path.exists():
+            return json.dumps({
+                "status": "error",
+                "error": f"No .venv directory found in {project_dir}. Run 'uv sync' first."
+            })
 
         # Check if in git repo
         try:
             subprocess.run(
                 ["git", "rev-parse", "--is-inside-work-tree"],
+                cwd=project_dir,
                 check=True, capture_output=True, text=True
             )
         except subprocess.CalledProcessError:
             return json.dumps({
                 "status": "error",
-                "error": "Not inside a git repository."
+                "error": f"Not a git repository: {project_dir}"
             })
 
-        # Check for commits
-        try:
-            subprocess.run(
-                ["git", "log", "-1"],
-                check=True, capture_output=True, text=True
-            )
-        except subprocess.CalledProcessError:
-            return json.dumps({
-                "status": "error",
-                "error": "No commits found. Commit something before tagging."
-            })
-
-        # Fetch tags
-        try:
-            subprocess.run(
-                ["git", "fetch", "--tags", "--quiet"],
-                check=False, capture_output=True, text=True
-            )
-        except Exception:
-            pass  # Non-fatal
-
-        # Find latest semver tag
-        pattern = f"{prefix}[0-9]*.[0-9]*.[0-9]*"
+        # Get current version before bump
         try:
             result = subprocess.run(
-                ["git", "describe", "--tags", "--abbrev=0", "--match", pattern],
+                ["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*.[0-9]*.[0-9]*"],
+                cwd=project_dir,
                 check=True, capture_output=True, text=True
             )
-            current_tag = result.stdout.strip()
+            previous_version = result.stdout.strip()
         except subprocess.CalledProcessError:
-            current_tag = None
+            previous_version = None
 
-        if not current_tag:
-            # Seed initial tag
-            initial_tag = f"{prefix}{start_version}"
-            try:
-                subprocess.run(
-                    ["git", "tag", initial_tag, "-m", f"Initial release {initial_tag}"],
-                    check=True, capture_output=True, text=True
-                )
-                subprocess.run(
-                    ["git", "push", "--tags"],
-                    check=True, capture_output=True, text=True
-                )
-                return json.dumps({
-                    "status": "success",
-                    "action": "seeded",
-                    "previous_version": None,
-                    "new_version": initial_tag,
-                    "message": f"No existing semver tag found. Seeded initial tag: {initial_tag}"
-                })
-            except subprocess.CalledProcessError as e:
+        # Run the deriva-ml bump-version CLI
+        try:
+            result = subprocess.run(
+                ["uv", "run", "bump-version", bump_type],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+
+            if result.returncode != 0:
                 return json.dumps({
                     "status": "error",
-                    "error": f"Failed to seed initial tag: {e.stderr}"
+                    "error": f"bump-version failed: {result.stderr or result.stdout}",
+                    "returncode": result.returncode
                 })
 
-        # Bump version using bump-my-version
-        try:
-            result = subprocess.run(
-                ["uv", "run", "bump-my-version", "bump", bump_type, "--verbose"],
-                check=True, capture_output=True, text=True
-            )
-        except subprocess.CalledProcessError as e:
+        except subprocess.TimeoutExpired:
             return json.dumps({
                 "status": "error",
-                "error": f"bump-my-version failed: {e.stderr or e.stdout}"
+                "error": "Command timed out after 120 seconds"
             })
-
-        # Push commits and tags
-        try:
-            subprocess.run(
-                ["git", "push", "--follow-tags"],
-                check=True, capture_output=True, text=True
-            )
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             return json.dumps({
                 "status": "error",
-                "error": f"Failed to push: {e.stderr}"
+                "error": f"Failed to run command: {e}"
             })
 
-        # Get new version tag
+        # Get new version after bump
         try:
             result = subprocess.run(
                 ["git", "describe", "--tags", "--abbrev=0"],
+                cwd=project_dir,
                 check=True, capture_output=True, text=True
             )
-            new_tag = result.stdout.strip()
+            new_version = result.stdout.strip()
         except subprocess.CalledProcessError:
-            new_tag = "unknown"
+            new_version = "unknown"
 
         return json.dumps({
             "status": "success",
-            "action": "bumped",
             "bump_type": bump_type,
-            "previous_version": current_tag,
-            "new_version": new_tag,
-            "message": f"Version bumped from {current_tag} to {new_tag}"
+            "previous_version": previous_version,
+            "new_version": new_version,
+            "project_path": str(project_dir),
+            "message": f"Version bumped from {previous_version or 'none'} to {new_version}"
         })
 
     @mcp.tool()
