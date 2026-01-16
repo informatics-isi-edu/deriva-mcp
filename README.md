@@ -106,18 +106,20 @@ Uses Docker for both MCP servers - most consistent setup:
 {
   "mcpServers": {
     "deriva-ml": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
-        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+        "-v", "${HOME}/.deriva:${HOME}/.deriva:ro",
+        "-v", "${HOME}/.bdbag:${HOME}/.bdbag",
+        "-v", "${HOME}/.deriva/deriva-ml:${HOME}/.deriva/deriva-ml",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
-      ]
+      ],
+      "env": {}
     },
     "github": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
@@ -141,24 +143,15 @@ Uses Docker for both MCP servers - most consistent setup:
 ```
 
 **Volume mounts explained:**
-- `~/.deriva:/home/mcpuser/.deriva:ro` - Mounts your Deriva credentials (read-only)
-- `~/.bdbag:/home/mcpuser/.bdbag` - Mounts bdbag keychain for dataset download authentication (writable, allows keychain updates)
-- `~/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml` - Writable overlay for the workspace inside `.deriva`
-- `~/.deriva/deriva-ml:/home/mcpuser/workspace` - Working directory for execution outputs
+- `~/.deriva:~/.deriva:ro` - Mounts your Deriva credentials (read-only), at the same path in the container
+- `~/.bdbag:~/.bdbag` - Mounts bdbag keychain for dataset download authentication (writable)
+- `~/.deriva/deriva-ml:~/.deriva/deriva-ml` - Working directory for execution outputs (writable)
 
 **Note:** Create the workspace directory before first use:
 ```bash
 mkdir -p ~/.deriva/deriva-ml
 ```
 If the directory doesn't exist, Docker creates it as root, causing permission issues.
-
-**Workspace directory considerations:**
-- If you already use DerivaML locally with a `working_dir` setting, you can mount that same directory to share execution outputs between local and Docker runs
-- The container writes to `/home/mcpuser/workspace`, so mount your preferred host directory there
-- Example using an existing DerivaML working directory:
-  ```
-  "-v", "${HOME}/my-existing-deriva-workdir:/home/mcpuser/workspace"
-  ```
 
 #### Option 2: Direct Install with GitHub Remote
 
@@ -168,9 +161,12 @@ Uses pip-installed DerivaML MCP with GitHub's hosted server:
 {
   "mcpServers": {
     "deriva-ml": {
-      "command": "deriva-ml-mcp"
+      "type": "stdio",
+      "command": "deriva-ml-mcp",
+      "env": {}
     },
     "github": {
+      "type": "stdio",
       "command": "npx",
       "args": ["-y", "@anthropic-ai/github-mcp-server"],
       "env": {
@@ -189,15 +185,18 @@ For development or customization:
 {
   "mcpServers": {
     "deriva-ml": {
+      "type": "stdio",
       "command": "uv",
       "args": [
         "--directory",
         "/path/to/deriva-ml-mcp",
         "run",
         "deriva-ml-mcp"
-      ]
+      ],
+      "env": {}
     },
     "github": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
@@ -220,16 +219,17 @@ If you don't need GitHub integration:
 {
   "mcpServers": {
     "deriva-ml": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
-        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+        "-v", "${HOME}/.deriva:${HOME}/.deriva:ro",
+        "-v", "${HOME}/.bdbag:${HOME}/.bdbag",
+        "-v", "${HOME}/.deriva/deriva-ml:${HOME}/.deriva/deriva-ml",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
-      ]
+      ],
+      "env": {}
     }
   }
 }
@@ -241,7 +241,9 @@ Or with direct install:
 {
   "mcpServers": {
     "deriva-ml": {
-      "command": "deriva-ml-mcp"
+      "type": "stdio",
+      "command": "deriva-ml-mcp",
+      "env": {}
     }
   }
 }
@@ -249,7 +251,7 @@ Or with direct install:
 
 ### Claude Code
 
-Add to your project's `.mcp.json` file:
+Add to `~/.mcp.json` (global) or your project's `.mcp.json` file:
 
 **With Docker:**
 
@@ -257,18 +259,20 @@ Add to your project's `.mcp.json` file:
 {
   "mcpServers": {
     "deriva-ml": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
-        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+        "-v", "${HOME}/.deriva:${HOME}/.deriva:ro",
+        "-v", "${HOME}/.bdbag:${HOME}/.bdbag",
+        "-v", "${HOME}/.deriva/deriva-ml:${HOME}/.deriva/deriva-ml",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
-      ]
+      ],
+      "env": {}
     },
     "github": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
@@ -289,9 +293,12 @@ Add to your project's `.mcp.json` file:
 {
   "mcpServers": {
     "deriva-ml": {
-      "command": "deriva-ml-mcp"
+      "type": "stdio",
+      "command": "deriva-ml-mcp",
+      "env": {}
     },
     "github": {
+      "type": "stdio",
       "command": "npx",
       "args": ["-y", "@anthropic-ai/github-mcp-server"],
       "env": {
@@ -320,18 +327,20 @@ Add to your MCP configuration (typically `.vscode/mcp.json`):
   "mcp": {
     "servers": {
       "deriva-ml": {
+        "type": "stdio",
         "command": "docker",
         "args": [
           "run", "-i", "--rm",
           "--add-host", "localhost:host-gateway",
-          "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-          "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
-          "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
-          "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+          "-v", "${HOME}/.deriva:${HOME}/.deriva:ro",
+          "-v", "${HOME}/.bdbag:${HOME}/.bdbag",
+          "-v", "${HOME}/.deriva/deriva-ml:${HOME}/.deriva/deriva-ml",
           "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
-        ]
+        ],
+        "env": {}
       },
       "github": {
+        "type": "stdio",
         "command": "docker",
         "args": [
           "run", "-i", "--rm",
@@ -362,6 +371,7 @@ Then reference in config:
 {
   "mcpServers": {
     "github": {
+      "type": "stdio",
       "command": "docker",
       "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
       "env": {
@@ -758,16 +768,17 @@ If your Deriva server is running directly on the host machine (not in Docker), u
 {
   "mcpServers": {
     "deriva-ml": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
         "--add-host", "localhost:host-gateway",
-        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+        "-v", "${HOME}/.deriva:${HOME}/.deriva:ro",
+        "-v", "${HOME}/.bdbag:${HOME}/.bdbag",
+        "-v", "${HOME}/.deriva/deriva-ml:${HOME}/.deriva/deriva-ml",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
-      ]
+      ],
+      "env": {}
     }
   }
 }
@@ -781,17 +792,18 @@ If your Deriva server is running in Docker (e.g., using deriva-localhost), the M
 {
   "mcpServers": {
     "deriva-ml": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
         "--network", "deriva-localhost_internal_network",
         "--add-host", "localhost:172.28.3.15",
-        "-v", "${HOME}/.deriva:/home/mcpuser/.deriva:ro",
-        "-v", "${HOME}/.bdbag:/home/mcpuser/.bdbag",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/.deriva/deriva-ml",
-        "-v", "${HOME}/.deriva/deriva-ml:/home/mcpuser/workspace",
+        "-v", "${HOME}/.deriva:${HOME}/.deriva:ro",
+        "-v", "${HOME}/.bdbag:${HOME}/.bdbag",
+        "-v", "${HOME}/.deriva/deriva-ml:${HOME}/.deriva/deriva-ml",
         "ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
-      ]
+      ],
+      "env": {}
     }
   }
 }
