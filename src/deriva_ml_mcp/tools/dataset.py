@@ -65,11 +65,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     """Register dataset management tools with the MCP server."""
 
     @mcp.tool()
-    async def list_datasets(include_deleted: bool = False) -> str:
-        """List all datasets in the catalog with their types and current versions.
+    async def find_datasets(include_deleted: bool = False) -> str:
+        """Find all datasets in the catalog with their types and current versions.
 
         Returns datasets with their Dataset_Type labels (e.g., "Training", "Testing")
-        and current semantic version. Use get_dataset() for full details including
+        and current semantic version. Use lookup_dataset() for full details including
         nested dataset relationships.
 
         Args:
@@ -83,7 +83,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             datasets = ml.find_datasets(deleted=include_deleted)
             return json.dumps([_serialize_dataset(ds) for ds in datasets])
         except Exception as e:
-            logger.error(f"Failed to list datasets: {e}")
+            logger.error(f"Failed to find datasets: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
@@ -151,8 +151,8 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def get_dataset(dataset_rid: str) -> str:
-        """Get full details about a dataset including nested dataset relationships.
+    async def lookup_dataset(dataset_rid: str) -> str:
+        """Look up full details about a dataset including nested dataset relationships.
 
         Returns dataset metadata plus its position in the dataset hierarchy:
         - children: Nested datasets contained within this dataset
@@ -173,7 +173,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             result["parents"] = [_serialize_dataset(p) for p in dataset.list_dataset_parents()]
             return json.dumps(result)
         except Exception as e:
-            logger.error(f"Failed to get dataset {dataset_rid}: {e}")
+            logger.error(f"Failed to lookup dataset {dataset_rid}: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()

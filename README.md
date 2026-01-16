@@ -406,8 +406,8 @@ Found configuration files in configs/:
 
 | Tool | Description |
 |------|-------------|
-| `list_datasets` | List all datasets in the catalog |
-| `get_dataset` | Get detailed information about a dataset |
+| `find_datasets` | Find all datasets in the catalog |
+| `lookup_dataset` | Look up detailed information about a dataset |
 | `create_dataset` | Create a new dataset |
 | `list_dataset_members` | List members of a dataset |
 | `add_dataset_members` | Add members to a dataset |
@@ -588,7 +588,7 @@ Connected to example.org, catalog 123. The domain schema is 'my_project'.
 User: What datasets are available?
 
 Claude: Let me check what datasets exist.
-[Uses list_datasets tool]
+[Uses find_datasets tool]
 Found 5 datasets:
 1. Training Images (v1.2.0) - 1500 images for model training
 2. Validation Set (v1.0.0) - 300 images for validation
