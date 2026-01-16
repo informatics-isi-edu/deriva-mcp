@@ -809,17 +809,12 @@ docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' der
 
 #### SSL Certificate Configuration
 
-If your localhost Deriva server uses a self-signed certificate (common for development), the container won't trust it. You need to:
+If your localhost Deriva server uses a self-signed certificate (common for development), the container won't trust it by default. The image automatically sets `REQUESTS_CA_BUNDLE` to `$HOME/.deriva/allCAbundle-with-local.pem`, so you just need to create this file:
 
-1. Export your local CA certificate to a PEM file accessible to the container
-2. Set the `REQUESTS_CA_BUNDLE` environment variable
-
-**Creating the CA bundle with your local certificate:**
-
-If your local Deriva CA is in the macOS System Keychain:
+**Creating the CA bundle with your local certificate (macOS):**
 
 ```bash
-# Export the local CA certificate
+# Export the local CA certificate from System Keychain
 security find-certificate -a -c "DERIVA Dev Local CA" -p /Library/Keychains/System.keychain > /tmp/deriva-local-ca.pem
 
 # Combine with existing CA bundle (if you have one)
@@ -828,6 +823,8 @@ cat ~/.deriva/allCAbundle.pem /tmp/deriva-local-ca.pem > ~/.deriva/allCAbundle-w
 # Or just use the local CA alone
 cp /tmp/deriva-local-ca.pem ~/.deriva/allCAbundle-with-local.pem
 ```
+
+To use a different CA bundle path, override with `-e REQUESTS_CA_BUNDLE=/path/to/bundle.pem`.
 
 ### Deriva Authentication Issues
 

@@ -212,7 +212,7 @@ If Deriva runs in Docker (e.g., deriva-localhost), join the same network and map
 docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deriva-webserver
 ```
 
-The entrypoint script automatically adjusts `/etc/hosts` so that `--add-host` takes effect for localhost resolution.
+The entrypoint script automatically adjusts `/etc/hosts` so that `--add-host` takes effect for localhost resolution. It also sets `REQUESTS_CA_BUNDLE` to `$HOME/.deriva/allCAbundle-with-local.pem` by default.
 
 **Creating the CA bundle (macOS):**
 ```bash
@@ -222,6 +222,8 @@ security find-certificate -a -c "DERIVA Dev Local CA" -p /Library/Keychains/Syst
 # Combine with existing bundle
 cat ~/.deriva/allCAbundle.pem /tmp/deriva-local-ca.pem > ~/.deriva/allCAbundle-with-local.pem
 ```
+
+To use a different CA bundle, override with `-e REQUESTS_CA_BUNDLE=/path/to/bundle.pem`.
 
 ### Option 2: From Source (Development)
 
