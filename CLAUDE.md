@@ -31,7 +31,8 @@ uv run ruff format src/
 src/deriva_ml_mcp/
 ├── server.py          # Main MCP server entry point
 ├── connection.py      # ConnectionManager for catalog connections
-├── resources.py       # MCP resources (config templates, catalog info)
+├── resources.py       # MCP resources (config templates, catalog info, docs)
+├── github_docs.py     # Fetches documentation from GitHub with caching
 └── tools/             # MCP tools organized by domain
     ├── __init__.py    # Exports all register_*_tools functions
     ├── catalog.py     # Connection and catalog management tools
@@ -54,6 +55,9 @@ src/deriva_ml_mcp/
 - Static config templates (hydra-zen configurations)
 - Dynamic catalog info (schema, vocabularies, datasets, workflows)
 - Parameterized resources (specific dataset/table/vocabulary details)
+- Documentation fetched dynamically from GitHub repositories
+
+**github_docs.py**: Fetches documentation from GitHub with 1-hour caching. Supports deriva-ml, deriva-py, ermrest, and chaise repositories.
 
 **tools/**: Each module registers tools for a specific domain. Tools follow the pattern:
 ```python
@@ -86,6 +90,7 @@ def register_*_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 | `deriva-ml://catalog/*` | Dynamic | Current catalog state (requires connection) |
 | `deriva-ml://dataset/{rid}` | Template | Specific dataset details |
 | `deriva-ml://vocabulary/{name}` | Template | Specific vocabulary terms |
+| `deriva-ml://docs/*` | Dynamic | Documentation fetched from GitHub repos |
 
 ## Installation
 
