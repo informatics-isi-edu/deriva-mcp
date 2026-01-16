@@ -11,7 +11,7 @@ from deriva_ml_mcp.tools.vocabulary import register_vocabulary_tools
 from deriva_ml_mcp.tools.workflow import register_workflow_tools
 from deriva_ml_mcp.tools.feature import register_feature_tools
 from deriva_ml_mcp.tools.schema import register_schema_tools
-from deriva_ml_mcp.tools.execution import register_execution_tools
+from deriva_ml_mcp.tools.execution import register_execution_tools, register_storage_tools
 from deriva_ml_mcp.tools.data import register_data_tools
 from deriva_ml_mcp.tools.devtools import register_devtools
 
@@ -24,6 +24,7 @@ __all__ = [
     "register_feature_tools",
     "register_schema_tools",
     "register_execution_tools",
+    "register_storage_tools",
     "register_data_tools",
     "register_devtools",
 ]

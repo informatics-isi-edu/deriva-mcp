@@ -599,3 +599,314 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         except Exception as e:
             logger.error(f"Failed to get working dir: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    # =========================================================================
+    # Execution Nesting Tools
+    # =========================================================================
+
+    @mcp.tool()
+    async def add_nested_execution(
+        parent_execution_rid: str,
+        child_execution_rid: str,
+        sequence: int | None = None,
+    ) -> str:
+        """Add a child execution to a parent execution.
+
+        Creates a parent-child relationship between executions. Use this to
+        group related executions, such as:
+        - Parameter sweeps (parent = sweep, children = individual runs)
+        - Pipelines (parent = pipeline, children = stages)
+        - Cross-validation (parent = CV experiment, children = folds)
+
+        Args:
+            parent_execution_rid: RID of the parent execution.
+            child_execution_rid: RID of the child execution to nest.
+            sequence: Optional ordering index (0, 1, 2...). Use None for parallel executions.
+
+        Returns:
+            JSON with parent_rid, child_rid, sequence.
+
+        Example:
+            # Create a sweep parent, then add child executions
+            add_nested_execution("1-PARENT", "1-CHILD1", sequence=0)
+            add_nested_execution("1-PARENT", "1-CHILD2", sequence=1)
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            parent_exec = ml.lookup_execution(parent_execution_rid)
+            parent_exec.add_nested_execution(child_execution_rid, sequence=sequence)
+
+            return json.dumps({
+                "status": "added",
+                "parent_rid": parent_execution_rid,
+                "child_rid": child_execution_rid,
+                "sequence": sequence,
+            })
+        except Exception as e:
+            logger.error(f"Failed to add nested execution: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def list_nested_executions(
+        execution_rid: str,
+        recurse: bool = False,
+    ) -> str:
+        """List all child (nested) executions of an execution.
+
+        Args:
+            execution_rid: RID of the parent execution.
+            recurse: If True, return all descendants (children, grandchildren, etc.).
+
+        Returns:
+            JSON array of {rid, workflow, status, sequence} for each child.
+
+        Example:
+            list_nested_executions("1-PARENT")  # Direct children only
+            list_nested_executions("1-PARENT", recurse=True)  # All descendants
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            execution = ml.lookup_execution(execution_rid)
+            children = execution.list_nested_executions(recurse=recurse)
+
+            result = []
+            for child in children:
+                result.append({
+                    "execution_rid": child.execution_rid,
+                    "workflow_rid": child.workflow_rid,
+                    "status": child.status.value if hasattr(child.status, 'value') else str(child.status),
+                    "description": child.configuration.description if child.configuration else None,
+                })
+
+            return json.dumps({
+                "parent_rid": execution_rid,
+                "recurse": recurse,
+                "count": len(result),
+                "children": result,
+            })
+        except Exception as e:
+            logger.error(f"Failed to list nested executions: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def list_parent_executions(
+        execution_rid: str,
+        recurse: bool = False,
+    ) -> str:
+        """List all parent executions that contain this execution as a child.
+
+        Args:
+            execution_rid: RID of the child execution.
+            recurse: If True, return all ancestors (parents, grandparents, etc.).
+
+        Returns:
+            JSON array of {rid, workflow, status} for each parent.
+
+        Example:
+            list_parent_executions("1-CHILD")  # Direct parents only
+            list_parent_executions("1-CHILD", recurse=True)  # All ancestors
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            execution = ml.lookup_execution(execution_rid)
+            parents = execution.list_parent_executions(recurse=recurse)
+
+            result = []
+            for parent in parents:
+                result.append({
+                    "execution_rid": parent.execution_rid,
+                    "workflow_rid": parent.workflow_rid,
+                    "status": parent.status.value if hasattr(parent.status, 'value') else str(parent.status),
+                    "description": parent.configuration.description if parent.configuration else None,
+                })
+
+            return json.dumps({
+                "child_rid": execution_rid,
+                "recurse": recurse,
+                "count": len(result),
+                "parents": result,
+            })
+        except Exception as e:
+            logger.error(f"Failed to list parent executions: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+
+# =============================================================================
+# Storage Management Tools
+# =============================================================================
+
+
+def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager):
+    """Register storage management tools with the MCP server."""
+
+    @mcp_server.tool()
+    def get_storage_summary() -> str:
+        """Get a summary of local storage usage for DerivaML.
+
+        Returns information about the working directory, cache directory,
+        and execution directories including sizes and file counts.
+
+        Returns:
+            JSON object with storage statistics including:
+            - working_dir: Path to working directory
+            - cache_dir: Path to cache directory
+            - cache_size_mb: Cache size in megabytes
+            - cache_file_count: Number of files in cache
+            - execution_dir_count: Number of execution directories
+            - execution_size_mb: Total size of execution directories in MB
+            - total_size_mb: Combined storage usage in MB
+
+        Example:
+            get_storage_summary()
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            summary = ml.get_storage_summary()
+            return json.dumps({
+                "status": "success",
+                **summary,
+            })
+        except Exception as e:
+            logger.error(f"Failed to get storage summary: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp_server.tool()
+    def get_cache_size() -> str:
+        """Get the size of the dataset cache directory.
+
+        The cache stores downloaded dataset bags for reuse across executions.
+
+        Returns:
+            JSON object with:
+            - total_bytes: Total cache size in bytes
+            - total_mb: Total cache size in megabytes
+            - file_count: Number of files in cache
+            - dir_count: Number of directories in cache
+
+        Example:
+            get_cache_size()
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            stats = ml.get_cache_size()
+            return json.dumps({
+                "status": "success",
+                **stats,
+            })
+        except Exception as e:
+            logger.error(f"Failed to get cache size: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp_server.tool()
+    def clear_cache(older_than_days: int | None = None) -> str:
+        """Clear the dataset cache directory.
+
+        Removes cached dataset bags to free disk space. Can optionally
+        filter by age to only remove old entries.
+
+        Args:
+            older_than_days: If provided, only remove cache entries older
+                than this many days. If None, removes all cache entries.
+
+        Returns:
+            JSON object with:
+            - files_removed: Number of files removed
+            - dirs_removed: Number of directories removed
+            - bytes_freed: Total bytes freed
+            - errors: Number of removal errors
+
+        Example:
+            clear_cache()  # Clear all cache
+            clear_cache(older_than_days=7)  # Only clear old entries
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            result = ml.clear_cache(older_than_days=older_than_days)
+            return json.dumps({
+                "status": "success",
+                "older_than_days": older_than_days,
+                **result,
+            })
+        except Exception as e:
+            logger.error(f"Failed to clear cache: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp_server.tool()
+    def list_execution_dirs() -> str:
+        """List execution working directories.
+
+        Returns information about each execution directory including
+        size, file count, and modification time. Useful for identifying
+        orphaned or incomplete execution outputs.
+
+        Returns:
+            JSON array of execution directories, each with:
+            - execution_rid: The execution RID (directory name)
+            - path: Full path to the directory
+            - size_bytes: Total size in bytes
+            - size_mb: Total size in megabytes
+            - modified: Last modification time (ISO format)
+            - file_count: Number of files
+
+        Example:
+            list_execution_dirs()
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            dirs = ml.list_execution_dirs()
+
+            # Convert datetime to ISO format for JSON serialization
+            for d in dirs:
+                if 'modified' in d:
+                    d['modified'] = d['modified'].isoformat()
+
+            return json.dumps({
+                "status": "success",
+                "count": len(dirs),
+                "execution_dirs": dirs,
+            })
+        except Exception as e:
+            logger.error(f"Failed to list execution dirs: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp_server.tool()
+    def clean_execution_dirs(
+        older_than_days: int | None = None,
+        exclude_rids: list[str] | None = None,
+    ) -> str:
+        """Clean up execution working directories.
+
+        Removes execution output directories from the local working directory
+        to free disk space. Use this to clean up completed or orphaned executions.
+
+        Args:
+            older_than_days: If provided, only remove directories older than
+                this many days. If None, removes all (except excluded).
+            exclude_rids: List of execution RIDs to preserve (never remove).
+
+        Returns:
+            JSON object with:
+            - dirs_removed: Number of directories removed
+            - bytes_freed: Total bytes freed
+            - errors: Number of removal errors
+
+        Example:
+            clean_execution_dirs()  # Clean all
+            clean_execution_dirs(older_than_days=30)  # Clean old only
+            clean_execution_dirs(exclude_rids=["1-ABC", "1-DEF"])  # Preserve specific
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            result = ml.clean_execution_dirs(
+                older_than_days=older_than_days,
+                exclude_rids=exclude_rids,
+            )
+            return json.dumps({
+                "status": "success",
+                "older_than_days": older_than_days,
+                "exclude_rids": exclude_rids,
+                **result,
+            })
+        except Exception as e:
+            logger.error(f"Failed to clean execution dirs: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
