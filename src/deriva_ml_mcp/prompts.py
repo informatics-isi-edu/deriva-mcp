@@ -1978,17 +1978,22 @@ model_store(BaseConfig, name="full", epochs=50, hidden_size=256)
 
 ## Step 5: Commit Changes and Bump Version
 
-**CRITICAL: Commit all changes before running!**
+**CRITICAL: Commit all changes before running!** DerivaML requires a clean git state
+for provenance tracking. The execution will warn if there are uncommitted changes.
+
+**RECOMMENDED: Bump version for significant experiments.** While not required, incrementing
+the version before important experiments makes it easier to identify and reproduce results
+later. Consider bumping the version when running experiments you may want to reference.
 
 ```bash
 # Check for uncommitted changes
 git status
 
-# Stage and commit all changes
+# Stage and commit all changes (REQUIRED)
 git add .
 git commit -m "Configure experiment: <description>"
 
-# Bump version (choose appropriate level)
+# Bump version (RECOMMENDED for significant experiments)
 uv run bump-version patch   # Bug fixes, small tweaks
 uv run bump-version minor   # New features, config changes
 uv run bump-version major   # Breaking changes
@@ -2001,11 +2006,11 @@ uv run python -m setuptools_scm
 ```
 
 **Check:**
-- [ ] All code changes committed
-- [ ] All config changes committed
-- [ ] Version bumped appropriately
-- [ ] Tags pushed to remote
-- [ ] `uv.lock` is current and committed
+- [ ] All code changes committed (required)
+- [ ] All config changes committed (required)
+- [ ] `uv.lock` is current and committed (required)
+- [ ] Version bumped appropriately (recommended)
+- [ ] Tags pushed to remote (if version bumped)
 
 ## Step 6: Run the Experiment
 
