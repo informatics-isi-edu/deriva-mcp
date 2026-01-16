@@ -89,6 +89,10 @@ Always call `connect_catalog` before using other tools. This establishes the con
 - Domain schema: Project-specific tables (assets, vocabularies, features)
 - Vocabularies: Controlled term lists for consistent labeling
 - Assets: Tables with file attachments (images, models, etc.)
+
+## Before Calling Tools
+
+**Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
 """,
 )
 
