@@ -539,6 +539,25 @@ These resources accept parameters to return specific information:
 | `deriva-ml://table/{table_name}/features` | Features defined for a specific table |
 | `deriva-ml://vocabulary/{vocab_name}` | Terms in a specific vocabulary table |
 
+### Documentation Resources
+
+Documentation is fetched dynamically from GitHub repositories with 1-hour caching:
+
+| Resource URI | Description |
+|--------------|-------------|
+| `deriva-ml://docs/overview` | DerivaML overview and architecture |
+| `deriva-ml://docs/datasets` | Guide to creating and managing datasets |
+| `deriva-ml://docs/features` | Guide to defining and using features |
+| `deriva-ml://docs/execution-configuration` | Guide to configuring ML executions |
+| `deriva-ml://docs/hydra-zen` | Guide to hydra-zen configuration |
+| `deriva-ml://docs/file-assets` | Guide to managing file assets |
+| `deriva-ml://docs/notebooks` | Guide to Jupyter notebook integration |
+| `deriva-ml://docs/identifiers` | Guide to RIDs, MINIDs, and identifiers |
+| `deriva-ml://docs/install` | Installation instructions |
+| `deriva-ml://docs/ermrest/*` | ERMrest API documentation |
+| `deriva-ml://docs/chaise/*` | Chaise UI documentation |
+| `deriva-ml://docs/deriva-py/*` | Deriva Python SDK documentation |
+
 ### Using Resources
 
 Resources are accessed differently than tools - they provide static or semi-static data that can be read without side effects:
