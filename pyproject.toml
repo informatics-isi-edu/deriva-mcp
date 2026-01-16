@@ -22,7 +22,7 @@ classifiers = [
 
 dependencies = [
     "mcp>=1.2.0",
-    "deriva-ml @ git+https://github.com/informatics-isi-edu/deriva-ml.git@f485cac968d0639a0ab46aa2817cd4c6ee4cc73a",
+    "deriva-ml @ git+https://github.com/informatics-isi-edu/deriva-ml.git@ac07a3091a681e6a73e014e20845f215484be6a8",
     "pydantic>=2.0",
     "pip-system-certs>=5.3",
     "kaggle>=1.8.3",
