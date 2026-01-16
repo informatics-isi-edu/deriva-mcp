@@ -599,3 +599,133 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         except Exception as e:
             logger.error(f"Failed to get working dir: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    # =========================================================================
+    # Execution Nesting Tools
+    # =========================================================================
+
+    @mcp.tool()
+    async def add_nested_execution(
+        parent_execution_rid: str,
+        child_execution_rid: str,
+        sequence: int | None = None,
+    ) -> str:
+        """Add a child execution to a parent execution.
+
+        Creates a parent-child relationship between executions. Use this to
+        group related executions, such as:
+        - Parameter sweeps (parent = sweep, children = individual runs)
+        - Pipelines (parent = pipeline, children = stages)
+        - Cross-validation (parent = CV experiment, children = folds)
+
+        Args:
+            parent_execution_rid: RID of the parent execution.
+            child_execution_rid: RID of the child execution to nest.
+            sequence: Optional ordering index (0, 1, 2...). Use None for parallel executions.
+
+        Returns:
+            JSON with parent_rid, child_rid, sequence.
+
+        Example:
+            # Create a sweep parent, then add child executions
+            add_nested_execution("1-PARENT", "1-CHILD1", sequence=0)
+            add_nested_execution("1-PARENT", "1-CHILD2", sequence=1)
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            parent_exec = ml.lookup_execution(parent_execution_rid)
+            parent_exec.add_nested_execution(child_execution_rid, sequence=sequence)
+
+            return json.dumps({
+                "status": "added",
+                "parent_rid": parent_execution_rid,
+                "child_rid": child_execution_rid,
+                "sequence": sequence,
+            })
+        except Exception as e:
+            logger.error(f"Failed to add nested execution: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def list_nested_executions(
+        execution_rid: str,
+        recurse: bool = False,
+    ) -> str:
+        """List all child (nested) executions of an execution.
+
+        Args:
+            execution_rid: RID of the parent execution.
+            recurse: If True, return all descendants (children, grandchildren, etc.).
+
+        Returns:
+            JSON array of {rid, workflow, status, sequence} for each child.
+
+        Example:
+            list_nested_executions("1-PARENT")  # Direct children only
+            list_nested_executions("1-PARENT", recurse=True)  # All descendants
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            execution = ml.lookup_execution(execution_rid)
+            children = execution.list_nested_executions(recurse=recurse)
+
+            result = []
+            for child in children:
+                result.append({
+                    "execution_rid": child.execution_rid,
+                    "workflow_rid": child.workflow_rid,
+                    "status": child.status.value if hasattr(child.status, 'value') else str(child.status),
+                    "description": child.configuration.description if child.configuration else None,
+                })
+
+            return json.dumps({
+                "parent_rid": execution_rid,
+                "recurse": recurse,
+                "count": len(result),
+                "children": result,
+            })
+        except Exception as e:
+            logger.error(f"Failed to list nested executions: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def list_parent_executions(
+        execution_rid: str,
+        recurse: bool = False,
+    ) -> str:
+        """List all parent executions that contain this execution as a child.
+
+        Args:
+            execution_rid: RID of the child execution.
+            recurse: If True, return all ancestors (parents, grandparents, etc.).
+
+        Returns:
+            JSON array of {rid, workflow, status} for each parent.
+
+        Example:
+            list_parent_executions("1-CHILD")  # Direct parents only
+            list_parent_executions("1-CHILD", recurse=True)  # All ancestors
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            execution = ml.lookup_execution(execution_rid)
+            parents = execution.list_parent_executions(recurse=recurse)
+
+            result = []
+            for parent in parents:
+                result.append({
+                    "execution_rid": parent.execution_rid,
+                    "workflow_rid": parent.workflow_rid,
+                    "status": parent.status.value if hasattr(parent.status, 'value') else str(parent.status),
+                    "description": parent.configuration.description if parent.configuration else None,
+                })
+
+            return json.dumps({
+                "child_rid": execution_rid,
+                "recurse": recurse,
+                "count": len(result),
+                "parents": result,
+            })
+        except Exception as e:
+            logger.error(f"Failed to list parent executions: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
