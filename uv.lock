@@ -527,8 +527,8 @@ wheels = [
 
 [[package]]
 name = "deriva-ml"
-version = "1.17.10.post84+g6707823db"
-source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git?rev=6707823db448942bdf70b167becfc3e9b2c03447#6707823db448942bdf70b167becfc3e9b2c03447" }
+version = "1.17.10.post85+g38a7e355d"
+source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git?rev=38a7e355d9b8ebfbdf7367b67f2e86afd5d60e31#38a7e355d9b8ebfbdf7367b67f2e86afd5d60e31" }
 dependencies = [
     { name = "bdbag" },
     { name = "bump-my-version" },
@@ -582,7 +582,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bump-my-version" },
-    { name = "deriva-ml", git = "https://github.com/informatics-isi-edu/deriva-ml.git?rev=6707823db448942bdf70b167becfc3e9b2c03447" },
+    { name = "deriva-ml", git = "https://github.com/informatics-isi-edu/deriva-ml.git?rev=38a7e355d9b8ebfbdf7367b67f2e86afd5d60e31" },
     { name = "kaggle", specifier = ">=1.8.3" },
     { name = "kaggle", marker = "extra == 'scripts'", specifier = ">=1.5.0" },
     { name = "mcp", specifier = ">=1.2.0" },
