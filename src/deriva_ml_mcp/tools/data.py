@@ -139,9 +139,12 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             limit = min(limit, 1000)  # Cap at 1000
             entities = path.entities()
 
-            # Get total count before limiting
-            # Note: This is approximate for filtered queries
-            all_records = list(entities.fetch(limit=limit, offset=offset))
+            # Fetch records with offset by fetching (offset + limit) and slicing
+            # Note: Deriva's fetch() doesn't support offset directly
+            fetch_limit = offset + limit if offset > 0 else limit
+            all_records = list(entities.fetch(limit=fetch_limit))
+            if offset > 0:
+                all_records = all_records[offset:]
 
             # Select columns if specified
             if columns:
