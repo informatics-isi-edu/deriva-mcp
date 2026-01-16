@@ -278,102 +278,98 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
     @mcp.tool()
     def install_jupyter_kernel(
-        kernel_name: str | None = None,
-        display_name: str | None = None,
+        project_path: str | None = None,
     ) -> str:
-        """Install a Jupyter kernel for the current virtual environment.
+        """Install a Jupyter kernel for a DerivaML project's virtual environment.
 
-        This allows Jupyter notebooks to use the DerivaML environment with all
-        its dependencies. The kernel will appear in Jupyter's kernel selector.
+        Runs the `deriva-ml-install-kernel` command in the target project directory
+        using `uv run`. This installs a Jupyter kernel that points to the project's
+        virtual environment, making it available in Jupyter's kernel selector.
 
         **How it works:**
-        1. Detects the virtual environment name from pyvenv.cfg
-        2. Normalizes the name for Jupyter compatibility
-        3. Registers the kernel with ipykernel
+        1. Changes to the project directory (or uses current directory)
+        2. Runs `uv run deriva-ml-install-kernel`
+        3. The kernel name is derived from the venv's prompt setting
         4. The kernel becomes available in all Jupyter instances
 
         **Requirements:**
-        - Must be run from within a virtual environment
-        - ipykernel must be installed in the environment
+        - The project must have a virtual environment with deriva-ml installed
+        - `uv` must be available on PATH
 
         Args:
-            kernel_name: Override the kernel directory name. If not provided,
-                uses the virtual environment name (normalized).
-            display_name: Override the display name shown in Jupyter. If not
-                provided, uses "Python (<venv_name>)".
+            project_path: Path to the project directory containing the venv.
+                If not provided, uses the current working directory.
 
         Returns:
-            JSON with status, kernel_name, display_name, and install location.
+            JSON with status and the command output.
 
         Example:
+            install_jupyter_kernel("/path/to/my-ml-project")
+            # Installs kernel "Python (my-ml-project)"
+
             install_jupyter_kernel()
-            # Uses venv name: "Python (my-ml-project)"
-
-            install_jupyter_kernel("my-kernel", "My Custom Kernel")
-            # Custom names
+            # Uses current directory
         """
-        try:
-            from ipykernel.kernelspec import install as ipykernel_install
-        except ImportError:
+        # Check for uv
+        if shutil.which("uv") is None:
             return json.dumps({
                 "status": "error",
-                "error": "ipykernel not installed. Run: uv add ipykernel"
+                "error": "Required tool 'uv' not found on PATH."
             })
 
-        # Check if in a virtual environment
-        config_path = Path(sys.prefix) / "pyvenv.cfg"
-        if not config_path.exists():
+        # Determine project directory
+        if project_path:
+            project_dir = Path(project_path).resolve()
+            if not project_dir.exists():
+                return json.dumps({
+                    "status": "error",
+                    "error": f"Project directory not found: {project_path}"
+                })
+        else:
+            project_dir = Path.cwd()
+
+        # Check for venv
+        venv_path = project_dir / ".venv"
+        if not venv_path.exists():
             return json.dumps({
                 "status": "error",
-                "error": "Not running in a virtual environment. Activate a venv first."
+                "error": f"No .venv directory found in {project_dir}. Run 'uv sync' first."
             })
 
-        # Get venv name from pyvenv.cfg
+        # Run the deriva-ml-install-kernel command
         try:
-            with config_path.open() as f:
-                content = f.read()
-                match = re.search(r"prompt *= *(?P<prompt>.*)", content)
-                venv_name = match["prompt"].strip() if match else ""
-        except Exception as e:
-            return json.dumps({
-                "status": "error",
-                "error": f"Failed to read pyvenv.cfg: {e}"
-            })
-
-        if not venv_name:
-            # Fall back to directory name
-            venv_name = Path(sys.prefix).name
-
-        # Normalize kernel name for Jupyter
-        def normalize(name: str) -> str:
-            name = name.strip().lower()
-            name = re.sub(r"[^a-z0-9._-]+", "-", name)
-            return name
-
-        final_kernel_name = kernel_name or normalize(venv_name)
-        final_display_name = display_name or f"Python ({venv_name})"
-
-        # Install the kernel
-        try:
-            ipykernel_install(
-                user=True,
-                kernel_name=final_kernel_name,
-                display_name=final_display_name,
+            result = subprocess.run(
+                ["uv", "run", "deriva-ml-install-kernel"],
+                cwd=project_dir,
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
+
+            if result.returncode != 0:
+                return json.dumps({
+                    "status": "error",
+                    "error": f"Failed to install kernel: {result.stderr or result.stdout}",
+                    "returncode": result.returncode
+                })
+
+            return json.dumps({
+                "status": "success",
+                "project_path": str(project_dir),
+                "output": result.stdout.strip(),
+                "message": "Jupyter kernel installed successfully"
+            })
+
+        except subprocess.TimeoutExpired:
+            return json.dumps({
+                "status": "error",
+                "error": "Command timed out after 60 seconds"
+            })
         except Exception as e:
             return json.dumps({
                 "status": "error",
-                "error": f"Failed to install kernel: {e}"
+                "error": f"Failed to run command: {e}"
             })
-
-        return json.dumps({
-            "status": "success",
-            "kernel_name": final_kernel_name,
-            "display_name": final_display_name,
-            "venv_name": venv_name,
-            "prefix": str(sys.prefix),
-            "message": f"Installed Jupyter kernel '{final_kernel_name}' with display name '{final_display_name}'"
-        })
 
     @mcp.tool()
     def list_jupyter_kernels() -> str:
