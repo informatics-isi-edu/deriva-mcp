@@ -52,9 +52,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Create non-root user for security
-RUN useradd --create-home --shell /bin/bash mcpuser
-
 # Create entrypoint wrapper script that fixes localhost resolution for Docker networking.
 # When running in Docker with --add-host localhost:<webserver-ip>, Docker adds the custom
 # entry AFTER the default 127.0.0.1 localhost entry. Since /etc/hosts is resolved first-match,
@@ -67,17 +64,12 @@ RUN printf '#!/bin/sh\n\
 cp /etc/hosts /tmp/hosts.tmp\n\
 sed -e "s/^127\\.0\\.0\\.1[[:space:]]\\+localhost/#&/" -e "s/^::1[[:space:]]\\+localhost/#&/" /tmp/hosts.tmp > /etc/hosts 2>/dev/null || true\n\
 rm -f /tmp/hosts.tmp\n\
-# Drop privileges and exec the main command\n\
-exec su -s /bin/sh mcpuser -c "exec \\"\\$0\\" \\"\\$@\\"" -- "$@"\n\
-' > /entrypoint-wrapper.sh && chmod +x /entrypoint-wrapper.sh
+exec "$@"\n\
+' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Re-declare build args in runtime stage (they don't persist across FROM)
 ARG VERSION
 ARG GIT_COMMIT
-
-# Set home directory for the non-root user
-# Deriva credentials should be mounted at ~/.deriva at runtime
-ENV HOME=/home/mcpuser
 
 # Workflow metadata environment variables
 # These are used to create the MCP workflow and execution on connection
@@ -90,13 +82,8 @@ ENV DERIVAML_MCP_IMAGE_NAME="ghcr.io/informatics-isi-edu/deriva-ml-mcp"
 # Flag to indicate running in Docker container
 ENV DERIVAML_MCP_IN_DOCKER="true"
 
-# Default CA bundle path for localhost with self-signed certificates
-# This can be overridden at runtime with -e REQUESTS_CA_BUNDLE=...
-ENV REQUESTS_CA_BUNDLE=/home/mcpuser/.deriva/allCAbundle-with-local.pem
-
 # MCP servers communicate via stdio
-# Use wrapper script to fix localhost resolution before dropping to mcpuser
-ENTRYPOINT ["/entrypoint-wrapper.sh", "deriva-ml-mcp"]
+ENTRYPOINT ["/entrypoint.sh", "deriva-ml-mcp"]
 
 # Labels for container metadata
 LABEL org.opencontainers.image.title="DerivaML MCP Server"
