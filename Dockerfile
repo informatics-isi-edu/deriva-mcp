@@ -64,6 +64,9 @@ RUN printf '#!/bin/sh\n\
 cp /etc/hosts /tmp/hosts.tmp\n\
 sed -e "s/^127\\.0\\.0\\.1[[:space:]]\\+localhost/#&/" -e "s/^::1[[:space:]]\\+localhost/#&/" /tmp/hosts.tmp > /etc/hosts 2>/dev/null || true\n\
 rm -f /tmp/hosts.tmp\n\
+# Set default CA bundle for localhost with self-signed certificates if not already set\n\
+: "${REQUESTS_CA_BUNDLE:=$HOME/.deriva/allCAbundle-with-local.pem}"\n\
+export REQUESTS_CA_BUNDLE\n\
 exec "$@"\n\
 ' > /entrypoint.sh && chmod +x /entrypoint.sh
 
