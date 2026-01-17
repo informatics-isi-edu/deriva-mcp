@@ -534,6 +534,38 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def list_dataset_executions(dataset_rid: str) -> str:
+        """List all executions associated with a dataset.
+
+        Returns all executions that used this dataset as input. This is useful
+        for provenance tracking - finding which workflows processed a given dataset.
+
+        Args:
+            dataset_rid: RID of the dataset.
+
+        Returns:
+            JSON array of execution records with {execution_rid, description, status,
+            workflow_rid}.
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            dataset = ml.lookup_dataset(dataset_rid)
+            executions = dataset.list_executions()
+
+            results = []
+            for exe in executions:
+                results.append({
+                    "execution_rid": exe.execution_rid,
+                    "description": exe.configuration.description if exe.configuration else None,
+                    "status": exe.status.value if exe.status else None,
+                    "workflow_rid": exe.workflow_rid,
+                })
+            return json.dumps(results)
+        except Exception as e:
+            logger.error(f"Failed to list dataset executions: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def download_dataset(
         dataset_rid: str,
         version: str,
