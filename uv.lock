@@ -527,8 +527,8 @@ wheels = [
 
 [[package]]
 name = "deriva-ml"
-version = "1.17.10.post119+gbc3338b4b"
-source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git#bc3338b4b73c8aa09c23011d746543dc0381a837" }
+version = "1.17.10.post120+g29d7bcfe6"
+source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git#29d7bcfe659f2cea376ee9c4043b1893442e9b2d" }
 dependencies = [
     { name = "bdbag" },
     { name = "bump-my-version" },

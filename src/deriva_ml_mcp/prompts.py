@@ -1882,22 +1882,25 @@ Ensure your repository follows the recommended configuration structure:
 src/
 ├── configs/
 │   ├── __init__.py         # Auto-loads all config modules
+│   ├── base.py             # Main config (DerivaModelConfig)
 │   ├── deriva.py           # Catalog connection configs
 │   ├── datasets.py         # Dataset specifications
 │   ├── assets.py           # Input asset references
 │   ├── workflow.py         # Workflow definitions
 │   ├── <model_name>.py     # Model hyperparameters
 │   └── experiments.py      # Experiment presets
-├── models/
-│   └── <model_name>.py     # Model implementation
-└── deriva_run.py           # Main entry point
+└── models/
+    └── <model_name>.py     # Model implementation
 ```
+
+**Note:** The CLI `deriva-ml-run` is provided by the deriva-ml package. No local entry point
+script is needed - just configure your models in `src/configs/`.
 
 **Check:**
 - [ ] All config modules are in `configs/` directory
 - [ ] `configs/__init__.py` calls `load_all_configs()`
+- [ ] `configs/base.py` creates and registers `DerivaModelConfig`
 - [ ] Model implementation exists in `models/`
-- [ ] Entry point `deriva_run.py` is present
 
 ## Step 2: Configure Datasets
 
@@ -2030,33 +2033,56 @@ uv run python -m setuptools_scm
 
 ## Step 6: Run the Experiment
 
+### Using deriva-ml-run CLI
+
+The `deriva-ml-run` CLI is provided by deriva-ml. It automatically loads configs from
+`src/configs/` and supports both `--host`/`--catalog` arguments and Hydra config defaults.
+
 ### Test First (Dry Run)
 ```bash
 # Test configuration without creating records
-uv run python deriva_run.py dry_run=True
+uv run deriva-ml-run dry_run=True
 
 # Test with specific experiment preset
-uv run python deriva_run.py +experiment=quick_test dry_run=True
+uv run deriva-ml-run +experiment=quick_test dry_run=True
+
+# Show available configs
+uv run deriva-ml-run --info
 ```
 
 ### Production Run
 ```bash
-# Run with defaults
-uv run python deriva_run.py
+# Run with defaults (uses host/catalog from Hydra config)
+uv run deriva-ml-run
 
 # Run specific experiment
-uv run python deriva_run.py +experiment=full_training
+uv run deriva-ml-run +experiment=full_training
 
 # Override parameters
-uv run python deriva_run.py \\
+uv run deriva-ml-run \\
     datasets=training \\
     model_config=full \\
     model_config.epochs=100
 
-# Run parameter sweep
-uv run python deriva_run.py -m \\
+# Override host/catalog from command line
+uv run deriva-ml-run --host localhost --catalog 45 +experiment=cifar10_quick
+
+# Run parameter sweep (multirun mode)
+uv run deriva-ml-run --multirun \\
     model_config.learning_rate=1e-2,1e-3,1e-4
+
+# Run multiple experiments
+uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended
 ```
+
+**Common CLI options:**
+| Option | Purpose |
+|--------|---------|
+| `--host <host>` | Override catalog hostname |
+| `--catalog <id>` | Override catalog ID |
+| `--info` | Show available config groups |
+| `--multirun`, `-m` | Enable parameter sweep mode |
+| `--config-dir` | Custom configs location |
 
 **Common Hydra overrides:**
 | Override | Purpose |
@@ -2066,7 +2092,6 @@ uv run python deriva_run.py -m \\
 | `model_config=<name>` | Select model config |
 | `assets=<name>` | Select asset config |
 | `dry_run=True` | Test without records |
-| `-m param=a,b,c` | Parameter sweep |
 
 ## Step 7: Verify Results
 
@@ -2482,7 +2507,26 @@ get_current_version()
 
 Run your notebook with full execution tracking:
 
-### Command Line
+### Using Hydra Config Defaults (Recommended)
+If your notebook config specifies host/catalog in Hydra configs, you don't need
+to specify them on the command line:
+
+```bash
+# Use host/catalog from Hydra config defaults
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb
+
+# With Hydra config overrides
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \\
+    assets=my_assets \\
+    datasets=my_dataset
+
+# Show available Hydra configs
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
+```
+
+### With Explicit Host/Catalog
+Override host/catalog from command line:
+
 ```bash
 uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \\
     --host <HOSTNAME> \\
@@ -2507,9 +2551,13 @@ uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb \\
     --kernel my-project
 ```
 
-### Inspect Parameters First
+### Inspect Available Options
 ```bash
+# Show notebook parameters
 uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --inspect
+
+# Show Hydra config options
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
 ```
 
 ### MCP Tools
