@@ -557,7 +557,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             find_experiments(status="completed")  # Completed experiments only
         """
         try:
-            from deriva_ml.core.enums import Status
+            from deriva_ml.core.definitions import Status
 
             ml = conn_manager.get_active_or_raise()
 
