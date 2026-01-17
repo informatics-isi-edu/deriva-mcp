@@ -455,6 +455,45 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def get_experiment(execution_rid: str) -> str:
+        """Get experiment analysis for an execution.
+
+        Creates an Experiment object that provides convenient access to
+        execution metadata, configuration choices, model parameters, and
+        inputs/outputs. This is useful for analyzing completed executions.
+
+        Args:
+            execution_rid: RID of the execution to analyze.
+
+        Returns:
+            JSON with experiment summary including:
+            - name: Experiment name from config_choices.model_config
+            - execution_rid: The execution RID
+            - description: Execution description
+            - status: Execution status
+            - config_choices: Dictionary of Hydra config names used
+            - model_config: Dictionary of model hyperparameters
+            - input_datasets: List of input dataset info
+            - url: Chaise URL to view execution
+
+        Example:
+            get_experiment("47BE")
+        """
+        try:
+            from deriva_ml.execution.experiment import Experiment
+
+            ml = conn_manager.get_active_or_raise()
+            exp = Experiment(ml, execution_rid)
+
+            return json.dumps({
+                "status": "success",
+                **exp.summary(),
+            })
+        except Exception as e:
+            logger.error(f"Failed to get experiment: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def list_executions(limit: int = 50) -> str:
         """List recent executions in the catalog.
 
@@ -483,6 +522,79 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to list executions: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def find_experiments(
+        workflow_rid: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> str:
+        """List experiments (executions with Hydra configuration) in the catalog.
+
+        Only returns executions that have Hydra configuration metadata (i.e., a
+        config.yaml file in Execution_Metadata assets). This distinguishes ML
+        experiments from other types of executions.
+
+        Args:
+            workflow_rid: Optional workflow RID to filter by.
+            status: Optional status filter ("pending", "running", "completed", "failed").
+            limit: Max number to return (default: 50).
+
+        Returns:
+            JSON array of experiment summaries, each with:
+            - name: Experiment name from config_choices.model_config
+            - execution_rid: The execution RID
+            - description: Execution description
+            - status: Execution status
+            - config_choices: Dictionary of Hydra config names used
+            - model_config: Dictionary of model hyperparameters
+            - input_datasets: List of input dataset info
+            - url: Chaise URL to view execution
+
+        Example:
+            find_experiments()  # All experiments
+            find_experiments(status="completed")  # Completed experiments only
+        """
+        try:
+            from deriva_ml.core.enums import Status
+
+            ml = conn_manager.get_active_or_raise()
+
+            # Map status string to enum if provided
+            status_enum = None
+            if status:
+                status_map = {
+                    "pending": Status.pending,
+                    "running": Status.running,
+                    "completed": Status.completed,
+                    "failed": Status.failed,
+                    "initializing": Status.initializing,
+                    "created": Status.created,
+                }
+                status_enum = status_map.get(status.lower())
+
+            # Use the new find_experiments method
+            experiments = list(ml.find_experiments(
+                workflow_rid=workflow_rid,
+                status=status_enum,
+            ))
+
+            # Limit results
+            experiments = experiments[:limit]
+
+            # Build summaries
+            result = []
+            for exp in experiments:
+                result.append(exp.summary())
+
+            return json.dumps({
+                "status": "success",
+                "count": len(result),
+                "experiments": result,
+            })
+        except Exception as e:
+            logger.error(f"Failed to find experiments: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
