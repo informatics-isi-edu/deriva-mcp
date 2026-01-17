@@ -202,6 +202,31 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def list_asset_tables() -> str:
+        """List all asset tables in the catalog.
+
+        Returns the names of all tables that are asset tables (tables with
+        file attachments like Image, Model, etc.). Use this to discover
+        what types of assets exist in the catalog.
+
+        Returns:
+            JSON array of {name, schema} for each asset table.
+
+        Example:
+            list_asset_tables() -> [{"name": "Image", "schema": "domain"}, ...]
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            tables = ml.list_asset_tables()
+            return json.dumps([
+                {"name": t.name, "schema": t.schema.name}
+                for t in tables
+            ])
+        except Exception as e:
+            logger.error(f"Failed to list asset tables: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def list_assets(asset_table: str) -> str:
         """List all assets in an asset table with their metadata.
 

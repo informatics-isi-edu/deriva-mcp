@@ -3682,7 +3682,17 @@ URL/checksum tracking and provenance. Follow this guide to work with assets.
 **Asset Types** are vocabulary terms that categorize assets (e.g., "Model_File",
 "Training_Data", "Segmentation_Mask").
 
-## Step 1: Find Assets
+## Step 1: Discover Asset Tables
+
+Find what asset tables exist in the catalog:
+
+```
+list_asset_tables()
+```
+
+Returns: `[{"name": "Image", "schema": "domain"}, {"name": "Model", "schema": "domain"}, ...]`
+
+## Step 2: Find Assets
 
 ### List All Assets in a Table
 
@@ -3707,7 +3717,7 @@ lookup_asset("<asset-rid>")
 
 Returns detailed info: RID, table, filename, URL, types, execution that created it.
 
-## Step 2: Check Asset Provenance
+## Step 3: Check Asset Provenance
 
 Find which execution created an asset:
 
@@ -3721,7 +3731,7 @@ Find which executions used an asset as input:
 list_asset_executions("<asset-rid>", asset_role="Input")
 ```
 
-## Step 3: Manage Asset Types
+## Step 4: Manage Asset Types
 
 ### View Available Types
 
@@ -3735,7 +3745,7 @@ list_asset_types()
 add_asset_type("Segmentation_Mask", "Binary mask images for segmentation")
 ```
 
-## Step 4: Create Asset Tables
+## Step 5: Create Asset Tables
 
 Create a new asset table for your domain:
 
@@ -3751,7 +3761,7 @@ create_asset_table(
 )
 ```
 
-## Step 5: Upload Assets via Execution
+## Step 6: Upload Assets via Execution
 
 Assets are uploaded through executions for provenance tracking.
 
