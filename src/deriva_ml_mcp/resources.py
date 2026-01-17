@@ -576,3 +576,123 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
     )
     def get_derivapy_tutorial_doc() -> str:
         return fetch_doc("deriva-py", "docs/project-tutorial.md")
+
+    # =========================================================================
+    # Dynamic Resources - Assets
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://catalog/assets",
+        name="Catalog Assets",
+        description="Summary of all asset tables and their contents",
+        mime_type="application/json",
+    )
+    def get_catalog_assets() -> str:
+        """Return summary of all asset tables."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            asset_tables = ml.model.find_assets()
+            result = {}
+            for table in asset_tables:
+                assets = ml.list_assets(table.name)
+                result[table.name] = {
+                    "count": len(assets),
+                    "columns": [c.name for c in table.columns if c.name not in ["RID", "RCT", "RMT", "RCB", "RMB"]],
+                }
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://asset/{asset_rid}",
+        name="Asset Details",
+        description="Detailed information about a specific asset including provenance",
+        mime_type="application/json",
+    )
+    def get_asset_details(asset_rid: str) -> str:
+        """Return detailed information about an asset."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            asset = ml.lookup_asset(asset_rid)
+            executions = ml.list_asset_executions(asset_rid)
+
+            return json.dumps({
+                "rid": asset.asset_rid,
+                "table": asset.asset_table,
+                "filename": asset.filename,
+                "url": asset.url,
+                "length": asset.length,
+                "md5": asset.md5,
+                "description": asset.description,
+                "types": asset.asset_types,
+                "executions": executions,
+                "chaise_url": asset.get_chaise_url(),
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/executions",
+        name="Catalog Executions",
+        description="Recent executions in the catalog",
+        mime_type="application/json",
+    )
+    def get_catalog_executions() -> str:
+        """Return recent executions."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            pb = ml.pathBuilder()
+            exec_path = pb.schemas[ml.ml_schema].Execution
+            executions = list(exec_path.entities().fetch(limit=50))
+
+            result = []
+            for exe in executions:
+                result.append({
+                    "rid": exe.get("RID"),
+                    "workflow": exe.get("Workflow"),
+                    "status": exe.get("Status"),
+                    "description": exe.get("Description", ""),
+                    "created": exe.get("RCT"),
+                })
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://execution/{execution_rid}",
+        name="Execution Details",
+        description="Detailed information about a specific execution",
+        mime_type="application/json",
+    )
+    def get_execution_details(execution_rid: str) -> str:
+        """Return detailed information about an execution."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            exe = ml.lookup_execution(execution_rid)
+
+            # Get nested executions
+            nested = exe.list_nested_executions()
+            parents = exe.list_parent_executions()
+
+            return json.dumps({
+                "rid": exe.execution_rid,
+                "workflow_rid": exe.workflow_rid,
+                "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
+                "description": exe.configuration.description if exe.configuration else "",
+                "nested_executions": [n["Nested_Execution"] for n in nested],
+                "parent_executions": [p["Execution"] for p in parents],
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})

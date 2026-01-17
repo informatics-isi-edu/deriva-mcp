@@ -108,7 +108,7 @@ Use `list_workflow_types()` to see available workflow types.
 
 ### Step 2: Do Your ML Work
 
-- **Download input data**: Use `download_execution_dataset(dataset_rid)` to get data
+- **Download input data**: Use `download_execution_dataset(dataset_rid)` to get data as a DatasetBag
 - **Process/train/infer**: Run your ML code
 - **Register outputs**: For each output file, call `asset_file_path()`:
 
@@ -3653,4 +3653,654 @@ User: Yes, proceed
 
 [Proceeds with execution]
 ```
+"""
+
+    @mcp.prompt(
+        name="work-with-assets",
+        description="Step-by-step guide to working with assets (files) - lookup, provenance, and management",
+    )
+    def work_with_assets_prompt() -> str:
+        """Guide for working with assets in DerivaML."""
+        return """# Working with Assets in DerivaML
+
+Assets are file-based records (images, models, data files) with automatic
+URL/checksum tracking and provenance. Follow this guide to work with assets.
+
+## Prerequisites
+- Connected to a DerivaML catalog
+- Understanding of asset tables vs regular tables
+
+## Understanding Assets
+
+**Asset Tables** automatically include:
+- `URL`: File location (uploaded to object store)
+- `Filename`: Original filename
+- `Length`: File size in bytes
+- `MD5`: Checksum for integrity
+- `Description`: Human-readable description
+
+**Asset Types** are vocabulary terms that categorize assets (e.g., "Model_File",
+"Training_Data", "Segmentation_Mask").
+
+## Step 1: Find Assets
+
+### List All Assets in a Table
+
+```
+list_assets("Image")       # All images
+list_assets("Model")       # All models
+```
+
+### Search with Filters
+
+```
+find_assets()                              # All assets in catalog
+find_assets(asset_table="Image")           # Images only
+find_assets(asset_type="Training_Data")    # By type
+```
+
+### Look Up Specific Asset
+
+```
+lookup_asset("<asset-rid>")
+```
+
+Returns detailed info: RID, table, filename, URL, types, execution that created it.
+
+## Step 2: Check Asset Provenance
+
+Find which execution created an asset:
+
+```
+list_asset_executions("<asset-rid>", asset_role="Output")
+```
+
+Find which executions used an asset as input:
+
+```
+list_asset_executions("<asset-rid>", asset_role="Input")
+```
+
+## Step 3: Manage Asset Types
+
+### View Available Types
+
+```
+list_asset_types()
+```
+
+### Add New Type
+
+```
+add_asset_type("Segmentation_Mask", "Binary mask images for segmentation")
+```
+
+## Step 4: Create Asset Tables
+
+Create a new asset table for your domain:
+
+```
+create_asset_table(
+    "Scan",
+    columns=[
+        {"name": "Resolution", "type": "float4"},
+        {"name": "Modality", "type": "text"}
+    ],
+    referenced_tables=["Subject"],  # Foreign keys
+    comment="Medical scan images"
+)
+```
+
+## Step 5: Upload Assets via Execution
+
+Assets are uploaded through executions for provenance tracking.
+
+**Python API (recommended):**
+```python
+config = ExecutionConfiguration(
+    workflow=Workflow(name="Process Images", workflow_type="Preprocessing", description="Generate masks")
+)
+
+with ml.create_execution(config) as exe:
+    # Create output file
+    mask_path = exe.asset_file_path(
+        "Image",                    # Asset table
+        "mask_001.png",             # Filename
+        asset_types=["Segmentation_Mask"]  # Types
+    )
+    # Write file to mask_path...
+
+# Upload AFTER exiting context manager
+exe.upload_execution_outputs()
+```
+
+**MCP Tools:**
+```
+# 1. Create execution
+create_execution("Process Images", "Preprocessing", "Generate masks")
+
+# 2. Register output (copies existing file)
+asset_file_path("Image", "/path/to/mask_001.png", ["Segmentation_Mask"])
+
+# 3. Upload to catalog
+upload_execution_outputs()
+```
+
+## Step 6: Use Assets as Execution Inputs
+
+**Python API:**
+```python
+config = ExecutionConfiguration(
+    workflow=Workflow(name="Train Model", workflow_type="Training", description="Train on images"),
+    assets=["<asset-rid-1>", "<asset-rid-2>"]  # Input assets
+)
+
+with ml.create_execution(config) as exe:
+    # Assets are automatically downloaded
+    # Access via exe.asset_paths
+    for asset in exe.asset_paths:
+        print(f"Using: {asset}")
+```
+
+**MCP Tools:**
+```
+create_execution(
+    "Train Model",
+    "Training",
+    "Train on images",
+    asset_rids=["<asset-rid-1>", "<asset-rid-2>"]
+)
+# Assets downloaded automatically
+```
+
+## Complete Example: Image Processing Pipeline
+
+```python
+# 1. Create preprocessing execution
+config = ExecutionConfiguration(
+    workflow=Workflow(name="Preprocess", workflow_type="Preprocessing", description="Resize images"),
+    assets=["3-RAW"]  # Input: raw images
+)
+
+with ml.create_execution(config) as exe:
+    # 2. Process each input
+    for input_asset in exe.asset_paths:
+        # Load, process, save
+        output_path = exe.asset_file_path(
+            "Image",
+            f"processed_{input_asset.name}",
+            asset_types=["Preprocessed"]
+        )
+        # Write processed image to output_path...
+
+# 3. Upload
+exe.upload_execution_outputs()
+
+# 4. Check provenance
+uploaded = exe.uploaded_assets
+for table, assets in uploaded.items():
+    for asset in assets:
+        print(f"Created: {asset.asset_rid} in {table}")
+        # Can later query: list_asset_executions(asset.asset_rid)
+```
+
+## Tips
+
+- Use `lookup_asset` to get full details about any asset
+- Use `list_asset_executions` to trace provenance
+- Asset types help organize and filter assets
+- Always upload through executions for provenance
+- Use `find_assets` for bulk discovery operations
+
+## Related Tools
+
+- `list_assets()` - List assets in a table
+- `find_assets()` - Search assets with filters
+- `lookup_asset()` - Get asset details
+- `list_asset_executions()` - Asset provenance
+- `asset_file_path()` - Register output files
+- `upload_execution_outputs()` - Upload registered files
+"""
+
+    @mcp.prompt(
+        name="troubleshoot-execution",
+        description="Troubleshooting guide for common execution problems",
+    )
+    def troubleshoot_execution_prompt() -> str:
+        """Guide for troubleshooting execution issues."""
+        return """# Troubleshooting Execution Problems
+
+Common issues and solutions when running DerivaML executions.
+
+## Problem: "No active execution"
+
+**Symptom**: Error when calling `asset_file_path()` or `upload_execution_outputs()`
+
+**Cause**: Execution was not created or context manager exited
+
+**Solution**:
+```python
+# Make sure execution is created
+with ml.create_execution(config) as exe:
+    # Call asset_file_path() INSIDE the with block
+    path = exe.asset_file_path("Model", "output.pt")
+    # Write file...
+
+# Call upload AFTER the with block
+exe.upload_execution_outputs()
+```
+
+## Problem: "Files not uploaded"
+
+**Symptom**: Execution completes but no assets appear in catalog
+
+**Causes**:
+1. Forgot to call `upload_execution_outputs()`
+2. Called upload inside the `with` block (before files were written)
+3. Files weren't written to the paths from `asset_file_path()`
+
+**Solution**:
+```python
+with ml.create_execution(config) as exe:
+    path = exe.asset_file_path("Model", "model.pt")
+
+    # MUST write to the exact path returned
+    torch.save(model, path)  # Correct
+    # torch.save(model, "model.pt")  # WRONG - different path
+
+# MUST call upload AFTER with block
+exe.upload_execution_outputs()
+```
+
+## Problem: "Dataset not found"
+
+**Symptom**: Error resolving dataset RID
+
+**Causes**:
+1. Dataset RID is wrong
+2. Dataset was deleted
+3. Not connected to correct catalog
+
+**Solution**:
+```
+# Verify connection
+get_catalog_info()
+
+# List available datasets
+find_datasets()
+
+# Check if dataset exists
+lookup_dataset("<rid>")
+```
+
+## Problem: "Invalid RID"
+
+**Symptom**: `DerivaMLException: Invalid RID`
+
+**Causes**:
+1. RID doesn't exist in catalog
+2. RID is from different catalog
+3. Typo in RID
+
+**Solution**:
+```
+# Resolve RID to check what it is
+resolve_rid("<rid>")
+
+# Returns table name and schema if valid
+```
+
+## Problem: "Permission denied"
+
+**Symptom**: 403 Forbidden error
+
+**Causes**:
+1. Not authenticated
+2. Insufficient permissions
+3. Session expired
+
+**Solution**:
+```bash
+# Re-authenticate
+deriva-globus-auth-utils login --host <hostname>
+
+# Check current credentials
+deriva-globus-auth-utils token validate
+```
+
+## Problem: "Version mismatch"
+
+**Symptom**: Dataset version doesn't match expected
+
+**Causes**:
+1. Dataset was modified after your reference
+2. Using wrong version specifier
+
+**Solution**:
+```
+# Check version history
+get_dataset_version_history("<rid>")
+
+# Pin to specific version
+config = ExecutionConfiguration(
+    datasets=[DatasetSpec(rid="<rid>", version="1.2.3")]
+)
+```
+
+## Problem: "Feature not found"
+
+**Symptom**: Can't find feature or feature values
+
+**Causes**:
+1. Feature name is misspelled
+2. Feature is on different table
+3. Feature was deleted
+
+**Solution**:
+```
+# List all feature names
+list_feature_names()
+
+# Find features for a specific table
+find_features("Image")
+
+# Get feature details
+lookup_feature("Image", "Diagnosis")
+```
+
+## Problem: "Upload timeout"
+
+**Symptom**: Upload hangs or times out on large files
+
+**Causes**:
+1. Network issues
+2. Very large files
+3. Server-side limits
+
+**Solution**:
+- Check network connectivity
+- Upload in smaller batches
+- Use `download_dataset` for large data transfers
+- Contact server administrator for limits
+
+## Problem: "Execution stuck in Running state"
+
+**Symptom**: Execution status shows "Running" but code finished
+
+**Causes**:
+1. Exception occurred before `stop_execution()`
+2. Code crashed
+3. Didn't use context manager
+
+**Solution**:
+```python
+# Always use context manager for automatic cleanup
+with ml.create_execution(config) as exe:
+    try:
+        # Your code
+        pass
+    except Exception as e:
+        # Context manager will still call stop_execution
+        raise
+
+# Or manually update status
+ml._update_status(Status.failed, "Crashed: <error>", "<execution-rid>")
+```
+
+## Problem: "Vocabulary term not found"
+
+**Symptom**: Error when using a term that doesn't exist
+
+**Solution**:
+```
+# List available terms
+list_vocabulary_terms("<vocabulary-name>")
+
+# Add missing term
+add_term("<vocabulary>", "<term>", "<description>")
+```
+
+## Debugging Tips
+
+1. **Enable verbose logging**:
+```python
+import logging
+logging.getLogger("deriva_ml").setLevel(logging.DEBUG)
+```
+
+2. **Check execution details**:
+```
+get_execution_info()
+```
+
+3. **Verify catalog connection**:
+```
+get_catalog_info()
+```
+
+4. **List recent executions**:
+```
+list_executions()
+```
+
+5. **Check working directory**:
+```
+get_execution_working_dir()
+```
+
+## Getting Help
+
+- Check DerivaML documentation: `deriva-ml://docs/overview`
+- Review execution logs in the execution metadata
+- Contact support with execution RID for tracking
+"""
+
+    @mcp.prompt(
+        name="api-naming-conventions",
+        description="Reference guide for DerivaML API naming conventions and patterns",
+    )
+    def api_naming_conventions_prompt() -> str:
+        """Reference for API naming conventions."""
+        return """# DerivaML API Naming Conventions
+
+This reference documents the naming patterns used throughout the DerivaML API
+for consistency and discoverability.
+
+## Method Prefixes
+
+### `lookup_*` - Single Item Retrieval
+
+Retrieves one item by identifier. Raises exception if not found.
+
+```python
+dataset = ml.lookup_dataset("4HM")        # Returns Dataset
+asset = ml.lookup_asset("3JSE")           # Returns Asset
+term = ml.lookup_term("Image_Type", "X-ray")  # Returns VocabularyTerm
+workflow = ml.lookup_workflow("http://...")   # Returns Workflow RID
+feature = ml.lookup_feature("Image", "Diagnosis")  # Returns Feature
+```
+
+**Pattern**: `lookup_<entity>(identifier) -> Entity`
+
+### `find_*` - Search/Discovery
+
+Returns iterable of matching items. Empty result is valid (not an error).
+
+```python
+datasets = ml.find_datasets()             # Returns Iterable[Dataset]
+assets = ml.find_assets(asset_type="Model")  # Returns Iterable[Asset]
+features = ml.find_features("Image")      # Returns Iterable[Feature]
+workflows = ml.find_workflows()           # Returns list[Workflow]
+```
+
+**Pattern**: `find_<entities>(filters) -> Iterable[Entity]`
+
+### `list_*` - Enumerate Items
+
+Lists all items of a type, often in a specific context.
+
+```python
+# Catalog-level
+terms = ml.list_vocabulary_terms("Asset_Type")  # All terms in vocab
+tables = ml.list_tables()                       # All domain tables
+assets = ml.list_assets("Image")                # All assets in table
+
+# Entity-level
+members = dataset.list_dataset_members()        # Members of this dataset
+parents = dataset.list_dataset_parents()        # Parent datasets
+children = dataset.list_dataset_children()      # Child datasets
+executions = asset.list_executions()            # Executions using asset
+```
+
+**Pattern**: `list_<items>(context) -> list[Item]`
+
+### `get_*` - Data Retrieval with Transformation
+
+Retrieves data with optional transformation (e.g., to DataFrame).
+
+```python
+df = ml.get_table_as_dataframe("Image")        # Returns DataFrame
+metadata = asset.get_metadata()                 # Returns dict
+url = dataset.get_chaise_url()                  # Returns URL string
+info = ml.get_schema_description()              # Returns schema dict
+```
+
+**Pattern**: `get_<data>() -> TransformedData`
+
+### `create_*` - Create New Entities
+
+Creates new records in the catalog.
+
+```python
+dataset = exe.create_dataset(["Training"])     # New dataset
+workflow = ml.create_workflow("Name", "Type")  # New workflow
+feature = ml.create_feature("Image", "Label")  # New feature
+table = ml.create_table("Subject", [...])      # New table
+vocab = ml.create_vocabulary("Status", "...")  # New vocabulary
+execution = ml.create_execution(config)        # New execution
+```
+
+**Pattern**: `create_<entity>(params) -> Entity`
+
+### `add_*` - Add to Existing
+
+Adds items to existing entities or creates vocabulary terms.
+
+```python
+# Add to collections
+dataset.add_dataset_members({"Image": ["1-A", "1-B"]})
+dataset.add_dataset_type("Training")
+asset.add_asset_type("Model_File")
+ml.add_dataset_child(parent_rid, child_rid)
+
+# Add vocabulary terms
+ml.add_term("Asset_Type", "New_Type", "Description")
+ml.add_synonym("Asset_Type", "New_Type", "alias")
+```
+
+**Pattern**: `add_<item>(target, item_to_add)`
+
+### `delete_*` / `remove_*` - Remove Items
+
+Removes items from entities.
+
+```python
+# delete_* for batch removal
+dataset.delete_dataset_members(["1-A", "1-B"])
+ml.delete_feature("Image", "Old_Label")
+ml.delete_term("Asset_Type", "Unused_Type")
+
+# remove_* for single items
+asset.remove_asset_type("Wrong_Type")
+ml.remove_synonym("Asset_Type", "Term", "old_alias")
+```
+
+**Pattern**: `delete_<items>(identifiers)` or `remove_<item>(identifier)`
+
+## Parameter Naming
+
+### RID Parameters
+
+Use semantic names that indicate the entity type:
+
+```python
+dataset_rid: RID      # Dataset identifier
+asset_rid: RID        # Asset identifier
+execution_rid: RID    # Execution identifier
+workflow_rid: RID     # Workflow identifier
+member_rids: list[RID]  # Multiple member identifiers
+```
+
+### Table/Column Parameters
+
+```python
+table_name: str       # Name of a table (e.g., "Image")
+column_name: str      # Name of a column (e.g., "Filename")
+feature_name: str     # Name of a feature (e.g., "Diagnosis")
+vocab_name: str       # Name of vocabulary (e.g., "Asset_Type")
+```
+
+### Boolean Parameters
+
+Use positive names with `bool` type:
+
+```python
+include_deleted: bool = False   # Include deleted items
+recurse: bool = True            # Recursive operation
+materialize: bool = True        # Download files
+validate: bool = True           # Validate input
+```
+
+## Return Types
+
+### Consistent Patterns
+
+| Method Type | Returns |
+|-------------|---------|
+| `lookup_*` | Single entity or raises |
+| `find_*` | `Iterable[Entity]` |
+| `list_*` | `list[Item]` or `dict[str, list]` |
+| `get_*` | Specific type (DataFrame, dict, str) |
+| `create_*` | Created entity |
+| `add_*` | Usually `None` (modifies in place) |
+| `delete_*` | Usually `None` |
+
+## Class Conventions
+
+### Entity Classes
+
+- `Dataset` - Catalog-backed dataset operations
+- `DatasetBag` - Downloaded/offline dataset
+- `Asset` - Catalog-backed asset operations
+- `Execution` - ML execution context
+- `Feature` - Feature definition
+
+### Protocol Classes (Interfaces)
+
+- `DatasetLike` - Read-only dataset interface
+- `WritableDataset` - Writable dataset interface
+- `AssetLike` - Read-only asset interface
+- `WritableAsset` - Writable asset interface
+- `DerivaMLCatalog` - Full catalog interface
+- `DerivaMLCatalogReader` - Read-only catalog interface
+
+## MCP Tool Conventions
+
+MCP tools follow the same naming but use underscores and sometimes
+abbreviated or clearer parameter names:
+
+| Python API | MCP Tool |
+|------------|----------|
+| `lookup_dataset(rid)` | `lookup_dataset(dataset_rid)` |
+| `find_datasets(deleted=True)` | `find_datasets(include_deleted=True)` |
+| `list_dataset_members()` | `list_dataset_members(dataset_rid)` |
+
+## Tips for API Discovery
+
+1. **Use `find_*` when you don't know if items exist**
+2. **Use `lookup_*` when you expect the item to exist**
+3. **Use `list_*` for enumeration within a context**
+4. **Use `get_*` when you need transformed output**
+5. **Check `list_feature_names()` before creating features**
+6. **Check `list_vocabulary_terms()` before adding terms**
 """
