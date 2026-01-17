@@ -133,6 +133,25 @@ catalog = config.deriva_ml.catalog_id
 assets = config.assets
 ```
 
+## Dataset Versioning and Configuration
+
+**DatasetSpecConfig requires a version parameter.** When creating `DatasetSpecConfig` entries for hydra-zen configuration files, the `version` parameter is required:
+
+```python
+DatasetSpecConfig(rid="28EA", version="0.4.0")  # Correct
+DatasetSpecConfig(rid="28EA")  # ERROR: missing required 'version'
+```
+
+**Finding the correct version:**
+- Use `lookup_dataset(rid)` to get dataset info including `current_version`
+- If no specific version is needed, use the `current_version` from the lookup result
+
+**Important: Dataset versions capture catalog state at creation time.**
+- A dataset version represents a snapshot of the data at the time the version was created
+- If changes have been made to the catalog since the version was created (e.g., adding new features, modifying records), those changes are NOT included in existing versions
+- To include recent changes, call `increment_dataset_version` first, then use the new version number
+- This ensures reproducibility: the same version always returns the same data
+
 ## Before Calling Tools
 
 **Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
