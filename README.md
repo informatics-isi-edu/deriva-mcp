@@ -402,6 +402,20 @@ Found configuration files in configs/:
 | `get_catalog_info` | Get information about the active catalog |
 | `list_users` | List users with catalog access |
 | `get_chaise_url` | Get web interface URL for a table |
+| `resolve_rid` | Find which table a RID belongs to |
+| `list_catalog_registry` | List all catalogs and aliases on a server |
+| `create_catalog` | Create a new DerivaML catalog (with optional alias) |
+| `delete_catalog` | Permanently delete a catalog |
+| `clone_catalog` | Clone a catalog to create a copy |
+
+### Catalog Alias Management
+
+| Tool | Description |
+|------|-------------|
+| `create_catalog_alias` | Create an alias for a catalog |
+| `get_catalog_alias` | Get alias metadata (target, owner) |
+| `update_catalog_alias` | Update alias target or owner |
+| `delete_catalog_alias` | Delete an alias (catalog not affected) |
 
 ### Dataset Management
 
@@ -576,6 +590,43 @@ Found the following datasets in your catalog...
 ```
 
 ## Usage Examples
+
+### Discovering and Connecting to Catalogs
+
+```
+User: What catalogs are available on example.org?
+
+Claude: [Uses list_catalog_registry tool]
+Found 3 catalogs on example.org:
+- ID: 21, Name: "ML Project", Persistent: true
+- ID: 45, Name: "Test Environment", Persistent: true
+- ID: 50, Name: "Clone of ML Project", Persistent: true
+
+And 2 aliases:
+- "ml-project" -> catalog 21
+- "test-env" -> catalog 45
+
+User: Connect to ml-project
+
+Claude: [Uses connect_catalog tool with catalog_id="ml-project"]
+Connected to example.org using alias "ml-project" (catalog 21).
+The domain schema is 'my_domain'.
+```
+
+### Cloning and Managing Catalogs
+
+```
+User: Clone the production catalog to create a test environment
+
+Claude: [Uses clone_catalog tool]
+Cloned catalog 21 to new catalog 52 with all data and policies.
+
+User: Create an alias "dev-test" for the new catalog
+
+Claude: [Uses create_catalog_alias tool]
+Created alias "dev-test" pointing to catalog 52.
+You can now connect using: connect_catalog("example.org", "dev-test")
+```
 
 ### Basic Catalog Operations
 

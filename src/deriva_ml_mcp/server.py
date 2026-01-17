@@ -61,12 +61,26 @@ Always call `connect_catalog` before using other tools. This establishes the con
 
 ## Common Workflows
 
+**Discovering available catalogs:**
+1. `list_catalog_registry` - Query a server to see all available catalogs and aliases
+2. `connect_catalog` - Connect using catalog ID or alias name
+
 **Exploring a catalog:**
 1. `connect_catalog` - Connect to the catalog
 2. `list_tables` or `get_schema_description` - Understand the schema
 3. `list_datasets` - See available datasets
 4. `list_vocabularies` / `list_vocabulary_terms` - Explore controlled vocabularies
 5. `list_features` / `list_feature_values` - Examine feature definitions
+
+**Creating a new catalog:**
+1. `create_catalog` - Create a new DerivaML catalog (optionally with an alias)
+2. `clone_catalog` - Clone an existing catalog to create a copy
+
+**Managing catalog aliases:**
+- `create_catalog_alias` - Create an alias for a catalog (access by name instead of ID)
+- `get_catalog_alias` - Get alias metadata (target catalog, owner)
+- `update_catalog_alias` - Change alias target or owner
+- `delete_catalog_alias` - Remove an alias (catalog is not deleted)
 
 **Working with datasets:**
 1. `create_dataset` - Create a new dataset with types
@@ -89,6 +103,31 @@ Always call `connect_catalog` before using other tools. This establishes the con
 - Domain schema: Project-specific tables (assets, vocabularies, features)
 - Vocabularies: Controlled term lists for consistent labeling
 - Assets: Tables with file attachments (images, models, etc.)
+
+## Notebook Configuration Pattern
+
+Notebooks use hydra-zen configuration as the primary source of parameters:
+
+1. Define a config module in `src/configs/` that inherits from `BaseConfig`
+2. Load configuration in the notebook using `get_notebook_configuration()`
+3. Extract connection settings and parameters from the resolved config object
+
+Example notebook setup:
+```python
+from configs import load_all_configs
+from configs.my_notebook import MyNotebookConfigBuilds
+from deriva_ml.execution import get_notebook_configuration
+
+load_all_configs()
+config = get_notebook_configuration(
+    MyNotebookConfigBuilds,
+    config_name="my_notebook",
+    overrides=["assets=different_assets"],  # Optional
+)
+host = config.deriva_ml.hostname
+catalog = config.deriva_ml.catalog_id
+assets = config.assets
+```
 
 ## Before Calling Tools
 
