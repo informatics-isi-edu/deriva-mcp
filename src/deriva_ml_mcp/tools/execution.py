@@ -480,7 +480,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             get_experiment("47BE")
         """
         try:
-            from deriva_ml.execution.experiment import Experiment
+            from deriva_ml.experiment import Experiment
 
             ml = conn_manager.get_active_or_raise()
             exp = Experiment(ml, execution_rid)
