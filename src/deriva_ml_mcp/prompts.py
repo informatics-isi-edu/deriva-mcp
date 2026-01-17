@@ -1081,6 +1081,22 @@ list_dataset_children("1-ABC")
 - Nested datasets share elements - good for train/test splits
 - Pin versions for reproducible training
 - Use `download_dataset` to get local copies for ML training
+
+## Provenance Tracking
+
+**Find executions that used a dataset:**
+```
+list_dataset_executions("<dataset-rid>")
+```
+Returns all executions that used this dataset as input.
+
+**Find executions that created/used an asset:**
+```
+list_asset_executions("<asset-rid>")
+list_asset_executions("<asset-rid>", "Output")  # Only creating execution
+list_asset_executions("<asset-rid>", "Input")   # Only using executions
+```
+Returns executions with their role (Input/Output).
 """
 
     @mcp.prompt(

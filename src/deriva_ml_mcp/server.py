@@ -97,6 +97,10 @@ Always call `connect_catalog` before using other tools. This establishes the con
 2. `start_execution` / `stop_execution` - Manage execution lifecycle
 3. `upload_execution_outputs` - Upload results to the catalog
 
+**Provenance queries:**
+- `list_dataset_executions` - Find all executions that used a dataset
+- `list_asset_executions` - Find executions that created/used an asset
+
 ## Schema Conventions
 
 - `deriva-ml` schema: Core ML tables (Dataset, Execution, Feature, etc.)

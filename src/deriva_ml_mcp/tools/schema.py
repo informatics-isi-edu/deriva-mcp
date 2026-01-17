@@ -230,6 +230,115 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def list_asset_executions(asset_rid: str, asset_role: str | None = None) -> str:
+        """List all executions associated with an asset.
+
+        Given an asset RID, returns a list of executions that created or used
+        the asset, along with the role (Input/Output) in each execution. This
+        is useful for provenance tracking - finding which execution created an
+        asset or which executions used it as input.
+
+        Args:
+            asset_rid: RID of the asset to look up.
+            asset_role: Optional filter: "Input" or "Output". If omitted, returns all.
+
+        Returns:
+            JSON array of {Execution, Asset_Role} records showing which executions
+            are associated with this asset and their role.
+
+        Example:
+            list_asset_executions("3JSE") -> finds all executions that created/used this asset
+            list_asset_executions("3JSE", "Output") -> finds only the execution that created it
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            executions = ml.list_asset_executions(asset_rid, asset_role=asset_role)
+            return json.dumps(executions)
+        except Exception as e:
+            logger.error(f"Failed to list asset executions: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def lookup_asset(asset_rid: str) -> str:
+        """Look up an asset by its RID.
+
+        Returns detailed information about a specific asset including its
+        metadata, types, and the execution that created it.
+
+        Args:
+            asset_rid: RID of the asset to look up.
+
+        Returns:
+            JSON with asset details: {asset_rid, asset_table, filename, url,
+            length, md5, description, asset_types, execution_rid, chaise_url}.
+
+        Example:
+            lookup_asset("3JSE") -> detailed info about this asset
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            asset = ml.lookup_asset(asset_rid)
+
+            return json.dumps({
+                "asset_rid": asset.asset_rid,
+                "asset_table": asset.asset_table,
+                "filename": asset.filename,
+                "url": asset.url,
+                "length": asset.length,
+                "md5": asset.md5,
+                "description": asset.description,
+                "asset_types": asset.asset_types,
+                "execution_rid": asset.execution_rid,
+                "chaise_url": asset.get_chaise_url(),
+            })
+        except Exception as e:
+            logger.error(f"Failed to lookup asset: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def find_assets(
+        asset_table: str | None = None,
+        asset_type: str | None = None,
+    ) -> str:
+        """Find assets in the catalog with optional filtering.
+
+        Search for assets across all tables or filter by table name and/or
+        asset type.
+
+        Args:
+            asset_table: Optional table name to search (e.g., "Image", "Model").
+                If omitted, searches all asset tables.
+            asset_type: Optional asset type to filter by (e.g., "Training_Data").
+                If omitted, returns assets of all types.
+
+        Returns:
+            JSON array of assets with {asset_rid, asset_table, filename,
+            asset_types, execution_rid}.
+
+        Example:
+            find_assets() -> all assets in catalog
+            find_assets("Model") -> all Model assets
+            find_assets(asset_type="Training_Data") -> assets of this type
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            assets = ml.find_assets(asset_table=asset_table, asset_type=asset_type)
+
+            result = []
+            for asset in assets:
+                result.append({
+                    "asset_rid": asset.asset_rid,
+                    "asset_table": asset.asset_table,
+                    "filename": asset.filename,
+                    "asset_types": asset.asset_types,
+                    "execution_rid": asset.execution_rid,
+                })
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Failed to find assets: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def list_tables() -> str:
         """List all tables in the domain schema with their properties.
 
