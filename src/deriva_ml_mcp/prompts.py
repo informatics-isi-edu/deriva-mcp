@@ -4559,7 +4559,8 @@ ml.add_dataset_child(parent_rid, child_rid)
 
 # Add vocabulary terms
 ml.add_term("Asset_Type", "New_Type", "Description")
-ml.add_synonym("Asset_Type", "New_Type", "alias")
+term = ml.lookup_term("Asset_Type", "New_Type")
+term.synonyms = term.synonyms + ("alias",)  # Add synonym via property
 ```
 
 **Pattern**: `add_<item>(target, item_to_add)`
@@ -4576,7 +4577,8 @@ ml.delete_term("Asset_Type", "Unused_Type")
 
 # remove_* for single items
 asset.remove_asset_type("Wrong_Type")
-ml.remove_synonym("Asset_Type", "Term", "old_alias")
+term = ml.lookup_term("Asset_Type", "Term")
+term.synonyms = tuple(s for s in term.synonyms if s != "old_alias")  # Remove via property
 ```
 
 **Pattern**: `delete_<items>(identifiers)` or `remove_<item>(identifier)`

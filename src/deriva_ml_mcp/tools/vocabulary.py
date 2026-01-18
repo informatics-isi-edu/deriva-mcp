@@ -62,7 +62,7 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 result.append({
                     "name": term.name,
                     "description": term.description,
-                    "synonyms": term.synonyms or [],
+                    "synonyms": list(term.synonyms) if term.synonyms else [],
                     "rid": term.rid,
                 })
             return json.dumps(result)
@@ -90,7 +90,7 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             return json.dumps({
                 "name": term.name,
                 "description": term.description,
-                "synonyms": term.synonyms or [],
+                "synonyms": list(term.synonyms) if term.synonyms else [],
                 "rid": term.rid,
             })
         except Exception as e:
@@ -131,7 +131,7 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 "status": "created",
                 "name": term.name,
                 "description": term.description,
-                "synonyms": term.synonyms or [],
+                "synonyms": list(term.synonyms) if term.synonyms else [],
                 "rid": term.rid,
             })
         except Exception as e:
@@ -204,11 +204,15 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            term = ml.add_synonym(vocabulary_name, term_name, synonym)
+            term = ml.lookup_term(vocabulary_name, term_name)
+            # Add synonym using property setter (appends to existing)
+            current = list(term.synonyms)
+            if synonym not in current:
+                term.synonyms = tuple(current + [synonym])
             return json.dumps({
                 "status": "added",
                 "name": term.name,
-                "synonyms": term.synonyms or [],
+                "synonyms": list(term.synonyms),
                 "rid": term.rid,
             })
         except Exception as e:
@@ -232,15 +236,48 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            term = ml.remove_synonym(vocabulary_name, term_name, synonym)
+            term = ml.lookup_term(vocabulary_name, term_name)
+            # Remove synonym using property setter
+            current = list(term.synonyms)
+            if synonym in current:
+                term.synonyms = tuple(s for s in current if s != synonym)
             return json.dumps({
                 "status": "removed",
                 "name": term.name,
-                "synonyms": term.synonyms or [],
+                "synonyms": list(term.synonyms),
                 "rid": term.rid,
             })
         except Exception as e:
             logger.error(f"Failed to remove synonym: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def update_term_description(vocabulary_name: str, term_name: str, description: str) -> str:
+        """Update the description of a vocabulary term.
+
+        Args:
+            vocabulary_name: Name of the vocabulary table (e.g., "Dataset_Type").
+            term_name: Primary name of the term to update.
+            description: New description for the term.
+
+        Returns:
+            JSON with status, name, updated description.
+
+        Example:
+            update_term_description("Dataset_Type", "Training", "Data used to train models")
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            term = ml.lookup_term(vocabulary_name, term_name)
+            term.description = description
+            return json.dumps({
+                "status": "updated",
+                "name": term.name,
+                "description": term.description,
+                "rid": term.rid,
+            })
+        except Exception as e:
+            logger.error(f"Failed to update term description: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
