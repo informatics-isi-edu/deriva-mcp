@@ -1,4 +1,10 @@
-"""Schema manipulation tools for DerivaML MCP server."""
+"""Schema manipulation tools for DerivaML MCP server.
+
+This module provides tools for manipulating catalog schema including:
+- Creating and configuring tables
+- Adding and modifying columns
+- Managing table/column annotations and display settings
+"""
 
 from __future__ import annotations
 
@@ -508,4 +514,383 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             return json.dumps(schema_info)
         except Exception as e:
             logger.error(f"Failed to get schema description: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    # -------------------------------------------------------------------------
+    # Table Manipulation Tools
+    # -------------------------------------------------------------------------
+
+    @mcp.tool()
+    async def set_table_description(table_name: str, description: str) -> str:
+        """Set or update the description (comment) for a table.
+
+        Args:
+            table_name: Name of the table to update.
+            description: New description for the table.
+
+        Returns:
+            JSON with status, table_name, description.
+
+        Example:
+            set_table_description("Image", "Medical images for analysis")
+        """
+        try:
+            from deriva_ml.model.handles import TableHandle
+
+            ml = conn_manager.get_active_or_raise()
+            table = ml.model.name_to_table(table_name)
+            handle = TableHandle(table)
+            handle.description = description
+
+            return json.dumps({
+                "status": "updated",
+                "table_name": table_name,
+                "description": description,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set table description: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def set_table_display_name(table_name: str, display_name: str) -> str:
+        """Set the display name shown in the UI for a table.
+
+        Args:
+            table_name: Name of the table to update.
+            display_name: Human-readable name to display in the UI.
+
+        Returns:
+            JSON with status, table_name, display_name.
+
+        Example:
+            set_table_display_name("Image", "Medical Images")
+        """
+        try:
+            from deriva_ml.model.handles import TableHandle
+
+            ml = conn_manager.get_active_or_raise()
+            table = ml.model.name_to_table(table_name)
+            handle = TableHandle(table)
+            handle.set_display_name(display_name)
+
+            return json.dumps({
+                "status": "updated",
+                "table_name": table_name,
+                "display_name": display_name,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set table display name: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def set_row_name_pattern(table_name: str, pattern: str) -> str:
+        """Set the pattern used to display row names in the UI.
+
+        The pattern uses Handlebars syntax with triple braces for column values.
+
+        Args:
+            table_name: Name of the table to update.
+            pattern: Handlebars template (e.g., "{{{Name}}}" or "{{{FirstName}}} {{{LastName}}}").
+
+        Returns:
+            JSON with status, table_name, pattern.
+
+        Examples:
+            set_row_name_pattern("Subject", "{{{Name}}}")
+            set_row_name_pattern("Image", "{{{Filename}}} ({{{RID}}})")
+        """
+        try:
+            from deriva_ml.model.handles import TableHandle
+
+            ml = conn_manager.get_active_or_raise()
+            table = ml.model.name_to_table(table_name)
+            handle = TableHandle(table)
+            handle.set_row_name_pattern(pattern)
+
+            return json.dumps({
+                "status": "updated",
+                "table_name": table_name,
+                "pattern": pattern,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set row name pattern: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def set_visible_columns(
+        table_name: str,
+        columns: list[str],
+        context: str = "*",
+    ) -> str:
+        """Set which columns are visible in a table display context.
+
+        Controls which columns appear when viewing the table in the UI.
+        Different contexts show different views of the data.
+
+        Args:
+            table_name: Name of the table to configure.
+            columns: List of column names to display (in order).
+            context: Display context - "*" (all), "compact", "detailed", "entry", or "filter".
+
+        Returns:
+            JSON with status, table_name, columns, context.
+
+        Example:
+            set_visible_columns("Subject", ["RID", "Name", "Age", "Notes"])
+            set_visible_columns("Subject", ["Name", "Age"], context="compact")
+        """
+        try:
+            from deriva_ml.model.handles import TableHandle
+
+            ml = conn_manager.get_active_or_raise()
+            table = ml.model.name_to_table(table_name)
+            handle = TableHandle(table)
+            handle.set_visible_columns(columns, context=context)
+
+            return json.dumps({
+                "status": "updated",
+                "table_name": table_name,
+                "columns": columns,
+                "context": context,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set visible columns: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def add_column(
+        table_name: str,
+        column_name: str,
+        column_type: str = "text",
+        nullok: bool = True,
+        default: str | None = None,
+        comment: str | None = None,
+    ) -> str:
+        """Add a new column to an existing table.
+
+        Args:
+            table_name: Name of the table to modify.
+            column_name: Name for the new column.
+            column_type: Data type - one of "text", "int2", "int4", "int8", "float4",
+                "float8", "boolean", "date", "timestamp", "timestamptz", "json",
+                "jsonb", "markdown" (default: "text").
+            nullok: Whether NULL values are allowed (default: True).
+            default: Default value for new rows (optional).
+            comment: Description of the column (optional).
+
+        Returns:
+            JSON with status, table_name, column_name, column_type.
+
+        Example:
+            add_column("Subject", "Age", "int4", nullok=True, comment="Subject age in years")
+        """
+        try:
+            from deriva_ml.model.handles import TableHandle
+            from deriva_ml.core.enums import BuiltinTypes
+
+            ml = conn_manager.get_active_or_raise()
+            table = ml.model.name_to_table(table_name)
+            handle = TableHandle(table)
+
+            type_map = {
+                "text": BuiltinTypes.text,
+                "int2": BuiltinTypes.int2,
+                "int4": BuiltinTypes.int4,
+                "int8": BuiltinTypes.int8,
+                "float4": BuiltinTypes.float4,
+                "float8": BuiltinTypes.float8,
+                "boolean": BuiltinTypes.boolean,
+                "date": BuiltinTypes.date,
+                "timestamp": BuiltinTypes.timestamp,
+                "timestamptz": BuiltinTypes.timestamptz,
+                "json": BuiltinTypes.json,
+                "jsonb": BuiltinTypes.jsonb,
+                "markdown": BuiltinTypes.markdown,
+            }
+            col_type = type_map.get(column_type, BuiltinTypes.text)
+
+            col = handle.add_column(
+                name=column_name,
+                column_type=col_type,
+                nullok=nullok,
+                default=default,
+                comment=comment,
+            )
+
+            return json.dumps({
+                "status": "created",
+                "table_name": table_name,
+                "column_name": col.name,
+                "column_type": column_type,
+            })
+        except Exception as e:
+            logger.error(f"Failed to add column: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    # -------------------------------------------------------------------------
+    # Column Manipulation Tools
+    # -------------------------------------------------------------------------
+
+    @mcp.tool()
+    async def set_column_description(
+        table_name: str,
+        column_name: str,
+        description: str,
+    ) -> str:
+        """Set or update the description (comment) for a column.
+
+        Args:
+            table_name: Name of the table containing the column.
+            column_name: Name of the column to update.
+            description: New description for the column.
+
+        Returns:
+            JSON with status, table_name, column_name, description.
+
+        Example:
+            set_column_description("Subject", "Age", "Subject age in years at enrollment")
+        """
+        try:
+            from deriva_ml.model.handles import TableHandle
+
+            ml = conn_manager.get_active_or_raise()
+            table = ml.model.name_to_table(table_name)
+            handle = TableHandle(table)
+            col = handle.column(column_name)
+            col.description = description
+
+            return json.dumps({
+                "status": "updated",
+                "table_name": table_name,
+                "column_name": column_name,
+                "description": description,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set column description: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def set_column_display_name(
+        table_name: str,
+        column_name: str,
+        display_name: str,
+    ) -> str:
+        """Set the display name shown in the UI for a column.
+
+        Args:
+            table_name: Name of the table containing the column.
+            column_name: Name of the column to update.
+            display_name: Human-readable name to display in the UI.
+
+        Returns:
+            JSON with status, table_name, column_name, display_name.
+
+        Example:
+            set_column_display_name("Subject", "DOB", "Date of Birth")
+        """
+        try:
+            from deriva_ml.model.handles import TableHandle
+
+            ml = conn_manager.get_active_or_raise()
+            table = ml.model.name_to_table(table_name)
+            handle = TableHandle(table)
+            col = handle.column(column_name)
+            col.set_display_name(display_name)
+
+            return json.dumps({
+                "status": "updated",
+                "table_name": table_name,
+                "column_name": column_name,
+                "display_name": display_name,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set column display name: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def set_column_nullok(
+        table_name: str,
+        column_name: str,
+        nullok: bool,
+    ) -> str:
+        """Set whether a column allows NULL values.
+
+        Args:
+            table_name: Name of the table containing the column.
+            column_name: Name of the column to update.
+            nullok: True to allow NULL values, False to require values.
+
+        Returns:
+            JSON with status, table_name, column_name, nullok.
+
+        Note:
+            Setting nullok=False will fail if the column contains NULL values.
+
+        Example:
+            set_column_nullok("Subject", "Name", False)  # Make Name required
+        """
+        try:
+            from deriva_ml.model.handles import TableHandle
+
+            ml = conn_manager.get_active_or_raise()
+            table = ml.model.name_to_table(table_name)
+            handle = TableHandle(table)
+            col = handle.column(column_name)
+            col.set_nullok(nullok)
+
+            return json.dumps({
+                "status": "updated",
+                "table_name": table_name,
+                "column_name": column_name,
+                "nullok": nullok,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set column nullok: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def get_table_columns(
+        table_name: str,
+        include_system: bool = False,
+    ) -> str:
+        """Get detailed information about all columns in a table.
+
+        Args:
+            table_name: Name of the table to describe.
+            include_system: Include system columns (RID, RCT, etc.) (default: False).
+
+        Returns:
+            JSON array of column details: {name, type, nullok, description,
+            display_name, is_system}.
+
+        Example:
+            get_table_columns("Subject") -> all user columns
+            get_table_columns("Subject", include_system=True) -> all columns
+        """
+        try:
+            from deriva_ml.model.handles import TableHandle
+
+            ml = conn_manager.get_active_or_raise()
+            table = ml.model.name_to_table(table_name)
+            handle = TableHandle(table)
+
+            if include_system:
+                columns = list(handle.all_columns)
+            else:
+                columns = handle.user_columns
+
+            result = []
+            for col in columns:
+                result.append({
+                    "name": col.name,
+                    "type": col._column.type.typename,
+                    "nullok": col.nullok,
+                    "description": col.description,
+                    "display_name": col.get_display_name(),
+                    "is_system": col.is_system_column,
+                })
+
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Failed to get table columns: {e}")
             return json.dumps({"status": "error", "message": str(e)})
