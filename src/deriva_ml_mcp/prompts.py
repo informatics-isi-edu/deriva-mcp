@@ -1429,6 +1429,312 @@ Configurations are composed in order (later overrides earlier):
 """
 
     @mcp.prompt(
+        name="configure-experiments-and-multiruns",
+        description="Step-by-step guide to configure experiment presets and multirun sweeps",
+    )
+    def configure_experiments_multiruns_prompt() -> str:
+        """Guide for configuring experiments and multiruns."""
+        return """# Configuring Experiments and Multiruns
+
+This guide explains how to create experiment presets and multirun sweep
+configurations for reproducible ML workflows.
+
+## Concepts
+
+### Experiments vs Multiruns
+
+| Feature | Experiments | Multiruns |
+|---------|-------------|-----------|
+| Purpose | Single preset configuration | Multiple runs with variations |
+| Invocation | `+experiment=name` | `+multirun=name` |
+| Output | One execution | Multiple executions (parent + children) |
+| Use case | Reproducible single runs | Hyperparameter sweeps, comparisons |
+
+**Decision Guide:**
+- Use **experiments** when you want a named, reproducible configuration preset
+- Use **multiruns** when you want to sweep parameters or compare configurations
+- **Best practice**: Build multiruns on top of existing experiments
+
+## Step 1: Define Your Base Configuration
+
+First, ensure you have a base configuration that your experiments inherit from.
+This is typically defined in `configs/base.py`:
+
+```python
+from hydra_zen import builds, store
+from model_runner import run_model
+
+# Build the base application config
+DerivaModelConfig = builds(
+    run_model,
+    populate_full_signature=True,
+    hydra_defaults=[
+        "_self_",
+        {"deriva_ml": "default_deriva"},
+        {"datasets": "default_dataset"},
+        {"assets": "default_asset"},
+        {"workflow": "default_workflow"},
+        {"model_config": "default_model"},
+    ],
+)
+
+# Store as the main app config
+store(DerivaModelConfig, name="deriva_model_app")
+```
+
+## Step 2: Create Experiment Presets
+
+Create `configs/experiments.py` to define named experiment configurations:
+
+```python
+from hydra_zen import make_config, store
+from configs.base import DerivaModelConfig
+
+# Use _global_ package for root-level overrides
+experiment_store = store(group="experiment", package="_global_")
+
+# Quick validation experiment
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "quick"},
+            {"override /datasets": "small_split"},
+        ],
+        description="Quick training: 3 epochs for fast validation",
+        bases=(DerivaModelConfig,),
+    ),
+    name="my_quick",
+)
+
+# Extended training experiment
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "extended"},
+            {"override /datasets": "full_split"},
+        ],
+        description="Extended training: 50 epochs with regularization",
+        bases=(DerivaModelConfig,),
+    ),
+    name="my_extended",
+)
+
+# Test-only experiment (no training, just evaluation)
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "test_only"},
+            {"override /datasets": "testing"},
+            {"override /assets": "pretrained_weights"},
+        ],
+        description="Evaluation only: load weights and evaluate",
+        bases=(DerivaModelConfig,),
+    ),
+    name="my_test_only",
+)
+```
+
+**Key patterns:**
+- `package="_global_"` allows experiments to override root-level configs
+- `{"override /group": "name"}` selects which config to use from each group
+- `bases=(BaseConfig,)` inherits all settings from the base config
+- `description` documents the experiment purpose
+
+## Step 3: Create Multirun Configurations
+
+Create `configs/multiruns.py` for sweep configurations:
+
+```python
+from deriva_ml.execution import multirun_config
+
+# Compare two experiments side by side
+multirun_config(
+    "quick_vs_extended",
+    overrides=[
+        "+experiment=my_quick,my_extended",
+    ],
+    description=\"\"\"## Quick vs Extended Comparison
+
+**Objective:** Compare fast vs full training.
+\"\"\",
+)
+
+# Learning rate sweep (build on existing experiment)
+multirun_config(
+    "lr_sweep",
+    overrides=[
+        "+experiment=my_quick",                    # Start from experiment
+        "model_config.epochs=10",                  # Override epochs
+        "model_config.learning_rate=0.0001,0.001,0.01,0.1",
+    ],
+    description=\"\"\"## Learning Rate Sweep
+
+**Objective:** Find optimal learning rate.
+
+| Learning Rate | Expected Behavior |
+|---------------|-------------------|
+| 0.0001 | Slow convergence, stable |
+| 0.001 | Balanced (default) |
+| 0.01 | Fast convergence, may overshoot |
+| 0.1 | Likely unstable |
+\"\"\",
+)
+
+# Grid search (multiple parameters)
+multirun_config(
+    "lr_batch_grid",
+    overrides=[
+        "+experiment=my_quick",
+        "model_config.learning_rate=0.001,0.01",
+        "model_config.batch_size=64,128",
+    ],
+    description=\"\"\"## LR x Batch Size Grid Search
+
+**Total runs:** 4 (2 x 2)
+\"\"\",
+)
+```
+
+**Key patterns:**
+- `multirun_config()` from `deriva_ml.execution`
+- Build on experiments: `"+experiment=name"` in overrides
+- Comma-separated values create multiple runs
+- Multiple comma-separated params create grid search
+- Markdown description becomes parent execution documentation
+
+## Step 4: Running Experiments and Multiruns
+
+### Single Experiments
+
+```bash
+# Run with defaults
+uv run deriva-ml-run
+
+# Run a specific experiment
+uv run deriva-ml-run +experiment=my_quick
+
+# Override experiment parameters
+uv run deriva-ml-run +experiment=my_quick model_config.epochs=5
+```
+
+### Multiruns
+
+```bash
+# Run a named multirun
+uv run deriva-ml-run +multirun=lr_sweep
+
+# Override multirun parameters
+uv run deriva-ml-run +multirun=lr_sweep model_config.epochs=20
+
+# Show available configs
+uv run deriva-ml-run --info
+```
+
+### Ad-hoc Sweeps
+
+```bash
+# Quick sweep without defining multirun config
+uv run deriva-ml-run --multirun +experiment=my_quick \\
+    model_config.learning_rate=0.001,0.01
+```
+
+## Common Patterns
+
+### Pattern 1: Experiment Hierarchy
+
+Define a base experiment and extend it:
+
+```python
+# Base quick experiment
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "quick"},
+            {"override /datasets": "small_split"},
+        ],
+        bases=(DerivaModelConfig,),
+    ),
+    name="quick",
+)
+
+# Quick on full dataset (override just the dataset)
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "quick"},
+            {"override /datasets": "full_split"},  # Different dataset
+        ],
+        bases=(DerivaModelConfig,),
+    ),
+    name="quick_full",
+)
+```
+
+### Pattern 2: Multirun Comparison
+
+Compare experiments with same parameters:
+
+```python
+multirun_config(
+    "architecture_comparison",
+    overrides=[
+        "+experiment=small_model,medium_model,large_model",
+        "model_config.epochs=20",  # Same epochs for fair comparison
+    ],
+    description="Compare model architectures with same training budget",
+)
+```
+
+### Pattern 3: Sweep on Experiment
+
+Build parameter sweep on an existing experiment:
+
+```python
+multirun_config(
+    "regularization_sweep",
+    overrides=[
+        "+experiment=my_extended",
+        "model_config.dropout_rate=0.0,0.1,0.25,0.5",
+        "model_config.weight_decay=0.0,1e-4,1e-3",
+    ],
+    description="Grid search for regularization hyperparameters",
+)
+```
+
+## Best Practices
+
+1. **Name experiments descriptively**: `cifar10_quick` not `exp1`
+2. **Document with descriptions**: Include objective and expected outcomes
+3. **Pin dataset versions**: Use explicit versions in DatasetSpecConfig
+4. **Build multiruns on experiments**: Reuse experiment settings
+5. **Use markdown in descriptions**: Tables and formatting render in Chaise
+6. **Keep experiments atomic**: Each experiment = one coherent configuration
+7. **Use --info to discover**: `uv run deriva-ml-run --info` shows all options
+
+## Troubleshooting
+
+### "Config not found" Error
+- Ensure config module is imported in `configs/__init__.py`
+- Check spelling of config name
+- Use `--info` to see available configs
+
+### Experiment Not Overriding Correctly
+- Verify `package="_global_"` in experiment_store
+- Check `hydra_defaults` uses `"override /group"` syntax
+- Ensure `bases=(BaseConfig,)` is set
+
+### Multirun Creates Wrong Number of Runs
+- Count comma-separated values: `a,b,c` = 3 runs
+- Grid search multiplies: `a,b` x `c,d` = 4 runs
+- Check no spaces after commas in overrides
+"""
+
+    @mcp.prompt(
         name="setup-catalog-display",
         description="Step-by-step guide to configure Chaise web UI navigation and display settings",
     )

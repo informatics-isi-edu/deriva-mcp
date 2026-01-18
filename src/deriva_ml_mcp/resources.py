@@ -188,6 +188,222 @@ model_store(ModelConfig, name="fast", epochs=5, learning_rate=1e-2)
 model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
 '''
 
+    @mcp.resource(
+        "deriva-ml://config/experiment-template",
+        name="Experiment Config Template",
+        description="Hydra-zen configuration template for experiment presets",
+        mime_type="text/x-python",
+    )
+    def get_experiment_config_template() -> str:
+        """Return a hydra-zen configuration template for experiments."""
+        return '''"""Experiment Configuration with hydra-zen.
+
+This template shows how to define experiment presets that combine
+model configs, datasets, and assets into reproducible configurations.
+
+Experiments use Hydra's defaults list to override specific config groups
+and inherit from a base configuration.
+
+Usage:
+    # Run a single experiment
+    uv run deriva-ml-run +experiment=my_quick_experiment
+
+    # Override experiment settings
+    uv run deriva-ml-run +experiment=my_quick_experiment datasets=different_dataset
+"""
+from hydra_zen import make_config, store
+
+from configs.base import MyBaseConfig  # Your base config (a builds() of run_model)
+
+# Use _global_ package to allow overrides at the root level
+experiment_store = store(group="experiment", package="_global_")
+
+# Quick test experiment - minimal training for validation
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "quick"},      # Use quick model config
+            {"override /datasets": "small_split"},    # Use small dataset
+        ],
+        description="Quick training: 3 epochs for fast validation",
+        bases=(MyBaseConfig,),  # Inherit from base config
+    ),
+    name="my_quick_experiment",
+)
+
+# Extended training experiment - full training run
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "extended"},   # Use extended model config
+            {"override /datasets": "full_split"},     # Use full dataset
+        ],
+        description="Extended training: 50 epochs with regularization",
+        bases=(MyBaseConfig,),
+    ),
+    name="my_extended_experiment",
+)
+
+# Test-only experiment - evaluation without training
+experiment_store(
+    make_config(
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "test_only"},  # Model config with test_only=True
+            {"override /datasets": "testing"},        # Test dataset only
+            {"override /assets": "pretrained_weights"},  # Load pretrained weights
+        ],
+        description="Evaluation only: load weights and evaluate on test set",
+        bases=(MyBaseConfig,),
+    ),
+    name="my_test_only_experiment",
+)
+
+# Key patterns:
+# 1. Use package="_global_" in experiment_store for root-level overrides
+# 2. Use "override /group": "name" syntax in hydra_defaults
+# 3. Inherit from base config using bases=(BaseConfig,)
+# 4. Add description field for documentation
+# 5. Experiments are selected with +experiment=name (note the + prefix)
+'''
+
+    @mcp.resource(
+        "deriva-ml://config/multirun-template",
+        name="Multirun Config Template",
+        description="Hydra-zen configuration template for multirun sweeps",
+        mime_type="text/x-python",
+    )
+    def get_multirun_config_template() -> str:
+        """Return a hydra-zen configuration template for multiruns."""
+        return '''"""Multirun Configuration for experiment sweeps.
+
+This template shows how to define named multirun configurations that bundle
+Hydra overrides with rich markdown descriptions. Multiruns allow running
+multiple experiment variations in a single command.
+
+Usage:
+    # Run a defined multirun (no --multirun flag needed)
+    uv run deriva-ml-run +multirun=my_lr_sweep
+
+    # Override parameters from the multirun config
+    uv run deriva-ml-run +multirun=my_lr_sweep model_config.epochs=5
+
+    # Show available multiruns
+    uv run deriva-ml-run --info
+
+Benefits:
+    - Explicit declaration of sweep experiments
+    - Rich markdown descriptions for parent executions
+    - Reproducible sweeps documented in code
+    - Same Hydra override syntax as command line
+    - No need to remember --multirun flag
+"""
+from deriva_ml.execution import multirun_config
+
+# =============================================================================
+# Experiment Comparisons
+# =============================================================================
+# Compare different experiment configurations side by side
+
+multirun_config(
+    "quick_vs_extended",
+    overrides=[
+        "+experiment=my_quick,my_extended",  # Run both experiments
+    ],
+    description="""## Quick vs Extended Training Comparison
+
+**Objective:** Compare fast validation training against full extended training.
+
+### Configurations
+
+| Experiment | Epochs | Model Size | Dataset |
+|------------|--------|------------|---------|
+| my_quick | 3 | Small | small_split |
+| my_extended | 50 | Large | full_split |
+
+### Expected Outcomes
+
+- Quick: Fast baseline, lower accuracy
+- Extended: Best accuracy, longer training time
+""",
+)
+
+# =============================================================================
+# Hyperparameter Sweeps
+# =============================================================================
+# Sweep over parameter ranges to find optimal values.
+# Build on existing experiments with parameter overrides.
+
+multirun_config(
+    "my_lr_sweep",
+    overrides=[
+        "+experiment=my_quick",                           # Base experiment
+        "model_config.epochs=10",                         # Override epochs
+        "model_config.learning_rate=0.0001,0.001,0.01,0.1",  # Sweep values
+    ],
+    description="""## Learning Rate Sweep
+
+**Objective:** Find optimal learning rate for the model.
+
+### Parameter Grid
+
+| Parameter | Values |
+|-----------|--------|
+| Learning Rate | 0.0001, 0.001, 0.01, 0.1 |
+
+**Total runs:** 4
+
+### Analysis
+
+Compare final test accuracy and training loss curves across runs.
+""",
+)
+
+# =============================================================================
+# Grid Searches
+# =============================================================================
+# Sweep multiple parameters simultaneously (creates N*M runs)
+
+multirun_config(
+    "my_lr_batch_grid",
+    overrides=[
+        "+experiment=my_quick",
+        "model_config.epochs=10",
+        "model_config.learning_rate=0.001,0.01",    # 2 values
+        "model_config.batch_size=64,128",           # 2 values
+    ],
+    description="""## Learning Rate and Batch Size Grid Search
+
+**Objective:** Find optimal combination of learning rate and batch size.
+
+### Parameter Grid
+
+| Parameter | Values |
+|-----------|--------|
+| Learning Rate | 0.001, 0.01 |
+| Batch Size | 64, 128 |
+
+**Total runs:** 4 (2 x 2 grid)
+
+### Expected Outcomes
+
+- Smaller batch sizes may need lower learning rates
+- Larger batch sizes can often tolerate higher learning rates
+- Look for the combination with best test accuracy and stable training
+""",
+)
+
+# Key patterns:
+# 1. Use multirun_config() from deriva_ml.execution
+# 2. Build sweeps on existing experiments with "+experiment=name"
+# 3. Override specific parameters with "group.param=value1,value2,..."
+# 4. Use markdown descriptions for documentation in parent execution
+# 5. Comma-separated values create multiple runs
+# 6. Multiple parameters with commas create grid search (N*M runs)
+'''
+
     # =========================================================================
     # Dynamic Resources - Catalog Information
     # =========================================================================
