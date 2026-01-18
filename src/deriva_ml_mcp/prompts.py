@@ -2257,8 +2257,27 @@ multirun_config(
         return """# Adding Descriptions to Configurations
 
 Configuration descriptions help users and AI assistants understand and discover
-the right configurations for their tasks. This guide explains how to add
-descriptions to different types of hydra-zen configurations.
+the right configurations for their tasks.
+
+## Quick Reference
+
+**Simple rule: How is the config stored?**
+
+| If storing... | Use this pattern |
+|---------------|------------------|
+| A **list** (assets, datasets) | `with_description(items, "description")` |
+| A **builds()** config (models) | `zen_meta={"description": "..."}` |
+
+```python
+# LISTS → with_description()
+from deriva_ml.execution import with_description
+
+asset_store(with_description(["RID1", "RID2"], "Description here"), name="my_assets")
+dataset_store(with_description([DatasetSpecConfig(...)], "Description"), name="my_dataset")
+
+# BUILDS → zen_meta
+model_store(MyModelConfig, name="my_model", zen_meta={"description": "Description here"})
+```
 
 ## Why Add Descriptions?
 
