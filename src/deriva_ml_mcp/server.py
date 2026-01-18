@@ -281,7 +281,7 @@ from deriva_ml.execution import with_description
 asset_store(
     with_description(
         ["RID1", "RID2"],
-        """Prediction probability files from learning rate sweep.
+        '''Prediction probability files from learning rate sweep.
 
 Compares four learning rates on the small labeled split:
 - lr=0.0001: Conservative, slow convergence
@@ -289,7 +289,7 @@ Compares four learning rates on the small labeled split:
 - lr=0.01: Aggressive, may show instability
 - lr=0.1: Very aggressive
 
-Use with roc_analysis notebook to compare AUC scores.""",
+Use with roc_analysis notebook to compare AUC scores.''',
     ),
     name="roc_lr_sweep",
 )
