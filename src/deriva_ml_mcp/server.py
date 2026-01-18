@@ -152,6 +152,66 @@ DatasetSpecConfig(rid="28EA")  # ERROR: missing required 'version'
 - To include recent changes, call `increment_dataset_version` first, then use the new version number
 - This ensures reproducibility: the same version always returns the same data
 
+## Running Models with deriva-ml-run
+
+The `deriva-ml-run` CLI executes ML models with full provenance tracking. It uses hydra-zen configuration for all parameters.
+
+**Single experiment:**
+```bash
+uv run deriva-ml-run +experiment=cifar10_quick
+```
+
+**Multirun experiments (using multirun_config):**
+```bash
+# Run a predefined multirun configuration
+uv run deriva-ml-run +multirun=quick_vs_extended
+
+# Override parameters from the multirun config
+uv run deriva-ml-run +multirun=lr_sweep model_config.epochs=5
+
+# List available configs
+uv run deriva-ml-run --info
+```
+
+**Defining multirun configurations:**
+
+Multirun configs bundle Hydra overrides with rich markdown descriptions. Define them in `configs/multiruns.py`:
+
+```python
+from deriva_ml.execution import multirun_config
+
+multirun_config(
+    "quick_vs_extended",
+    overrides=[
+        "+experiment=cifar10_quick,cifar10_extended",
+    ],
+    description='''## Model Comparison
+
+    Comparing quick vs extended training...
+
+    | Config | Epochs | Architecture |
+    |--------|--------|--------------|
+    | quick | 3 | 32->64 channels |
+    | extended | 50 | 64->128 channels |
+    ''',
+)
+
+multirun_config(
+    "lr_sweep",
+    overrides=[
+        "+experiment=cifar10_lr_sweep",
+        "model_config.learning_rate=0.0001,0.001,0.01,0.1",
+    ],
+    description="Learning rate hyperparameter sweep",
+)
+```
+
+**Benefits of multirun_config:**
+- No need to remember `--multirun` flag - automatically enabled
+- Rich markdown descriptions for parent executions (supports tables, headers, etc.)
+- Reproducible sweeps documented in code
+- Same Hydra override syntax as command line
+
 ## Before Calling Tools
 
 **Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
