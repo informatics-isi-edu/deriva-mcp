@@ -1571,47 +1571,95 @@ deriva_store(
 
 ## Step 2: Configure Datasets
 
-Create `configs/datasets.py` to specify input data:
+Create `configs/datasets.py` to specify input data. **Always include descriptions**
+to help users and AI assistants understand what each dataset is for.
 
 ```python
 from hydra_zen import store
 from deriva_ml.dataset import DatasetSpecConfig
+from deriva_ml.execution import with_description
 
 datasets_store = store(group="datasets")
 
 # Training dataset - pinned version for reproducibility
-training_data = [
-    DatasetSpecConfig(rid="1-ABC", version="1.0.0")
-]
-datasets_store(training_data, name="training")
+# Use with_description() to add metadata about the dataset
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="1-ABC", version="1.0.0")],
+        "Training dataset with 5,000 labeled images. "
+        "Use for model training. Source: CIFAR-10 training partition."
+    ),
+    name="training",
+)
 
 # Full dataset - all available data
-full_data = [
-    DatasetSpecConfig(rid="1-ABC"),  # Latest version
-    DatasetSpecConfig(rid="1-DEF"),  # Additional data
-]
-datasets_store(full_data, name="full")
+datasets_store(
+    with_description(
+        [
+            DatasetSpecConfig(rid="1-ABC"),  # Latest version
+            DatasetSpecConfig(rid="1-DEF"),  # Additional data
+        ],
+        "Complete dataset with all 10,000 images. "
+        "Combines training and testing partitions."
+    ),
+    name="full",
+)
 
 # Default for quick testing
-datasets_store(training_data, name="default_dataset")
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="1-ABC", version="1.0.0")],
+        "Default dataset for quick testing."
+    ),
+    name="default_dataset",
+)
 ```
+
+**Getting descriptions from the catalog:**
+Use `lookup_dataset("<rid>")` to see the dataset's description and types.
+This is a good starting point for your configuration description.
 
 ## Step 3: Configure Assets (Optional)
 
-Create `configs/assets.py` for pre-trained weights or other files:
+Create `configs/assets.py` for pre-trained weights or other files.
+**Always include descriptions** explaining what each asset contains and when to use it.
 
 ```python
 from hydra_zen import store
+from deriva_ml.execution import with_description
 
 asset_store = store(group="assets")
 
-# Pre-trained weights
-pretrained = ["2-XYZ"]  # RID of model checkpoint
-asset_store(pretrained, name="pretrained_weights")
+# Pre-trained weights - describe source and architecture
+asset_store(
+    with_description(
+        ["2-XYZ"],
+        "Model weights (model.pt) from extended training: 50 epochs, "
+        "64→128 channels, dropout 0.25. Use for inference or fine-tuning."
+    ),
+    name="pretrained_weights",
+)
 
-# No assets needed
-asset_store([], name="default_asset")
+# Classification probabilities from evaluation
+asset_store(
+    with_description(
+        ["2-ABC"],
+        "Probability outputs (probabilities.csv) from test evaluation. "
+        "Contains per-class confidence scores for 5,000 test images."
+    ),
+    name="evaluation_results",
+)
+
+# No assets needed (default)
+asset_store(
+    with_description([], "No assets - empty default configuration"),
+    name="default_asset",
+)
 ```
+
+**Getting descriptions from the catalog:**
+Use `lookup_asset("<rid>")` to see the asset's filename, description, types,
+and which execution created it. This helps write accurate config descriptions.
 
 ## Step 4: Configure Workflow
 
@@ -1647,7 +1695,8 @@ workflow_store(MyWorkflow, name="training")
 
 ## Step 5: Configure Model Parameters
 
-Create `configs/my_model.py` for model hyperparameters:
+Create `configs/my_model.py` for model hyperparameters. Use `zen_meta` to add
+descriptions to each model configuration explaining its purpose and parameters.
 
 ```python
 from hydra_zen import builds, store
@@ -1671,11 +1720,31 @@ MyModelConfig = builds(
     zen_partial=True,  # Execution context added at runtime
 )
 
-# Register variations
-model_store(MyModelConfig, name="default_model")
+# Register variations with descriptions using zen_meta
+model_store(
+    MyModelConfig,
+    name="default_model",
+    zen_meta={
+        "description": (
+            "Default config: 128 hidden, 2 layers, 10 epochs, lr=1e-3. "
+            "Balanced for standard training runs."
+        )
+    },
+)
 
 # Quick test - fewer epochs
-model_store(MyModelConfig, name="quick", epochs=2, batch_size=64)
+model_store(
+    MyModelConfig,
+    name="quick",
+    epochs=2,
+    batch_size=64,
+    zen_meta={
+        "description": (
+            "Quick test: 2 epochs, batch 64. Use for rapid iteration "
+            "and verifying the training pipeline works."
+        )
+    },
+)
 
 # Extended training
 model_store(
@@ -1684,8 +1753,17 @@ model_store(
     epochs=50,
     hidden_size=256,
     dropout=0.2,
+    zen_meta={
+        "description": (
+            "Extended training: 50 epochs, 256 hidden, dropout 0.2. "
+            "Use for production training when accuracy is the priority."
+        )
+    },
 )
 ```
+
+**Note:** `zen_meta` attaches metadata to the config without affecting instantiation.
+The description is accessible via `config._zen_meta["description"]` if needed.
 
 ## Step 6: Define Experiments
 
@@ -1811,6 +1889,39 @@ Configurations are composed in order (later overrides earlier):
 2. Experiment overrides
 3. Command-line overrides
 
+## Configuration Descriptions
+
+**Why descriptions matter:**
+- Help users understand what each configuration does
+- Enable AI assistants to discover and select appropriate configs
+- Serve as inline documentation in the repository
+
+**Two mechanisms for descriptions:**
+
+| Config Type | Mechanism | Example |
+|-------------|-----------|---------|
+| Lists (assets, datasets) | `with_description()` | `with_description(["RID"], "desc")` |
+| Model configs (builds) | `zen_meta` | `zen_meta={"description": "desc"}` |
+
+**Getting descriptions from the catalog:**
+When adding a new configuration, use MCP tools to find good starting descriptions:
+
+```
+# For datasets - includes description and types
+lookup_dataset("<dataset-rid>")
+
+# For assets - includes filename, description, types, source execution
+lookup_asset("<asset-rid>")
+
+# Then use these details in your configuration
+```
+
+If a dataset or asset lacks a good description in the catalog, consider adding one:
+```
+# Update dataset description
+update_record("deriva-ml", "Dataset", {"RID": "<rid>", "Description": "..."})
+```
+
 ## Best Practices
 
 1. **Pin dataset versions** for reproducibility
@@ -1819,11 +1930,13 @@ Configurations are composed in order (later overrides earlier):
 4. **Create experiment presets** for common configurations
 5. **Use `dry_run=True`** to test config before long runs
 6. **Register all configs** with hydra-zen store for discoverability
+7. **Always add descriptions** to configurations using `with_description()` or `zen_meta`
 
 ## Tips
 
 - Use `list_workflow_types()` to see available workflow types
 - Use `list_datasets()` to find dataset RIDs
+- Use `lookup_dataset()` / `lookup_asset()` to get catalog descriptions
 - Group related configs (e.g., all CIFAR-10 configs in one file)
 - Use `zen_partial=True` for model configs that need runtime context
 - Store experiments in `experiments.py` for easy discovery
@@ -2133,6 +2246,238 @@ multirun_config(
 - Count comma-separated values: `a,b,c` = 3 runs
 - Grid search multiplies: `a,b` x `c,d` = 4 runs
 - Check no spaces after commas in overrides
+"""
+
+    @mcp.prompt(
+        name="add-config-descriptions",
+        description="Guide for adding descriptions to hydra-zen configurations (assets, datasets, models)",
+    )
+    def add_config_descriptions_prompt() -> str:
+        """Guide for adding descriptions to configuration files."""
+        return """# Adding Descriptions to Configurations
+
+Configuration descriptions help users and AI assistants understand and discover
+the right configurations for their tasks. This guide explains how to add
+descriptions to different types of hydra-zen configurations.
+
+## Why Add Descriptions?
+
+1. **Discoverability**: AI assistants can understand and select appropriate configs
+2. **Documentation**: Inline docs in the repository for human users
+3. **Context**: Explain what each config is for and when to use it
+
+## Two Mechanisms for Descriptions
+
+| Config Type | Mechanism | Use When |
+|-------------|-----------|----------|
+| List configs (assets, datasets) | `with_description()` | Config is a list of RIDs |
+| Built configs (models, workflows) | `zen_meta` | Config uses `builds()` |
+
+## Step 1: Gather Information from the Catalog
+
+Before writing descriptions, get details from the catalog:
+
+### For Datasets
+```
+lookup_dataset("<dataset-rid>")
+```
+Returns: description, dataset_types, version, children/parents
+
+**Good dataset description includes:**
+- Size (number of images/records)
+- Labeling status (labeled, unlabeled, ground truth available)
+- Purpose (training, testing, validation)
+- Any special characteristics
+
+### For Assets
+```
+lookup_asset("<asset-rid>")
+```
+Returns: filename, description, asset_types, execution that created it
+
+**Good asset description includes:**
+- Filename and what it contains
+- Source execution (which training run produced it)
+- Key parameters (epochs, architecture, etc.)
+- When to use it (inference, fine-tuning, analysis)
+
+## Step 2: Add Descriptions to Datasets
+
+Use `with_description()` from `deriva_ml.execution`:
+
+```python
+from hydra_zen import store
+from deriva_ml.dataset import DatasetSpecConfig
+from deriva_ml.execution import with_description
+
+datasets_store = store(group="datasets")
+
+# Basic pattern
+datasets_store(
+    with_description(
+        [DatasetSpecConfig(rid="28D4", version="0.22.0")],
+        "Split dataset with 10,000 images (5,000 train + 5,000 test). "
+        "Testing images are unlabeled. Use for standard train/test workflows."
+    ),
+    name="cifar10_split",
+)
+
+# Multiple datasets in one config
+datasets_store(
+    with_description(
+        [
+            DatasetSpecConfig(rid="28DC", version="0.22.0"),
+            DatasetSpecConfig(rid="28DP", version="0.22.0"),
+        ],
+        "Combined training and testing datasets for full evaluation. "
+        "Training: 5,000 labeled, Testing: 5,000 unlabeled."
+    ),
+    name="cifar10_combined",
+)
+```
+
+## Step 3: Add Descriptions to Assets
+
+Use `with_description()` for asset lists:
+
+```python
+from hydra_zen import store
+from deriva_ml.execution import with_description
+
+asset_store = store(group="assets")
+
+# Model weights
+asset_store(
+    with_description(
+        ["3WMG"],
+        "Model weights (cifar10_cnn_weights.pt) from cifar10_quick: "
+        "3 epochs, 32→64 channels, batch 128. Source: execution 3WKE."
+    ),
+    name="quick_weights",
+)
+
+# Probability outputs
+asset_store(
+    with_description(
+        ["3WNA"],
+        "Classification probabilities (probabilities.csv) from cifar10_quick "
+        "on small testing dataset. Contains per-class confidence scores."
+    ),
+    name="quick_probabilities",
+)
+
+# Multiple related assets
+asset_store(
+    with_description(
+        ["3WMG", "3WNA", "3WN8"],
+        "Complete outputs from cifar10_quick experiment: "
+        "weights, probabilities, and training log."
+    ),
+    name="quick_complete",
+)
+
+# Empty default
+asset_store(
+    with_description([], "No assets - empty default configuration"),
+    name="default_asset",
+)
+```
+
+## Step 4: Add Descriptions to Model Configs
+
+Use `zen_meta` parameter when storing `builds()` configs:
+
+```python
+from hydra_zen import builds, store
+from models.my_model import train_model
+
+model_store = store(group="model_config")
+
+MyModelConfig = builds(
+    train_model,
+    hidden_size=128,
+    epochs=10,
+    learning_rate=1e-3,
+    populate_full_signature=True,
+    zen_partial=True,
+)
+
+# Add description via zen_meta
+model_store(
+    MyModelConfig,
+    name="default_model",
+    zen_meta={
+        "description": (
+            "Default config: 128 hidden, 10 epochs, lr=1e-3. "
+            "Balanced for standard training runs."
+        )
+    },
+)
+
+# Variant with description
+model_store(
+    MyModelConfig,
+    name="quick",
+    epochs=3,
+    batch_size=128,
+    zen_meta={
+        "description": (
+            "Quick training: 3 epochs, batch 128. "
+            "Use for rapid iteration and debugging."
+        )
+    },
+)
+```
+
+## Step 5: Update Catalog Descriptions (Optional)
+
+If an asset or dataset lacks a good description in the catalog, add one:
+
+```
+# Update dataset description
+update_record(
+    "deriva-ml",
+    "Dataset",
+    {"RID": "<dataset-rid>", "Description": "Clear description of the dataset..."}
+)
+
+# Update asset description (requires knowing the asset table)
+update_record(
+    "<schema>",
+    "<AssetTable>",
+    {"RID": "<asset-rid>", "Description": "Clear description of the asset..."}
+)
+```
+
+## Description Writing Guidelines
+
+**Good descriptions include:**
+- What it is (dataset size, asset contents)
+- Where it came from (source execution, creation process)
+- When to use it (training, testing, inference, debugging)
+- Key parameters (epochs, learning rate, architecture)
+
+**Examples:**
+
+❌ Bad: `"Training dataset"`
+✅ Good: `"Training dataset with 5,000 labeled CIFAR-10 images (32x32 RGB). All images have ground truth classifications."`
+
+❌ Bad: `"Model weights"`
+✅ Good: `"Model weights (model.pt) from extended training: 50 epochs, 64→128 channels, dropout 0.25. Use for inference or fine-tuning."`
+
+❌ Bad: `"Quick config"`
+✅ Good: `"Quick training: 3 epochs, batch 128. Use for rapid iteration and verifying the training pipeline works."`
+
+## Workflow: Adding Descriptions to Existing Configs
+
+1. **Inventory**: List all configs that need descriptions
+2. **Research**: Use `lookup_dataset()` / `lookup_asset()` to get catalog info
+3. **Write**: Create clear, informative descriptions
+4. **Import**: Add `from deriva_ml.execution import with_description`
+5. **Update**: Wrap list configs with `with_description()`
+6. **Model configs**: Add `zen_meta={"description": "..."}` to store calls
+7. **Test**: Run `--info` to verify configs still load
+8. **Commit**: Track description changes in version control
 """
 
     @mcp.prompt(
