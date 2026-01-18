@@ -336,6 +336,49 @@ If there are uncommitted changes, the execution record won't have a valid code r
 
 **Pattern:** Create separate dataset types like `Training`, `Testing`, `Labeled_Training`, `Labeled_Testing` to clearly distinguish datasets with and without ground truth.
 
+## Notebook Display Utilities
+
+**Dataset and Experiment classes provide markdown output methods:**
+
+Both `Dataset` and `Experiment` classes have `to_markdown()` and `display_markdown()` methods for generating formatted output in Jupyter notebooks:
+
+```python
+# Get markdown string for custom use
+md_str = dataset.to_markdown(show_children=True)
+md_str = experiment.to_markdown(show_datasets=True, show_assets=True)
+
+# Display directly in Jupyter
+dataset.display_markdown(show_children=True)
+experiment.display_markdown()
+```
+
+**Experiment.to_markdown()** returns:
+- Header with name and link to execution
+- Description (if available)
+- Configuration choices (Hydra config names used)
+- Model configuration (hyperparameters)
+- Input datasets (with nested children)
+- Input assets
+
+**Dataset.to_markdown()** returns:
+- Link to dataset record
+- Version, types, and description
+- Optionally nested child datasets
+
+**Loading experiments from assets:**
+
+When analyzing assets (e.g., prediction files), use `lookup_experiment()` to get the source experiment:
+
+```python
+# From asset path in execution context
+asset = ml.lookup_asset(asset_path.asset_rid)
+executions = asset.list_executions(asset_role='Output')
+
+if executions:
+    exp = ml.lookup_experiment(executions[0]['Execution'])
+    exp.display_markdown()  # Show full experiment details
+```
+
 ## Before Calling Tools
 
 **Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
