@@ -622,6 +622,8 @@ list_feature_values("Image", "Classification")
 ## Tips
 
 - Always add feature values within an execution for provenance
+- **Always provide a `comment`** for features to describe what they represent
+- **Always provide `description`** for vocabulary terms to explain their meaning
 - Use `lookup_feature` to see the feature's column structure
 - Features can reference both vocabulary terms AND assets
 - Feature values track which execution created them
@@ -682,17 +684,18 @@ Available column types:
 
 ## Step 3: Create a Simple Table
 
-Create a table with basic columns:
+Create a table with basic columns. **Always provide descriptions** for both the table
+and each column to make your catalog self-documenting:
 
 ```
 create_table(
     "Subject",
     columns=[
-        {"name": "Name", "type": "text", "nullok": false},
-        {"name": "Age", "type": "int4"},
-        {"name": "Notes", "type": "markdown"}
+        {"name": "Name", "type": "text", "nullok": false, "comment": "Full name of the research subject"},
+        {"name": "Age", "type": "int4", "comment": "Age in years at enrollment"},
+        {"name": "Notes", "type": "markdown", "comment": "Additional observations or comments"}
     ],
-    comment="Research subjects in the study"
+    comment="Research subjects enrolled in the study"
 )
 ```
 
@@ -700,7 +703,7 @@ create_table(
 - `name` (required): Column name
 - `type`: Data type (default: "text")
 - `nullok`: Allow NULL values (default: true)
-- `comment`: Description of the column
+- `comment`: **Always provide** - describes what the column stores, units, valid ranges, etc.
 
 ## Step 4: Create Tables with Foreign Keys
 
@@ -711,20 +714,20 @@ To link tables together, use foreign keys:
 create_table(
     "Subject",
     columns=[
-        {"name": "Name", "type": "text", "nullok": false},
-        {"name": "Species", "type": "text"}
+        {"name": "Name", "type": "text", "nullok": false, "comment": "Subject identifier"},
+        {"name": "Species", "type": "text", "comment": "Species name (e.g., 'Homo sapiens', 'Mus musculus')"}
     ],
-    comment="Research subjects"
+    comment="Research subjects enrolled in the study"
 )
 
 # Then create a child table that references it
 create_table(
     "Sample",
     columns=[
-        {"name": "Name", "type": "text", "nullok": false},
-        {"name": "Subject", "type": "text", "nullok": false},
-        {"name": "Collection_Date", "type": "date"},
-        {"name": "Tissue_Type", "type": "text"}
+        {"name": "Name", "type": "text", "nullok": false, "comment": "Sample identifier"},
+        {"name": "Subject", "type": "text", "nullok": false, "comment": "Reference to the source subject"},
+        {"name": "Collection_Date", "type": "date", "comment": "Date the sample was collected"},
+        {"name": "Tissue_Type", "type": "text", "comment": "Type of tissue (e.g., 'blood', 'biopsy')"}
     ],
     foreign_keys=[
         {
@@ -768,47 +771,67 @@ get_chaise_url("Subject")
 ```
 # Subject (top level)
 create_table("Subject", columns=[
-    {"name": "Name", "type": "text", "nullok": false},
-    {"name": "Age", "type": "int4"}
-])
+    {"name": "Name", "type": "text", "nullok": false, "comment": "Subject identifier"},
+    {"name": "Age", "type": "int4", "comment": "Age in years at enrollment"}
+], comment="Research subjects enrolled in the study")
 
 # Sample references Subject
 create_table("Sample", columns=[
-    {"name": "Name", "type": "text", "nullok": false},
-    {"name": "Subject", "type": "text", "nullok": false},
-    {"name": "Collection_Date", "type": "date"}
+    {"name": "Name", "type": "text", "nullok": false, "comment": "Sample identifier"},
+    {"name": "Subject", "type": "text", "nullok": false, "comment": "Reference to the source subject"},
+    {"name": "Collection_Date", "type": "date", "comment": "Date the sample was collected"}
 ], foreign_keys=[
     {"column": "Subject", "referenced_table": "Subject", "on_delete": "CASCADE"}
-])
+], comment="Biological samples collected from subjects")
 
 # Measurement references Sample
 create_table("Measurement", columns=[
-    {"name": "Sample", "type": "text", "nullok": false},
-    {"name": "Value", "type": "float8", "nullok": false},
-    {"name": "Unit", "type": "text"},
-    {"name": "Measured_At", "type": "timestamptz"}
+    {"name": "Sample", "type": "text", "nullok": false, "comment": "Reference to the measured sample"},
+    {"name": "Value", "type": "float8", "nullok": false, "comment": "Measured value"},
+    {"name": "Unit", "type": "text", "comment": "Unit of measurement (e.g., 'mg/L', 'mmHg')"},
+    {"name": "Measured_At", "type": "timestamptz", "comment": "Timestamp when measurement was taken"}
 ], foreign_keys=[
     {"column": "Sample", "referenced_table": "Sample", "on_delete": "CASCADE"}
-])
+], comment="Quantitative measurements from samples")
 ```
 
 ### Protocol with Versioning
 
 ```
 create_table("Protocol", columns=[
-    {"name": "Name", "type": "text", "nullok": false},
-    {"name": "Version", "type": "text", "nullok": false},
-    {"name": "Description", "type": "markdown"},
-    {"name": "Is_Active", "type": "boolean"}
+    {"name": "Name", "type": "text", "nullok": false, "comment": "Protocol name"},
+    {"name": "Version", "type": "text", "nullok": false, "comment": "Version identifier (e.g., '1.0', '2.1')"},
+    {"name": "Description", "type": "markdown", "comment": "Detailed protocol steps and instructions"},
+    {"name": "Is_Active", "type": "boolean", "comment": "Whether this protocol version is currently in use"}
 ], comment="Experimental protocols with version tracking")
-```
+
+## Documentation Best Practices
+
+**Always provide descriptions** for tables and columns. Good documentation:
+- Makes catalogs self-explanatory without needing external documentation
+- Helps users understand data provenance and meaning
+- Appears in the Chaise UI as tooltips and help text
+
+For every table:
+- Provide a `comment` explaining what the table stores and its role
+
+For every column:
+- Provide a `comment` explaining what the column contains
+- Include units of measurement where applicable (e.g., "Age in years")
+- Describe valid values or ranges when relevant
+- Note relationships to other data
+
+After creating tables, you can also:
+- Use `set_table_display_name` for user-friendly table names in the UI
+- Use `set_column_display_name` for user-friendly column names
+- Use `set_row_name_pattern` to control how rows appear in dropdowns
 
 ## Tips
 
 - **Naming conventions**: Use singular nouns (Subject, not Subjects)
 - **RID column**: Every table automatically gets an RID (unique identifier)
 - **Required fields**: Set `nullok: false` for required columns
-- **Descriptions**: Add comments to tables and columns for documentation
+- **Always document**: Add comments to every table and column
 - **Foreign keys**: The referenced table must exist before creating the foreign key
 - **Navbar update**: Tables are automatically added to the navigation bar
 
@@ -1076,6 +1099,7 @@ list_dataset_children("1-ABC")
 ## Tips
 
 - Always create datasets within an execution for provenance
+- **Always provide descriptive `description` values** - explains what the dataset contains and its purpose
 - Use `list_datasets()` to find existing datasets
 - Use semantic versioning: patch=metadata, minor=elements, major=breaking
 - Nested datasets share elements - good for train/test splits

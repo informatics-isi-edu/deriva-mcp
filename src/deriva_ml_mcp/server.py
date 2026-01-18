@@ -212,6 +212,25 @@ multirun_config(
 - Reproducible sweeps documented in code
 - Same Hydra override syntax as command line
 
+## Documentation Best Practices
+
+**Always provide descriptions for tables, columns, datasets, executions, and other catalog entities.**
+
+Good documentation makes catalogs self-explanatory and helps users understand data provenance:
+
+- **Tables**: Use `set_table_description` to explain what the table stores and its role in the workflow
+- **Columns**: Use `set_column_description` to explain what each column contains, units, valid ranges, etc.
+- **Datasets**: Always provide a `description` when creating datasets explaining their purpose and contents
+- **Executions**: Include a `description` explaining what the execution does and its expected outputs
+- **Vocabulary terms**: Provide clear `description` values explaining what each term means
+- **Features**: Document what the feature represents and how values should be interpreted
+
+**Display configuration improves usability:**
+
+- Use `set_table_display_name` and `set_column_display_name` for human-readable names in the UI
+- Use `set_row_name_pattern` to control how rows appear in dropdowns and references
+- Use `set_visible_columns` to show the most relevant columns first
+
 ## Before Calling Tools
 
 **Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
