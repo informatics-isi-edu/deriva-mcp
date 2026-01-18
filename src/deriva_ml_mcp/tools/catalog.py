@@ -684,3 +684,76 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "status": "error",
                 "message": str(e),
             })
+
+    @mcp.tool()
+    async def validate_rids(
+        dataset_rids: list[str] | None = None,
+        asset_rids: list[str] | None = None,
+        dataset_versions: dict[str, str] | None = None,
+        workflow_rids: list[str] | None = None,
+        execution_rids: list[str] | None = None,
+        warn_missing_descriptions: bool = True,
+    ) -> str:
+        """Validate that RIDs exist in the catalog before running experiments.
+
+        Performs batch validation of RIDs to catch configuration errors early with
+        clear error messages. Use this before running experiments to ensure all
+        referenced datasets, assets, and other entities actually exist.
+
+        Args:
+            dataset_rids: List of dataset RIDs to validate.
+            asset_rids: List of asset RIDs to validate (model weights, etc.).
+            dataset_versions: Dictionary mapping dataset RID to required version
+                string (e.g., {"1-ABC": "0.4.0"}). Validates version exists.
+            workflow_rids: List of workflow RIDs to validate.
+            execution_rids: List of execution RIDs to validate.
+            warn_missing_descriptions: If True (default), include warnings for
+                datasets missing descriptions.
+
+        Returns:
+            JSON with:
+            - is_valid: True if all validations passed
+            - errors: List of error messages
+            - warnings: List of warning messages
+            - validated_rids: Dictionary of validated RID info
+
+        Example:
+            validate_rids(
+                dataset_rids=["1-ABC", "2-DEF"],
+                dataset_versions={"1-ABC": "0.4.0"},
+                asset_rids=["3-GHI"]
+            )
+            -> {
+                "is_valid": true,
+                "errors": [],
+                "warnings": [],
+                "validated_rids": {...}
+            }
+        """
+        try:
+            from deriva_ml.core.validation import validate_rids as do_validate
+
+            ml = conn_manager.get_active_or_raise()
+            result = do_validate(
+                ml,
+                dataset_rids=dataset_rids,
+                asset_rids=asset_rids,
+                dataset_versions=dataset_versions,
+                workflow_rids=workflow_rids,
+                execution_rids=execution_rids,
+                warn_missing_descriptions=warn_missing_descriptions,
+            )
+
+            return json.dumps({
+                "is_valid": result.is_valid,
+                "errors": result.errors,
+                "warnings": result.warnings,
+                "validated_rids": result.validated_rids,
+                "summary": str(result),  # Include formatted summary
+            })
+        except Exception as e:
+            logger.error(f"Failed to validate RIDs: {e}")
+            return json.dumps({
+                "status": "error",
+                "message": str(e),
+            })

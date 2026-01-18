@@ -140,7 +140,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
             return json.dumps({
                 "status": "created",
-                "rid": dataset.dataset_rid,
+                "dataset_rid": dataset.dataset_rid,
                 "description": dataset.description,
                 "dataset_types": dataset.dataset_types,
                 "version": str(dataset.current_version) if dataset.current_version else version or "0.1.0",
@@ -228,7 +228,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
             result = {
                 "spec": spec_string,
-                "rid": dataset_rid,
+                "dataset_rid": dataset_rid,
                 "version": use_version,
                 "description": dataset.description,
                 "dataset_types": dataset.dataset_types,

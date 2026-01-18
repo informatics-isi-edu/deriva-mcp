@@ -59,8 +59,8 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             ml = conn_manager.get_active_or_raise()
             rid = ml.lookup_workflow(url_or_checksum)
             if rid:
-                return json.dumps({"found": True, "rid": rid})
-            return json.dumps({"found": False, "rid": None})
+                return json.dumps({"found": True, "workflow_rid": rid})
+            return json.dumps({"found": False, "workflow_rid": None})
         except Exception as e:
             logger.error(f"Failed to lookup workflow: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -94,7 +94,7 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             rid = ml.add_workflow(workflow)
             return json.dumps({
                 "status": "created",
-                "rid": rid,
+                "workflow_rid": rid,
                 "name": workflow.name,
                 "workflow_type": workflow.workflow_type,
                 "description": workflow.description,
