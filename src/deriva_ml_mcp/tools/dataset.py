@@ -177,6 +177,71 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def get_dataset_spec(dataset_rid: str, version: str | None = None) -> str:
+        """Generate a DatasetSpecConfig string for use in Python configuration files.
+
+        Returns the exact Python code to use in hydra-zen config files. This ensures
+        the RID and version are correctly formatted and match what's in the catalog.
+
+        **IMPORTANT**: Always prefer specifying explicit versions in configurations.
+        Using current_version as a default can lead to unexpected changes in results
+        if the dataset is modified after the configuration is written. Pin to a
+        specific version for reproducibility.
+
+        Args:
+            dataset_rid: The RID of the dataset (e.g., "28CT").
+            version: Specific version to use. If not provided, uses the dataset's
+                current version (with a warning about reproducibility).
+
+        Returns:
+            JSON with the Python code string and metadata including:
+            - spec: The DatasetSpecConfig(...) string ready to paste into code
+            - rid: The dataset RID
+            - version: The version used
+            - description: Dataset description for reference
+            - warning: Present if using current_version (recommends explicit version)
+
+        Example:
+            get_dataset_spec("28CT")
+            -> {"spec": "DatasetSpecConfig(rid=\\"28CT\\", version=\\"0.21.0\\")", ...}
+
+            get_dataset_spec("28CT", "0.20.0")
+            -> {"spec": "DatasetSpecConfig(rid=\\"28CT\\", version=\\"0.20.0\\")", ...}
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            dataset = ml.lookup_dataset(dataset_rid)
+
+            # Use provided version or fall back to current version
+            if version:
+                use_version = version
+                warning = None
+            else:
+                use_version = str(dataset.current_version) if dataset.current_version else "0.1.0"
+                warning = (
+                    "Using current_version as default. For reproducibility, consider "
+                    "pinning to an explicit version. Dataset contents may change if "
+                    "the version is incremented after this configuration is written."
+                )
+
+            spec_string = f'DatasetSpecConfig(rid="{dataset_rid}", version="{use_version}")'
+
+            result = {
+                "spec": spec_string,
+                "rid": dataset_rid,
+                "version": use_version,
+                "description": dataset.description,
+                "dataset_types": dataset.dataset_types,
+            }
+            if warning:
+                result["warning"] = warning
+
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Failed to get dataset spec for {dataset_rid}: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def list_dataset_members(dataset_rid: str, version: str | None = None) -> str:
         """List all dataset elements (records) grouped by table type.
 
