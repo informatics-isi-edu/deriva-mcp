@@ -113,24 +113,40 @@ Always call `connect_catalog` before using other tools. This establishes the con
 Notebooks use hydra-zen configuration as the primary source of parameters:
 
 1. Define a config module in `src/configs/` that inherits from `BaseConfig`
-2. Load configuration in the notebook using `get_notebook_configuration()`
-3. Extract connection settings and parameters from the resolved config object
+2. Load configuration in the notebook using `run_notebook()`
+3. Access resolved config, DerivaML instance, and execution context
 
 Example notebook setup:
 ```python
-from configs import load_all_configs
-from configs.my_notebook import MyNotebookConfigBuilds
-from deriva_ml.execution import get_notebook_configuration
+from deriva_ml.execution import run_notebook
 
-load_all_configs()
-config = get_notebook_configuration(
-    MyNotebookConfigBuilds,
-    config_name="my_notebook",
-    overrides=["assets=different_assets"],  # Optional
-)
-host = config.deriva_ml.hostname
-catalog = config.deriva_ml.catalog_id
-assets = config.assets
+# Single call handles all setup
+ml, execution, config = run_notebook("my_analysis")
+
+# Ready to use:
+# - ml: Connected DerivaML instance
+# - execution: Execution context with downloaded inputs
+# - config: Resolved configuration (config.assets, config.threshold, etc.)
+
+# Access asset descriptions
+if hasattr(config.assets, 'description'):
+    print(f"Analysis: {config.assets.description}")
+```
+
+**Running notebooks from CLI:**
+
+```bash
+# Run with default configuration
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb
+
+# Use a specific named configuration
+uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb --config roc_lr_sweep
+
+# Override specific parameters
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb assets=different_assets
+
+# Show available configurations
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
 ```
 
 ## Dataset Versioning and Configuration
@@ -212,6 +228,36 @@ multirun_config(
 - Reproducible sweeps documented in code
 - Same Hydra override syntax as command line
 
+**Multirun execution hierarchy:**
+
+Multiruns create a parent-child execution structure:
+- **Parent execution**: Created first, contains the multirun description and links to all child runs
+- **Child executions**: One per parameter combination, each with full provenance
+
+Example: `+multirun=lr_sweep` with 4 learning rates creates 5 executions (1 parent + 4 children).
+
+Use `list_parent_executions` and `list_nested_executions` to navigate this hierarchy.
+
+## Discovering Execution Outputs
+
+After running experiments, use MCP tools to discover generated assets:
+
+```python
+# Find all prediction probability files
+find_assets(pattern="prediction_probabilities", limit=20)
+
+# Find model weights from a specific execution
+list_asset_executions(rid="<EXECUTION_RID>")
+
+# Get assets produced by an execution
+lookup_experiment(rid="<EXECUTION_RID>")  # Returns input/output assets
+```
+
+This is useful for:
+- Gathering asset RIDs to create analysis configurations
+- Verifying expected outputs were generated
+- Building asset groups for comparative analysis (e.g., ROC curves)
+
 ## Documentation Best Practices
 
 **Always provide descriptions for tables, columns, datasets, executions, and other catalog entities.**
@@ -225,11 +271,70 @@ Good documentation makes catalogs self-explanatory and helps users understand da
 - **Vocabulary terms**: Provide clear `description` values explaining what each term means
 - **Features**: Document what the feature represents and how values should be interpreted
 
+**Asset configuration descriptions:**
+
+When defining asset configurations in hydra-zen, use `with_description()` to document what assets are included and why:
+
+```python
+from deriva_ml.execution import with_description
+
+asset_store(
+    with_description(
+        ["RID1", "RID2"],
+        """Prediction probability files from learning rate sweep.
+
+Compares four learning rates on the small labeled split:
+- lr=0.0001: Conservative, slow convergence
+- lr=0.001: Standard baseline
+- lr=0.01: Aggressive, may show instability
+- lr=0.1: Very aggressive
+
+Use with roc_analysis notebook to compare AUC scores.""",
+    ),
+    name="roc_lr_sweep",
+)
+```
+
+The description should explain:
+- What the assets contain (e.g., model weights, prediction probabilities)
+- Which experiments/executions produced them
+- Key parameters that differ between assets
+- How to use them (e.g., which notebook or analysis)
+
 **Display configuration improves usability:**
 
 - Use `set_table_display_name` and `set_column_display_name` for human-readable names in the UI
 - Use `set_row_name_pattern` to control how rows appear in dropdowns and references
 - Use `set_visible_columns` to show the most relevant columns first
+
+## Code Provenance Best Practices
+
+**Commit code before running models.** DerivaML tracks code provenance by recording:
+- Git commit hash
+- Repository URL
+- Working directory state
+
+If there are uncommitted changes, the execution record won't have a valid code reference. Always:
+1. Stage and commit changes before running `deriva-ml-run`
+2. Use `dry_run=true` during debugging to test without creating execution records
+3. Tag versions with semantic versioning before significant model runs
+
+**Dry run mode:**
+- `dry_run=true` downloads input datasets/assets but skips execution record creation
+- Useful for testing data loading, configuration, and model initialization
+- No catalog writes occur in dry run mode
+
+## Dataset Splits for Evaluation
+
+**When creating train/test splits, consider whether ground truth labels are needed:**
+
+- **Unlabeled test splits**: Test partition has no ground truth labels. Use for training pipelines where test evaluation isn't needed during training.
+- **Labeled test splits**: Both train and test partitions have ground truth labels. Required for:
+  - Computing accuracy metrics on test set
+  - Generating ROC curves or other evaluation metrics
+  - Comparing model predictions to ground truth
+
+**Pattern:** Create separate dataset types like `Training`, `Testing`, `Labeled_Training`, `Labeled_Testing` to clearly distinguish datasets with and without ground truth.
 
 ## Before Calling Tools
 
