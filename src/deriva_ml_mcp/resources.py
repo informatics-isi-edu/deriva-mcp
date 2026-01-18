@@ -710,6 +710,15 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/notebooks.md")
 
     @mcp.resource(
+        "deriva-ml://docs/annotations",
+        name="Catalog Annotations Guide",
+        description="Guide to configuring Chaise display using annotation builders",
+        mime_type="text/markdown",
+    )
+    def get_annotations_doc() -> str:
+        return fetch_doc("deriva-ml", "docs/user-guide/annotations.md")
+
+    @mcp.resource(
         "deriva-ml://docs/identifiers",
         name="Identifiers Guide",
         description="Guide to RIDs, MINIDs and other identifiers in DerivaML",

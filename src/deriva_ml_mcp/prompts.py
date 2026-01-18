@@ -429,6 +429,383 @@ apply_annotations()
 """
 
     @mcp.prompt(
+        name="use-annotation-builders",
+        description="Guide to using DerivaML annotation builder classes in Python for type-safe annotation creation",
+    )
+    def use_annotation_builders_prompt() -> str:
+        """Guide for using Python annotation builder classes."""
+        return """# Using DerivaML Annotation Builders
+
+DerivaML provides **annotation builder classes** that simplify annotation creation
+with IDE autocompletion, type safety, and validation. This guide shows how to use
+them in Python code.
+
+## When to Use Builders vs MCP Tools
+
+- **MCP Tools**: Quick edits, exploratory work, CI/CD scripts
+- **Python Builders**: Production code, complex annotations, type-safe development
+
+## Quick Start
+
+```python
+from deriva_ml import DerivaML
+from deriva_ml.model import (
+    TableHandle, Display, VisibleColumns, TableDisplay,
+    PseudoColumn, OutboundFK, InboundFK, fk_constraint, SortKey,
+    Aggregate, CONTEXT_COMPACT, CONTEXT_DETAILED
+)
+
+# Connect and get table handle
+ml = DerivaML(hostname="example.org", catalog_id="1")
+table = ml.model.name_to_table("Subject")
+handle = TableHandle(table)
+
+# Set display name
+handle.set_annotation(Display(
+    name="Research Subjects",
+    comment="Individuals enrolled in the study"
+))
+
+# Configure visible columns
+vc = VisibleColumns()
+vc.compact(["RID", "Name", "Species", "Age"])
+vc.detailed(["RID", "Name", "Species", "Age", "Notes"])
+handle.set_annotation(vc)
+
+# Set row name pattern
+td = TableDisplay()
+td.row_name("{{{Name}}} ({{{Species}}})")
+handle.set_annotation(td)
+```
+
+## Available Builders
+
+### Display - Table/Column names and descriptions
+
+```python
+from deriva_ml.model import Display, NameStyle
+
+# Simple name
+Display(name="Friendly Name")
+
+# With markdown (mutually exclusive with name)
+Display(markdown_name="**Bold** Name")
+
+# With description (shows as tooltip)
+Display(name="Subjects", comment="Research subjects enrolled in the study")
+
+# With name styling
+Display(name_style=NameStyle(underline_space=True, title_case=True))
+```
+
+### VisibleColumns - Which columns appear
+
+```python
+from deriva_ml.model import VisibleColumns, PseudoColumn, fk_constraint
+
+vc = VisibleColumns()
+
+# Simple column lists
+vc.compact(["RID", "Name", "Status"])
+vc.detailed(["RID", "Name", "Status", "Description"])
+vc.entry(["Name", "Status", "Description"])
+
+# Include FK references
+vc.compact([
+    "RID",
+    "Name",
+    fk_constraint("domain", "Subject_Species_fkey"),
+])
+
+# Include pseudo-columns (computed values)
+vc.detailed([
+    "RID",
+    "Name",
+    PseudoColumn(source="Description", markdown_name="Notes"),
+])
+
+# Method chaining
+vc = (VisibleColumns()
+    .compact(["RID", "Name"])
+    .detailed(["RID", "Name", "Description"])
+    .entry(["Name", "Description"]))
+```
+
+### VisibleForeignKeys - Related tables in detail view
+
+```python
+from deriva_ml.model import VisibleForeignKeys, fk_constraint
+
+vfk = VisibleForeignKeys()
+vfk.detailed([
+    fk_constraint("domain", "Image_Subject_fkey"),
+    fk_constraint("domain", "Diagnosis_Subject_fkey"),
+])
+```
+
+### TableDisplay - Row naming and ordering
+
+```python
+from deriva_ml.model import TableDisplay, TableDisplayOptions, SortKey
+
+td = TableDisplay()
+
+# Row name pattern (used in dropdowns)
+td.row_name("{{{Name}}} ({{{RID}}})")
+
+# Compact view options
+td.compact(TableDisplayOptions(
+    row_order=[
+        SortKey("Name"),                      # Ascending
+        SortKey("Created", descending=True),  # Descending
+    ],
+    page_size=50
+))
+
+# Detailed view options
+td.detailed(TableDisplayOptions(
+    collapse_toc_panel=True,
+    hide_column_headers=False
+))
+```
+
+### ColumnDisplay - Column value formatting
+
+```python
+from deriva_ml.model import ColumnDisplay, ColumnDisplayOptions, PreFormat
+
+cd = ColumnDisplay()
+
+# Number formatting
+cd.default(ColumnDisplayOptions(
+    pre_format=PreFormat(format="%.2f")
+))
+
+# Boolean formatting
+cd.default(ColumnDisplayOptions(
+    pre_format=PreFormat(bool_true_value="Yes", bool_false_value="No")
+))
+
+# Markdown pattern (make URLs clickable)
+cd.default(ColumnDisplayOptions(
+    markdown_pattern="[Link]({{{_value}}})"
+))
+
+# Apply to column
+col_handle = handle.column("URL")
+col_handle.annotations[ColumnDisplay.tag] = cd.to_dict()
+col_handle.apply()
+```
+
+## PseudoColumns - Computed and FK-traversed values
+
+### Basic pseudo-column
+```python
+PseudoColumn(source="Internal_ID", markdown_name="ID")
+```
+
+### FK traversal - Get values from related tables
+```python
+from deriva_ml.model import PseudoColumn, OutboundFK, InboundFK
+
+# Outbound: Follow FK to get value from referenced table
+# Image -> Subject (get Subject name)
+PseudoColumn(
+    source=[OutboundFK("domain", "Image_Subject_fkey"), "Name"],
+    markdown_name="Subject Name"
+)
+
+# Inbound: Aggregate values from referencing table
+# Subject <- Images (count images)
+PseudoColumn(
+    source=[InboundFK("domain", "Image_Subject_fkey"), "RID"],
+    aggregate=Aggregate.CNT,
+    markdown_name="Image Count"
+)
+
+# Multi-hop: Chain FKs
+# Image -> Subject -> Species
+PseudoColumn(
+    source=[
+        OutboundFK("domain", "Image_Subject_fkey"),
+        OutboundFK("domain", "Subject_Species_fkey"),
+        "Name"
+    ],
+    markdown_name="Species"
+)
+```
+
+### Aggregates
+```python
+from deriva_ml.model import Aggregate
+
+# Available aggregates
+Aggregate.CNT       # Count
+Aggregate.CNT_D     # Count distinct
+Aggregate.MIN       # Minimum
+Aggregate.MAX       # Maximum
+Aggregate.ARRAY     # Array of values
+Aggregate.ARRAY_D   # Array of distinct values
+```
+
+## Faceted Search Configuration
+
+```python
+from deriva_ml.model import Facet, FacetList, FacetRange, FacetUxMode, OutboundFK
+
+facets = FacetList()
+
+# Simple choice facet
+facets.add(Facet(source="Status", open=True, markdown_name="Status"))
+
+# FK-based facet
+facets.add(Facet(
+    source=[OutboundFK("domain", "Subject_Species_fkey"), "Name"],
+    markdown_name="Species",
+    open=True
+))
+
+# Range facet
+facets.add(Facet(
+    source="Age",
+    ux_mode=FacetUxMode.RANGES,
+    ranges=[
+        FacetRange(min=0, max=18),
+        FacetRange(min=18, max=65),
+        FacetRange(min=65),  # 65+
+    ],
+    markdown_name="Age Group"
+))
+
+# Check presence facet (has value / no value)
+facets.add(Facet(
+    source="Notes",
+    ux_mode=FacetUxMode.CHECK_PRESENCE,
+    markdown_name="Has Notes"
+))
+
+# Apply to visible columns
+vc = VisibleColumns()
+vc.compact(["RID", "Name"])
+vc._contexts["filter"] = facets.to_dict()
+handle.set_annotation(vc)
+```
+
+## Handlebars Templates
+
+Templates use `{{{column_name}}}` syntax for values.
+
+```python
+# Get available variables for a table
+vars = ml.get_handlebars_template_variables("Subject")
+
+# Common patterns
+"{{{Name}}}"                              # Simple value
+"{{{Name}}} ({{{RID}}})"                  # Multiple values
+"{{#if Notes}}{{{Notes}}}{{else}}N/A{{/if}}"  # Conditional
+"[{{{Filename}}}]({{{URL}}})"             # Link
+"{{formatDate RCT 'YYYY-MM-DD'}}"         # Date formatting
+
+# FK values
+"{{{$fkeys.domain.Subject_Species_fkey.values.Name}}}"
+```
+
+## Context Constants
+
+```python
+from deriva_ml.model import (
+    CONTEXT_DEFAULT,    # "*" - fallback for all
+    CONTEXT_COMPACT,    # "compact" - table/list views
+    CONTEXT_DETAILED,   # "detailed" - single record view
+    CONTEXT_ENTRY,      # "entry" - create/edit forms
+    CONTEXT_FILTER,     # "filter" - facet panel
+)
+```
+
+## Complete Example
+
+```python
+from deriva_ml import DerivaML
+from deriva_ml.model import (
+    TableHandle, Display, VisibleColumns, VisibleForeignKeys,
+    TableDisplay, TableDisplayOptions, PseudoColumn, Facet, FacetList,
+    OutboundFK, InboundFK, fk_constraint, SortKey, Aggregate, FacetUxMode
+)
+
+ml = DerivaML(hostname="example.org", catalog_id="1")
+table = ml.model.name_to_table("Subject")
+handle = TableHandle(table)
+
+# 1. Display annotation
+handle.set_annotation(Display(
+    name="Research Subjects",
+    comment="Individuals enrolled in research studies"
+))
+
+# 2. Table display
+td = TableDisplay()
+td.row_name("{{{Name}}} ({{{Subject_ID}}})")
+td.compact(TableDisplayOptions(row_order=[SortKey("Name")], page_size=25))
+handle.set_annotation(td)
+
+# 3. Visible columns with pseudo-column
+vc = VisibleColumns()
+vc.compact([
+    "RID", "Subject_ID", "Name",
+    fk_constraint("domain", "Subject_Species_fkey"),
+    "Age",
+    PseudoColumn(
+        source=[InboundFK("domain", "Sample_Subject_fkey"), "RID"],
+        aggregate=Aggregate.CNT,
+        markdown_name="Samples"
+    ),
+])
+vc.detailed([
+    "RID", "Subject_ID", "Name",
+    fk_constraint("domain", "Subject_Species_fkey"),
+    "Age", "Sex", "Enrollment_Date", "Notes"
+])
+vc.entry(["Subject_ID", "Name", "Species", "Age", "Sex", "Notes"])
+
+# 4. Faceted search
+facets = FacetList()
+facets.add(Facet(
+    source=[OutboundFK("domain", "Subject_Species_fkey"), "Name"],
+    markdown_name="Species",
+    open=True
+))
+facets.add(Facet(source="Sex", open=True))
+facets.add(Facet(source="Age", ux_mode=FacetUxMode.RANGES))
+vc._contexts["filter"] = facets.to_dict()
+handle.set_annotation(vc)
+
+# 5. Visible foreign keys
+vfk = VisibleForeignKeys()
+vfk.detailed([
+    fk_constraint("domain", "Sample_Subject_fkey"),
+    fk_constraint("domain", "Diagnosis_Subject_fkey"),
+])
+handle.set_annotation(vfk)
+
+# 6. Column annotations
+age_col = handle.column("Age")
+age_col.description = "Age in years at enrollment"
+age_col.set_display_name("Age (years)")
+
+print("Annotations configured!")
+print(f"View at: {ml.get_chaise_url('Subject')}")
+```
+
+## Tips
+
+- Use `handle.set_annotation()` with `apply=True` (default) to apply immediately
+- Builders have `to_dict()` method if you need the raw dictionary
+- Raw dictionaries still work for edge cases not covered by builders
+- Test changes in Chaise after applying
+- Use `get_handlebars_template_variables()` to see available template variables
+"""
+
+    @mcp.prompt(
         name="create-feature",
         description="Step-by-step guide to create and populate a feature for ML labeling",
     )
