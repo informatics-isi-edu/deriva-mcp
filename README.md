@@ -55,16 +55,22 @@ Create a GitHub Personal Access Token (PAT) for the GitHub MCP Server:
 
 ### Using Docker (Recommended)
 
-Docker provides the simplest setup with no Python environment management:
+Docker provides the simplest setup with no Python environment management. The image is automatically built and published to GitHub Container Registry on every commit to main.
 
 ```bash
-# Pull the image
+# Pull the latest image from GitHub Container Registry
 docker pull ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest
 
-# Or build locally
+# Run the server (for testing)
+docker run --rm -it ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest --help
+```
+
+To build locally instead:
+
+```bash
 git clone https://github.com/informatics-isi-edu/deriva-ml-mcp.git
 cd deriva-ml-mcp
-docker build -t deriva-ml-mcp .
+./scripts/docker-build.sh
 ```
 
 ### Using uv
