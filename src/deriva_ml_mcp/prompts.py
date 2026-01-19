@@ -5423,3 +5423,344 @@ User: "That's exactly what I need, use that"
 This prevents catalog pollution, promotes consistency, and helps users discover
 existing resources they may not know about.
 """
+
+    # =========================================================================
+    # Hydra-zen Configuration Update Prompt
+    # =========================================================================
+
+    @mcp.prompt(
+        name="update-hydra-configs",
+        description="ALWAYS use after creating catalog entities: Guide for updating hydra-zen config files when datasets, assets, or executions are created",
+    )
+    def update_hydra_configs_prompt() -> str:
+        """Guide for keeping hydra-zen configs in sync with catalog entities."""
+        return """# Updating Hydra-zen Configuration Files
+
+**Use this prompt PROACTIVELY**: After creating datasets, assets, workflows, or running
+executions, offer to update the user's hydra-zen configuration files to include the
+new entities. This keeps configurations in sync with the catalog.
+
+## When to Trigger This Workflow
+
+Update configs after ANY of these operations:
+
+| Operation | Config File to Update | Config Type |
+|-----------|----------------------|-------------|
+| Create dataset | `configs/datasets.py` | DatasetSpecConfig |
+| Create asset group | `configs/assets.py` | Asset RID list |
+| Run execution with outputs | `configs/assets.py` | Output asset RIDs |
+| Create workflow | `configs/workflow.py` | Workflow config |
+| Define new model variant | `configs/<model>.py` | Model builds() |
+| Create experiment preset | `configs/experiments.py` | Experiment store |
+
+---
+
+## Step 1: Identify What Was Created
+
+After a catalog operation, gather the key information:
+
+### For Datasets:
+```
+Dataset created:
+  RID: 2-ABC
+  Name: CIFAR10 Small Training Split
+  Current Version: 1.0.0
+  Types: [Training, Labeled_Training]
+  Description: Small subset of CIFAR-10 for quick experiments
+```
+
+### For Assets (execution outputs):
+```
+Execution completed:
+  Execution RID: 3-XYZ
+  Output assets:
+    - Model weights: RID 4-DEF (Model type)
+    - Predictions: RID 4-GHI (Execution_Metadata type)
+    - Metrics: RID 4-JKL (Execution_Metadata type)
+```
+
+### For Workflows:
+```
+Workflow created:
+  RID: 1-MNO
+  Name: ResNet50 Training
+  Type: Training
+  Description: Train ResNet50 on image classification tasks
+```
+
+---
+
+## Step 2: Read Current Config Files
+
+Check what config files exist and their current structure:
+
+```python
+# Common config file locations
+configs/
+  __init__.py           # Must import all config modules
+  base.py              # Base configuration (deriva connection, workflow)
+  datasets.py          # DatasetSpecConfig entries
+  assets.py            # Asset RID configurations
+  experiments.py       # Experiment presets
+  <model_name>.py      # Model-specific configs (e.g., cifar10_cnn.py)
+  workflow.py          # Workflow configurations
+```
+
+Read the relevant file to understand the existing pattern and naming conventions.
+
+---
+
+## Step 3: Generate Config Updates
+
+### Dataset Configuration (`configs/datasets.py`)
+
+**Template:**
+```python
+from hydra_zen import store
+from deriva_ml.dataset import DatasetSpecConfig
+
+# Register dataset configs
+datasets_store = store(group="datasets")
+
+# [EXISTING CONFIGS...]
+
+# NEW: {dataset_name}
+# {description}
+# Types: {types}
+datasets_store(
+    [
+        DatasetSpecConfig(
+            rid="{rid}",
+            version="{version}",
+            materialize=True,  # Download data locally
+        ),
+    ],
+    name="{config_name}",  # Use snake_case, descriptive name
+)
+```
+
+**Naming conventions for datasets:**
+- Use snake_case: `cifar10_small_training`
+- Include key characteristics: `{data_name}_{size}_{split_type}`
+- Examples: `mnist_full_training`, `cifar10_small_labeled_test`
+
+### Asset Configuration (`configs/assets.py`)
+
+**Template for asset groups:**
+```python
+from hydra_zen import store
+from deriva_ml.execution import asset_store, with_description
+
+# [EXISTING CONFIGS...]
+
+# NEW: {asset_group_name}
+# Created by execution {execution_rid}
+asset_store(
+    with_description(
+        ["{asset_rid_1}", "{asset_rid_2}"],
+        '''{description}
+
+Source: Execution {execution_rid}
+- Model: {model_config_used}
+- Dataset: {dataset_used}
+''',
+    ),
+    name="{config_name}",
+)
+```
+
+**Naming conventions for assets:**
+- Include model or purpose: `resnet50_weights_v1`
+- Include relevant context: `lr_sweep_predictions`
+- For output groups: `{experiment_name}_outputs`
+
+### Workflow Configuration (`configs/workflow.py`)
+
+**Template:**
+```python
+from hydra_zen import builds, store
+from deriva_ml.execution import Workflow
+
+workflow_store = store(group="workflow")
+
+# [EXISTING CONFIGS...]
+
+# NEW: {workflow_name}
+workflow_store(
+    builds(
+        Workflow,
+        name="{name}",
+        workflow_type="{type}",
+        description="{description}",
+    ),
+    name="{config_name}",
+)
+```
+
+### Experiment Configuration (`configs/experiments.py`)
+
+**Template:**
+```python
+from hydra_zen import make_config, store
+
+experiment_store = store(group="experiment", package="_global_")
+
+# [EXISTING CONFIGS...]
+
+# NEW: {experiment_name}
+# {description}
+experiment_store(
+    make_config(
+        defaults=[
+            "_self_",
+            {"model_config": "{model_config_name}"},
+            {"datasets": "{dataset_config_name}"},
+            {"assets": "{asset_config_name}"},  # Optional
+        ],
+        # Override specific settings if needed
+        hydra_defaults=[
+            "_self_",
+            {"override /model_config": "{model_config_name}"},
+        ],
+    ),
+    name="{experiment_name}",
+)
+```
+
+---
+
+## Step 4: Update __init__.py
+
+Ensure the config module is imported in `configs/__init__.py`:
+
+```python
+# configs/__init__.py
+from . import base
+from . import datasets
+from . import assets
+from . import experiments
+from . import workflow
+# Add new config modules here
+```
+
+---
+
+## Step 5: Verify Configuration
+
+After updating, verify the configuration is valid:
+
+```bash
+# Check for syntax errors
+uv run python -c "from configs import *"
+
+# List available configs
+uv run deriva-ml-run --info
+
+# Dry run with new config
+uv run deriva-ml-run datasets={new_config_name} dry_run=true
+```
+
+---
+
+## Example: Complete Workflow
+
+### Scenario: User creates a new labeled dataset
+
+```
+User: "Create a training dataset from images with the 'good' quality label"
+
+→ Assistant creates dataset via MCP tools
+→ Dataset created with RID: 2-XYZ, version 1.0.0
+
+Assistant response:
+"I've created the dataset. Would you like me to add it to your hydra-zen
+configuration so you can use it in experiments?
+
+I'll add this to `configs/datasets.py`:
+```python
+# Good quality training images
+# 150 images with quality='good' label
+datasets_store(
+    [DatasetSpecConfig(rid='2-XYZ', version='1.0.0', materialize=True)],
+    name='good_quality_training',
+)
+```
+
+You can then use it with:
+```bash
+uv run deriva-ml-run datasets=good_quality_training
+```
+"
+```
+
+### Scenario: User runs an experiment and wants to save outputs
+
+```
+User: "Run the cifar10_quick experiment"
+
+→ Assistant runs experiment via deriva-ml-run
+→ Execution completes with output assets:
+   - Model: 4-ABC
+   - Predictions: 4-DEF
+
+Assistant response:
+"The experiment completed successfully. I can add the output assets to your
+configuration for future use (e.g., for inference or analysis).
+
+Add to `configs/assets.py`:
+```python
+# CIFAR-10 quick experiment outputs
+# Execution: 3-XYZ, Model: cifar10_quick, Dataset: cifar10_small
+asset_store(
+    with_description(
+        ['4-ABC', '4-DEF'],
+        '''CIFAR-10 Quick Experiment Outputs
+
+Model weights and predictions from quick training run.
+- Epochs: 3
+- Learning rate: 0.001
+- Test accuracy: 72.5%
+''',
+    ),
+    name='cifar10_quick_outputs',
+)
+```
+"
+```
+
+---
+
+## Quick Reference: Config Templates
+
+Use these MCP resources to get full templates:
+
+| Config Type | Resource |
+|-------------|----------|
+| Deriva connection | `deriva-ml://config/deriva-ml-template` |
+| Dataset specs | `deriva-ml://config/dataset-spec-template` |
+| Model configs | `deriva-ml://config/model-template` |
+| Experiments | `deriva-ml://config/experiment-template` |
+| Multiruns | `deriva-ml://config/multirun-template` |
+
+---
+
+## Important Notes
+
+1. **Version pinning**: Always include the `version` parameter in DatasetSpecConfig.
+   Use `lookup_dataset()` to get the current version.
+
+2. **Materialize flag**: Set `materialize=True` for datasets that need local files,
+   `False` for metadata-only access.
+
+3. **Description quality**: Include provenance information in asset descriptions:
+   - Source execution RID
+   - Model configuration used
+   - Key hyperparameters
+   - Performance metrics if available
+
+4. **Naming consistency**: Follow existing naming patterns in the config files.
+   Check what conventions are already in use.
+
+5. **Git commit**: After updating configs, remind the user to commit changes
+   before running experiments (DerivaML tracks code provenance).
+"""
