@@ -8,10 +8,8 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -521,8 +519,8 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             )
         """
         try:
-            import papermill as pm
             import nbformat
+            import papermill as pm
             from nbconvert import MarkdownExporter
         except ImportError as e:
             return json.dumps({

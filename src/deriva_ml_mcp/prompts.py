@@ -29,18 +29,22 @@ def register_prompts(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
     @mcp.prompt(
         name="run-ml-execution",
-        description="Step-by-step guide to run an ML workflow with full provenance tracking",
+        description="Python API and MCP tools guide for ML execution lifecycle - use for custom scripts and interactive work",
     )
     def run_ml_execution_prompt() -> str:
         """Guide for running an ML execution with provenance."""
         return """# Running an ML Execution with Provenance
+
+**Use this prompt for**: Custom Python scripts, interactive work, or when NOT using
+the `deriva-ml-run` CLI. For CLI-based experiments with full git verification,
+use the `run-experiment` prompt instead.
 
 Follow these steps to run an ML workflow (training, inference, preprocessing, etc.)
 with full provenance tracking in DerivaML.
 
 ## Prerequisites
 - Connected to a DerivaML catalog (use `connect_catalog` if not connected)
-- Input dataset(s) available (use `list_datasets` to find them)
+- Input dataset(s) available (use `find_datasets` to find them)
 
 ## Python API: Using the Context Manager (Recommended)
 
@@ -104,7 +108,7 @@ create_execution(
 )
 ```
 
-Use `list_workflow_types()` to see available workflow types.
+Use the `deriva-ml://catalog/workflow-types` resource to see available workflow types.
 
 ### Step 2: Do Your ML Work
 
@@ -154,7 +158,7 @@ upload_execution_outputs()
 - Use `get_execution_info()` to check current execution status
 - Use `update_execution_status(status, message)` for progress updates
 - Use `restore_execution(rid)` to resume a previous execution
-- Use `list_executions()` to see past workflow runs
+- Use `find_executions()` or the `deriva-ml://catalog/executions` resource to see past workflow runs
 - In Python, always prefer the context manager over manual start/stop
 """
 
@@ -171,7 +175,7 @@ for use in ML training pipelines.
 
 ## Prerequisites
 - Connected to a DerivaML catalog
-- Know your dataset RID (use `list_datasets()` to find it)
+- Know your dataset RID (use `find_datasets()` to find it)
 
 ## Step 1: Explore Your Dataset
 
@@ -179,10 +183,10 @@ First, understand what data is available:
 
 ```
 # List all datasets
-list_datasets()
+find_datasets()
 
 # Get details about your dataset
-get_dataset("<dataset-rid>")
+lookup_dataset("<dataset-rid>")
 
 # See which tables have data in this dataset
 list_dataset_members("<dataset-rid>")
@@ -215,12 +219,12 @@ This returns:
 - `columns`: List like ["Image.RID", "Image.Filename", "Subject.Name", "Diagnosis.Label"]
 - `rows`: Array of dictionaries with all values
 
-### Option B: Single Table Access
+### Option B: Query Table Data
 
-Get raw data from one table:
+Query records from a specific table (not dataset-filtered):
 
 ```
-get_dataset_table("<dataset-rid>", "<table-name>", limit=1000)
+query_table("<table-name>", limit=1000)
 ```
 
 ### Option C: Full Download (Production)
@@ -269,19 +273,39 @@ denormalize_dataset("<rid>", ["Image", "Label"], version="1.2.0")
 """
 
     @mcp.prompt(
-        name="customize-table-display",
-        description="Step-by-step guide to customize how a table appears in the Chaise web UI",
+        name="customize-display",
+        description="MCP tools approach: Customize Chaise web UI display using individual annotation tools",
     )
-    def customize_table_display_prompt() -> str:
-        """Guide for customizing table annotations."""
-        return """# Customizing Table Display in Chaise
+    def customize_display_prompt() -> str:
+        """Guide for customizing catalog and table display annotations."""
+        return """# Customizing Display in Chaise (MCP Tools)
 
-Follow these steps to customize how a table appears in the Chaise web interface
-using Deriva annotations.
+**Approach**: This prompt uses individual MCP tools for annotation changes. For a
+Python-first approach with type-safe builder classes, see `use-annotation-builders`.
+
+Follow these steps to customize how your catalog and tables appear in the
+Chaise web interface using Deriva annotations.
 
 ## Prerequisites
 - Connected to a DerivaML catalog
-- Know which table you want to customize
+- Admin access to modify annotations
+
+## Quick Start: Apply Default Catalog Annotations
+
+Set up standard navigation and display settings for the entire catalog:
+
+```
+apply_catalog_annotations(
+    navbar_brand_text="My ML Project",  # Text in nav bar
+    head_title="ML Catalog"              # Browser tab title
+)
+```
+
+This automatically configures:
+- Navigation bar with organized dropdown menus
+- Display settings (underscores as spaces, system columns visible)
+- Default landing page (Dataset table)
+- Bulk upload support for asset tables
 
 ## Step 1: Check Current Annotations
 
@@ -430,11 +454,14 @@ apply_annotations()
 
     @mcp.prompt(
         name="use-annotation-builders",
-        description="Guide to using DerivaML annotation builder classes in Python for type-safe annotation creation",
+        description="Python approach: Type-safe annotation builder classes for production code",
     )
     def use_annotation_builders_prompt() -> str:
         """Guide for using Python annotation builder classes."""
-        return """# Using DerivaML Annotation Builders
+        return """# Using DerivaML Annotation Builders (Python)
+
+**Approach**: This prompt covers Python builder classes for annotations. For
+quick edits using MCP tools, see `customize-display`.
 
 DerivaML provides **annotation builder classes** that simplify annotation creation
 with IDE autocompletion, type safety, and validation. This guide shows how to use
@@ -442,8 +469,8 @@ them in Python code.
 
 ## When to Use Builders vs MCP Tools
 
-- **MCP Tools**: Quick edits, exploratory work, CI/CD scripts
-- **Python Builders**: Production code, complex annotations, type-safe development
+- **MCP Tools** (`customize-display`): Quick edits, exploratory work, CI/CD scripts
+- **Python Builders** (this prompt): Production code, complex annotations, type-safe development
 
 ## Quick Start
 
@@ -1244,7 +1271,18 @@ Key concepts:
 - **Nested Datasets**: Parent datasets can contain child datasets
 - **Versioning**: Semantic versioning (major.minor.patch) for reproducibility
 
-## Step 1: Create Dataset via Execution
+## Step 1: Check for Existing Workflow (Optional)
+
+If you've created datasets before, you may already have a workflow:
+
+```
+# Read deriva-ml://catalog/workflows resource
+```
+
+If a suitable workflow exists (e.g., "Dataset Curation" with type "Preprocessing"),
+you can reuse it. Otherwise, a new one will be created in Step 2.
+
+## Step 2: Create Dataset via Execution
 
 Datasets must be created through an execution for provenance.
 
@@ -1273,7 +1311,7 @@ exe.upload_execution_outputs()
 create_execution("Create Training Set", "Preprocessing", "Curate training data")
 
 # Create the dataset
-create_execution_dataset(
+create_dataset(
     description="Training images for model v2",
     dataset_types=["Training"]
 )
@@ -1281,7 +1319,7 @@ create_execution_dataset(
 
 Note the returned `dataset_rid` for adding members.
 
-## Step 2: Register Element Types (if needed)
+## Step 3: Register Element Types (if needed)
 
 Before adding records, their table must be registered as an element type:
 
@@ -1294,7 +1332,7 @@ add_dataset_element_type("Image")
 add_dataset_element_type("Subject")
 ```
 
-## Step 3: Add Dataset Members
+## Step 4: Add Dataset Members
 
 Add records to the dataset:
 
@@ -1309,7 +1347,7 @@ add_dataset_members("<dataset-rid>", [
 
 Adding members automatically increments the minor version.
 
-## Step 4: Upload Outputs (REQUIRED)
+## Step 5: Upload Outputs (REQUIRED)
 
 **Python API:** The context manager handles timing automatically. Call upload after exiting:
 ```python
@@ -1322,7 +1360,7 @@ exe.upload_execution_outputs()
 upload_execution_outputs()
 ```
 
-## Step 5: Manage Dataset Types
+## Step 6: Manage Dataset Types
 
 Add or remove type labels:
 
@@ -1337,7 +1375,7 @@ remove_dataset_type("<dataset-rid>", "Draft")
 list_dataset_types()
 ```
 
-## Step 6: Create Nested Datasets (Optional)
+## Step 7: Create Nested Datasets (Optional)
 
 Create training/testing splits as child datasets:
 
@@ -1371,11 +1409,11 @@ ml.add_dataset_child("<parent-rid>", testing_ds.rid)
 create_execution("Create Train/Test Split", "Preprocessing", "Split data")
 
 # Create training subset
-create_execution_dataset("Training subset (80%)", ["Training"])
+create_dataset(description="Training subset (80%)", dataset_types=["Training"])
 # Add training members...
 
 # Create testing subset
-create_execution_dataset("Testing subset (20%)", ["Testing"])
+create_dataset(description="Testing subset (20%)", dataset_types=["Testing"])
 # Add testing members...
 
 # Upload outputs
@@ -1386,7 +1424,7 @@ add_dataset_child("<parent-rid>", "<training-rid>")
 add_dataset_child("<parent-rid>", "<testing-rid>")
 ```
 
-## Step 7: Version Management
+## Step 8: Version Management
 
 ```
 # View version history
@@ -1446,19 +1484,19 @@ create_execution("Dataset Curation", "Preprocessing", "Create ML datasets")
 add_dataset_element_type("Image")
 
 # 3. Create main dataset
-create_execution_dataset("Complete Image Set", ["Complete"])
+create_dataset(description="Complete Image Set", dataset_types=["Complete"])
 # Returns dataset_rid: "1-ABC"
 
 # 4. Add all images
 add_dataset_members("1-ABC", ["2-D01", "2-D02", "2-D03", ..., "2-D100"])
 
 # 5. Create training split
-create_execution_dataset("Training Set (80%)", ["Training"])
+create_dataset(description="Training Set (80%)", dataset_types=["Training"])
 # Returns: "1-DEF"
 add_dataset_members("1-DEF", ["2-D01", "2-D02", ..., "2-D80"])
 
 # 6. Create test split
-create_execution_dataset("Test Set (20%)", ["Testing"])
+create_dataset(description="Test Set (20%)", dataset_types=["Testing"])
 # Returns: "1-GHI"
 add_dataset_members("1-GHI", ["2-D81", ..., "2-D100"])
 
@@ -1469,7 +1507,7 @@ add_dataset_child("1-ABC", "1-DEF")
 add_dataset_child("1-ABC", "1-GHI")
 
 # 8. Verify
-get_dataset("1-ABC")  # Shows children
+lookup_dataset("1-ABC")  # Shows children
 list_dataset_children("1-ABC")
 ```
 
@@ -1477,7 +1515,7 @@ list_dataset_children("1-ABC")
 
 - Always create datasets within an execution for provenance
 - **Always provide descriptive `description` values** - explains what the dataset contains and its purpose
-- Use `list_datasets()` to find existing datasets
+- Use `find_datasets()` to find existing datasets
 - Use semantic versioning: patch=metadata, minor=elements, major=breaking
 - Nested datasets share elements - good for train/test splits
 - Pin versions for reproducible training
@@ -1501,15 +1539,16 @@ Returns executions with their role (Input/Output).
 """
 
     @mcp.prompt(
-        name="configure-ml-experiment",
-        description="Step-by-step guide to configure ML experiments using hydra-zen with DerivaML",
+        name="configure-experiment",
+        description="Comprehensive guide to configure ML experiments, multiruns, and sweeps with hydra-zen and DerivaML",
     )
-    def configure_ml_experiment_prompt() -> str:
-        """Guide for configuring ML experiments with hydra-zen."""
+    def configure_experiment_prompt() -> str:
+        """Guide for configuring ML experiments, presets, and sweeps with hydra-zen."""
         return """# Configuring ML Experiments with Hydra-Zen and DerivaML
 
-This guide explains how to set up reproducible ML experiments using hydra-zen
-configuration management with DerivaML for data and provenance tracking.
+This comprehensive guide explains how to set up reproducible ML experiments,
+experiment presets, and multirun sweeps using hydra-zen configuration management
+with DerivaML for data and provenance tracking.
 
 ## Overview
 
@@ -1658,8 +1697,8 @@ asset_store(
 ```
 
 **Getting descriptions from the catalog:**
-Use `lookup_asset("<rid>")` to see the asset's filename, description, types,
-and which execution created it. This helps write accurate config descriptions.
+Read the `deriva-ml://asset/<rid>` resource to see the asset's filename, description,
+types, and which execution created it. This helps write accurate config descriptions.
 
 ## Step 4: Configure Workflow
 
@@ -1911,7 +1950,7 @@ When adding a new configuration, use MCP tools to find good starting description
 lookup_dataset("<dataset-rid>")
 
 # For assets - includes filename, description, types, source execution
-lookup_asset("<asset-rid>")
+# Read deriva-ml://asset/<asset-rid> resource
 
 # Then use these details in your configuration
 ```
@@ -1922,40 +1961,11 @@ If a dataset or asset lacks a good description in the catalog, consider adding o
 update_record("deriva-ml", "Dataset", {"RID": "<rid>", "Description": "..."})
 ```
 
-## Best Practices
+---
 
-1. **Pin dataset versions** for reproducibility
-2. **Use meaningful names** for configurations
-3. **Document workflows** with markdown descriptions
-4. **Create experiment presets** for common configurations
-5. **Use `dry_run=True`** to test config before long runs
-6. **Register all configs** with hydra-zen store for discoverability
-7. **Always add descriptions** to configurations using `with_description()` or `zen_meta`
+# Part 2: Experiments and Multiruns
 
-## Tips
-
-- Use `list_workflow_types()` to see available workflow types
-- Use `list_datasets()` to find dataset RIDs
-- Use `lookup_dataset()` / `lookup_asset()` to get catalog descriptions
-- Group related configs (e.g., all CIFAR-10 configs in one file)
-- Use `zen_partial=True` for model configs that need runtime context
-- Store experiments in `experiments.py` for easy discovery
-"""
-
-    @mcp.prompt(
-        name="configure-experiments-and-multiruns",
-        description="Step-by-step guide to configure experiment presets and multirun sweeps",
-    )
-    def configure_experiments_multiruns_prompt() -> str:
-        """Guide for configuring experiments and multiruns."""
-        return """# Configuring Experiments and Multiruns
-
-This guide explains how to create experiment presets and multirun sweep
-configurations for reproducible ML workflows.
-
-## Concepts
-
-### Experiments vs Multiruns
+## Experiments vs Multiruns
 
 | Feature | Experiments | Multiruns |
 |---------|-------------|-----------|
@@ -2220,41 +2230,59 @@ multirun_config(
 )
 ```
 
-## Best Practices
+---
 
-1. **Name experiments descriptively**: `cifar10_quick` not `exp1`
-2. **Document with descriptions**: Include objective and expected outcomes
-3. **Pin dataset versions**: Use explicit versions in DatasetSpecConfig
-4. **Build multiruns on experiments**: Reuse experiment settings
-5. **Use markdown in descriptions**: Tables and formatting render in Chaise
-6. **Keep experiments atomic**: Each experiment = one coherent configuration
-7. **Use --info to discover**: `uv run deriva-ml-run --info` shows all options
+# Best Practices
 
-## Troubleshooting
+1. **Pin dataset versions** for reproducibility
+2. **Use meaningful names** for configurations (e.g., `cifar10_quick` not `exp1`)
+3. **Document workflows** with markdown descriptions
+4. **Create experiment presets** for common configurations
+5. **Build multiruns on experiments**: Reuse experiment settings
+6. **Use `dry_run=True`** to test config before long runs
+7. **Register all configs** with hydra-zen store for discoverability
+8. **Always add descriptions** to configurations using `with_description()` or `zen_meta`
+9. **Use markdown in descriptions**: Tables and formatting render in Chaise
+10. **Use --info to discover**: `uv run deriva-ml-run --info` shows all options
 
-### "Config not found" Error
+# Troubleshooting
+
+## "Config not found" Error
 - Ensure config module is imported in `configs/__init__.py`
 - Check spelling of config name
 - Use `--info` to see available configs
 
-### Experiment Not Overriding Correctly
+## Experiment Not Overriding Correctly
 - Verify `package="_global_"` in experiment_store
 - Check `hydra_defaults` uses `"override /group"` syntax
 - Ensure `bases=(BaseConfig,)` is set
 
-### Multirun Creates Wrong Number of Runs
+## Multirun Creates Wrong Number of Runs
 - Count comma-separated values: `a,b,c` = 3 runs
 - Grid search multiplies: `a,b` x `c,d` = 4 runs
 - Check no spaces after commas in overrides
+
+# Tips
+
+- Use the workflow-types resource to see available workflow types
+- Use `find_datasets()` to find dataset RIDs
+- Read `deriva-ml://dataset/{rid}` and `deriva-ml://asset/{rid}` resources for descriptions
+- Group related configs (e.g., all CIFAR-10 configs in one file)
+- Use `zen_partial=True` for model configs that need runtime context
+- Store experiments in `experiments.py` for easy discovery
 """
 
     @mcp.prompt(
         name="add-config-descriptions",
-        description="Guide for adding descriptions to hydra-zen configurations (assets, datasets, models)",
+        description="Hydra-zen specific: How to add descriptions to Python config files using with_description() and zen_meta",
     )
     def add_config_descriptions_prompt() -> str:
         """Guide for adding descriptions to configuration files."""
-        return """# Adding Descriptions to Configurations
+        return """# Adding Descriptions to Hydra-zen Configurations
+
+**Focus**: This prompt covers the **Python syntax** for adding descriptions to
+hydra-zen configuration files. For guidance on **what to write** in descriptions
+and how to generate them from context, see the `generate-descriptions` prompt.
 
 Configuration descriptions help users and AI assistants understand and discover
 the right configurations for their tasks.
@@ -2310,7 +2338,7 @@ Returns: description, dataset_types, version, children/parents
 
 ### For Assets
 ```
-lookup_asset("<asset-rid>")
+# Read deriva-ml://asset/<asset-rid> resource
 ```
 Returns: filename, description, asset_types, execution that created it
 
@@ -2490,200 +2518,13 @@ update_record(
 ## Workflow: Adding Descriptions to Existing Configs
 
 1. **Inventory**: List all configs that need descriptions
-2. **Research**: Use `lookup_dataset()` / `lookup_asset()` to get catalog info
+2. **Research**: Read `deriva-ml://dataset/{rid}` and `deriva-ml://asset/{rid}` resources
 3. **Write**: Create clear, informative descriptions
 4. **Import**: Add `from deriva_ml.execution import with_description`
 5. **Update**: Wrap list configs with `with_description()`
 6. **Model configs**: Add `zen_meta={"description": "..."}` to store calls
 7. **Test**: Run `--info` to verify configs still load
 8. **Commit**: Track description changes in version control
-"""
-
-    @mcp.prompt(
-        name="setup-catalog-display",
-        description="Step-by-step guide to configure Chaise web UI navigation and display settings",
-    )
-    def setup_catalog_display_prompt() -> str:
-        """Guide for setting up catalog-level display configuration."""
-        return """# Setting Up Catalog Display in Chaise
-
-Follow these steps to configure how your catalog appears in the Chaise web interface,
-including navigation menus, branding, and default behaviors.
-
-## Prerequisites
-- Connected to a DerivaML catalog
-- Admin access to modify catalog annotations
-
-## Step 1: Apply Default Catalog Annotations
-
-Set up the standard navigation bar and display settings:
-
-```
-apply_catalog_annotations(
-    navbar_brand_text="My ML Project",  # Text in nav bar
-    head_title="ML Catalog"              # Browser tab title
-)
-```
-
-This automatically configures:
-- Navigation bar with organized dropdown menus
-- User info, Deriva-ML tables, domain tables, vocabularies
-- Default landing page (Dataset table)
-- Display settings (underscores as spaces, system columns visible)
-- Bulk upload support for asset tables
-
-## Step 2: Customize Table Display Names
-
-Set friendly names for your tables:
-
-```
-# Domain tables
-set_display_annotation("Image", {"name": "Images"})
-set_display_annotation("Subject", {"name": "Subjects"})
-set_display_annotation("Diagnosis", {"name": "Diagnoses"})
-
-# Commit changes
-apply_annotations()
-```
-
-## Step 3: Configure Key Tables
-
-For your most important tables, set up complete display:
-
-### Example: Image Table
-
-```
-# 1. Set display name
-set_display_annotation("Image", {"name": "Images"})
-
-# 2. Configure compact view (listings)
-set_visible_columns("Image", {
-    "compact": ["RID", "Filename", "Subject", "Created"],
-    "detailed": ["RID", "Filename", "URL", "Subject", "Description", "Created", "Modified"]
-})
-
-# 3. Set row name for listings
-set_table_display("Image", {
-    "row_name": {
-        "row_markdown_pattern": "{{{Filename}}}"
-    }
-})
-
-# 4. Apply changes
-apply_annotations()
-```
-
-## Step 4: Configure Column Display
-
-Customize how individual columns appear:
-
-```
-# Set column label
-set_display_annotation("Image", {"name": "File Name"}, column_name="Filename")
-
-# Set column display pattern (e.g., format as link)
-set_column_display("Image", "URL", {
-    "*": {
-        "markdown_pattern": "[Download]({{{URL}}})"
-    }
-})
-
-apply_annotations()
-```
-
-## Step 5: Configure Related Tables
-
-Control which foreign key relationships appear:
-
-```
-# List available foreign keys
-list_foreign_keys("Image")
-
-# Add to detailed view
-add_visible_foreign_key("Image", "detailed", ["domain", "Image_Subject_fkey"])
-
-apply_annotations()
-```
-
-## Step 6: Test Your Configuration
-
-Get the URL to view your changes:
-
-```
-get_chaise_url("Image")
-```
-
-Open this URL in a browser to verify the display.
-
-## Common Patterns
-
-### Hide System Columns in Entry Forms
-
-```
-set_visible_columns("Image", {
-    "entry": ["Filename", "Description", "Subject"],  # No RID, Created, etc.
-    "entry/create": ["Filename", "Description", "Subject"]
-})
-```
-
-### Show Thumbnails in Listings
-
-```
-set_visible_columns("Image", {
-    "compact": [
-        {"sourcekey": "thumbnail_url", "markdown_pattern": "![thumb]({{{URL}}}?w=50)"},
-        "Filename",
-        "Subject"
-    ]
-})
-```
-
-### Configure Sort Order
-
-```
-set_table_display("Image", {
-    "row_order": [{"column": "Created", "descending": true}]
-})
-```
-
-## Complete Setup Example
-
-```
-# 1. Apply catalog-level settings
-apply_catalog_annotations("Medical Imaging ML", "Med-ML Catalog")
-
-# 2. Configure Image table
-set_display_annotation("Image", {"name": "Medical Images"})
-set_visible_columns("Image", {
-    "compact": ["RID", "Filename", "Subject", "Diagnosis"],
-    "detailed": ["*"],
-    "entry": ["Filename", "Description", "Subject"]
-})
-set_table_display("Image", {
-    "row_name": {"row_markdown_pattern": "{{{Filename}}}"},
-    "row_order": [{"column": "RID", "descending": true}]
-})
-
-# 3. Configure Subject table
-set_display_annotation("Subject", {"name": "Patients"})
-set_visible_columns("Subject", {
-    "compact": ["RID", "Name", "Age", "Sex"]
-})
-
-# 4. Apply all changes
-apply_annotations()
-
-# 5. Verify
-get_chaise_url("Image")
-```
-
-## Tips
-
-- Run `apply_catalog_annotations()` first to set up navigation
-- Use `get_table_annotations()` to see current configuration
-- Use `get_chaise_url()` to quickly view changes in browser
-- Context `*` provides defaults; specific contexts override
-- Always call `apply_annotations()` after making changes
 """
 
     @mcp.prompt(
@@ -2932,20 +2773,114 @@ Before running an ML workflow:
 
     @mcp.prompt(
         name="run-experiment",
-        description="Step-by-step checklist for running an ML experiment with DerivaML",
+        description="CLI-based experiment checklist with git verification - use for deriva-ml-run CLI workflows",
     )
     def run_experiment_prompt() -> str:
-        """Guide for running an ML experiment."""
+        """Guide for running an ML experiment with full provenance."""
         return """# Running an ML Experiment with DerivaML
 
-Follow this checklist to run a reproducible ML experiment with full provenance tracking.
+**Use this prompt for**: Running experiments via the `deriva-ml-run` CLI with full
+reproducibility (git commit tracking, version tags, configuration files). For custom
+Python scripts or interactive MCP tool usage, use the `run-ml-execution` prompt instead.
+
+Follow this comprehensive checklist to run a reproducible ML experiment with
+full provenance tracking.
+
+**IMPORTANT**: For reproducibility, every execution must be traceable to:
+1. A specific **git commit** (exact code version)
+2. A **semantic version tag** (human-readable version)
+3. A **clean working tree** (no uncommitted changes)
+
+Without this, you cannot reproduce results or know what code produced them.
+
+---
 
 ## Prerequisites
 - Repository set up following the DerivaML model template
 - Connected to the target DerivaML catalog
 - Model code implemented and tested
 
-## Step 1: Verify Repository Structure
+---
+
+## Part 1: Pre-Execution Checklist (REQUIRED)
+
+### Step 1.1: Check Git Status
+
+Run this command and report the results to the user:
+
+```bash
+git status --porcelain
+```
+
+**If output is EMPTY (clean):**
+✅ Working tree is clean - proceed to Step 1.2
+
+**If output shows changes:**
+⚠️ **STOP** - There are uncommitted changes!
+
+Report to the user which files are modified/untracked.
+Ask: "There are uncommitted changes. Should I commit these before proceeding?"
+
+If user confirms:
+```bash
+git add .
+git commit -m "<descriptive message>"
+```
+
+### Step 1.2: Check Current Version
+
+```bash
+git describe --tags --always 2>/dev/null || echo "No tags found"
+```
+
+**If version ends with `-g<hash>` (e.g., `v1.2.3-5-gabcd123`):**
+⚠️ There are commits since the last version tag.
+
+Ask the user: "The current version is `<version>`. Should I bump the version?"
+
+If user confirms:
+```bash
+uv run bump-my-version bump patch   # For bug fixes
+uv run bump-my-version bump minor   # For new features
+uv run bump-my-version bump major   # For breaking changes
+
+git push && git push --tags
+```
+
+**If version is a clean tag (e.g., `v1.2.3`):**
+✅ Version is current - proceed
+
+### Step 1.3: Verify Lock File
+
+```bash
+uv lock
+git status --porcelain uv.lock
+```
+
+If `uv.lock` changed:
+```bash
+git add uv.lock
+git commit -m "Update uv.lock"
+```
+
+### Step 1.4: User Confirmation
+
+**You MUST ask the user explicitly:**
+
+> I have verified the repository state:
+> - **Commit**: `<commit hash and message>`
+> - **Version**: `<version tag>`
+> - **Status**: Clean working tree
+>
+> **Is it OK to proceed with the ML execution?**
+
+**Wait for explicit user confirmation** before proceeding.
+
+---
+
+## Part 2: Verify Configuration
+
+### Step 2.1: Verify Repository Structure
 
 Ensure your repository follows the recommended configuration structure:
 
@@ -2973,14 +2908,14 @@ script is needed - just configure your models in `src/configs/`.
 - [ ] `configs/base.py` creates and registers `DerivaModelConfig`
 - [ ] Model implementation exists in `models/`
 
-## Step 2: Configure Datasets
+### Step 2.2: Configure Datasets
 
 Edit `configs/datasets.py` to specify the datasets for your experiment.
 
 **Find dataset RIDs in the catalog:**
 ```
-list_datasets()
-get_dataset("<rid>")
+find_datasets()
+lookup_dataset("<rid>")
 get_dataset_version_history("<rid>")
 ```
 
@@ -3003,7 +2938,7 @@ datasets_store(training_data, name="training")
 - [ ] Versions are pinned for production runs
 - [ ] Multiple datasets listed if needed
 
-## Step 3: Configure Input Assets
+### Step 2.3: Configure Input Assets
 
 Edit `configs/assets.py` to specify pre-trained weights or other input files.
 
@@ -3032,7 +2967,7 @@ asset_store([], name="no_assets")
 - [ ] All required input files are specified
 - [ ] Asset table names match catalog schema
 
-## Step 4: Configure Model Parameters
+### Step 2.4: Configure Model Parameters
 
 Edit `configs/<model_name>.py` to define model hyperparameters.
 
@@ -3066,50 +3001,14 @@ model_store(BaseConfig, name="full", epochs=50, hidden_size=256)
 - [ ] Production configuration is defined
 - [ ] `zen_partial=True` set for configs needing runtime context
 
-## Step 5: Commit Changes and Bump Version
+---
 
-**CRITICAL: Commit all changes before running!** DerivaML requires a clean git state
-for provenance tracking. The execution will warn if there are uncommitted changes.
-
-**RECOMMENDED: Bump version for significant experiments.** While not required, incrementing
-the version before important experiments makes it easier to identify and reproduce results
-later. Consider bumping the version when running experiments you may want to reference.
-
-```bash
-# Check for uncommitted changes
-git status
-
-# Stage and commit all changes (REQUIRED)
-git add .
-git commit -m "Configure experiment: <description>"
-
-# Bump version (RECOMMENDED for significant experiments)
-uv run bump-version patch   # Bug fixes, small tweaks
-uv run bump-version minor   # New features, config changes
-uv run bump-version major   # Breaking changes
-
-# Push changes and tags
-git push && git push --tags
-
-# Verify version
-uv run python -m setuptools_scm
-```
-
-**Check:**
-- [ ] All code changes committed (required)
-- [ ] All config changes committed (required)
-- [ ] `uv.lock` is current and committed (required)
-- [ ] Version bumped appropriately (recommended)
-- [ ] Tags pushed to remote (if version bumped)
-
-## Step 6: Run the Experiment
-
-### Using deriva-ml-run CLI
+## Part 3: Run the Experiment
 
 The `deriva-ml-run` CLI is provided by deriva-ml. It automatically loads configs from
 `src/configs/` and supports both `--host`/`--catalog` arguments and Hydra config defaults.
 
-### Test First (Dry Run)
+### Step 3.1: Test First (Dry Run)
 ```bash
 # Test configuration without creating records
 uv run deriva-ml-run dry_run=True
@@ -3121,7 +3020,7 @@ uv run deriva-ml-run +experiment=quick_test dry_run=True
 uv run deriva-ml-run --info
 ```
 
-### Production Run
+### Step 3.2: Production Run
 ```bash
 # Run with defaults (uses host/catalog from Hydra config)
 uv run deriva-ml-run
@@ -3164,13 +3063,17 @@ uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended
 | `assets=<name>` | Select asset config |
 | `dry_run=True` | Test without records |
 
-## Step 7: Verify Results
+---
+
+## Part 4: Verify Results
+
+### Step 4.1: Check Execution
 
 After the run completes:
 
 ```
 # List recent executions
-list_executions(limit=5)
+find_executions(limit=5)
 
 # Check execution details
 get_execution_info()
@@ -3185,31 +3088,55 @@ get_chaise_url("Execution")
 - [ ] Metrics/metadata captured
 - [ ] Provenance links correct (datasets, code version)
 
-## Complete Checklist
+### Step 4.2: After Execution
 
-Before running:
+Remind the user:
+- The execution is linked to version `<version>`
+- Results can be reproduced by checking out this version
+- Consider tagging successful experiments
+
+---
+
+## Complete Checklist Summary
+
+**Before running (Part 1):**
+- [ ] Git working tree is clean
+- [ ] Version is bumped (if significant experiment)
+- [ ] `uv.lock` is committed
+- [ ] User confirmation received
+
+**Configuration (Part 2):**
 - [ ] Repository structure matches template
 - [ ] Dataset RIDs and versions configured
 - [ ] Asset RIDs configured (if needed)
 - [ ] Model parameters configured
-- [ ] All changes committed to Git
-- [ ] Version bumped with `bump-version`
-- [ ] Dry run successful
 
-After running:
+**After running (Part 4):**
 - [ ] Execution record exists in catalog
 - [ ] Outputs uploaded successfully
 - [ ] Results reproducible with same config
 
+---
+
+## Quick Reference
+
+| Check | Command | Expected |
+|-------|---------|----------|
+| Clean tree | `git status --porcelain` | Empty output |
+| Current version | `git describe --tags` | Clean tag (no `-g<hash>`) |
+| Lock file | `git status uv.lock` | Not modified |
+
+---
+
 ## Troubleshooting
 
 ### "Dataset not found"
-- Verify RID exists: `get_dataset("<rid>")`
+- Verify RID exists: `lookup_dataset("<rid>")`
 - Check you're connected to correct catalog
 - Ensure version exists: `get_dataset_version_history("<rid>")`
 
 ### "Asset not found"
-- Verify RID exists: `resolve_rid("<rid>")`
+- Verify RID exists: read the asset resource
 - Check asset table name matches catalog
 
 ### "Execution failed"
@@ -3710,297 +3637,6 @@ run_notebook(
 """
 
     @mcp.prompt(
-        name="create-new-dataset-workflow",
-        description="Complete workflow for creating a new dataset with workflow, execution, and proper cleanup",
-    )
-    def create_new_dataset_workflow_prompt() -> str:
-        """Complete workflow for creating datasets from scratch."""
-        return """# Complete Dataset Creation Workflow
-
-This guide walks through the entire process of creating a new dataset in DerivaML,
-including creating a workflow, execution context, datasets, and proper cleanup.
-
-## Prerequisites
-- Connected to a DerivaML catalog (`connect_catalog`)
-- Data exists in domain tables (e.g., Images, Subjects)
-- Know which records you want to include in the dataset
-
-## Overview
-
-Creating a dataset requires these components:
-1. **Workflow**: Defines what type of operation this is (reusable)
-2. **Execution**: A single run of the workflow (tracks this specific operation)
-3. **Dataset**: The collection of data being created
-4. **Upload**: Finalizes and persists everything
-
-## Step 1: Check for Existing Workflow (Optional)
-
-If you've created datasets before, you may already have a workflow:
-
-```
-find_workflows()
-```
-
-If a suitable workflow exists (e.g., "Dataset Curation" with type "Preprocessing"),
-you can reuse it. Otherwise, create a new one in Step 2.
-
-## Step 2: Create the Execution
-
-The execution automatically creates or references a workflow:
-
-```
-create_execution(
-    workflow_name="Dataset Curation",           # Descriptive name
-    workflow_type="Preprocessing",              # From Workflow_Type vocabulary
-    description="Create curated dataset for training"
-)
-```
-
-**Available workflow types** (use `list_workflow_types()` to see all):
-- `Preprocessing` - Data preparation and curation
-- `Training` - Model training runs
-- `Inference` - Running predictions
-- `Annotation` - Adding labels/features
-
-## Step 3: Ensure Element Types are Registered
-
-Before adding records, their tables must be registered as dataset element types:
-
-```
-# Check what's already registered
-list_dataset_element_types()
-
-# Register tables if needed
-add_dataset_element_type("Image")
-add_dataset_element_type("Subject")
-```
-
-## Step 4: Create the Dataset
-
-Create a new dataset within the execution context:
-
-```
-create_execution_dataset(
-    description="Training images - batch 1",
-    dataset_types=["Training"]                  # From Dataset_Type vocabulary
-)
-```
-
-**Returns**: The new dataset's RID (e.g., "1-ABC"). Save this for the next step.
-
-**Available dataset types** (use `list_vocabulary_terms("Dataset_Type")` to see all):
-- `Training` - For model training
-- `Testing` - For model evaluation
-- `Validation` - For hyperparameter tuning
-- `Complete` - Full dataset (often parent of train/test splits)
-
-## Step 5: Add Members to the Dataset
-
-Add records by their RIDs:
-
-```
-# Find records to add
-query_table("Image", limit=100)
-
-# Add them to the dataset
-add_dataset_members("<dataset-rid>", [
-    "<image-rid-1>",
-    "<image-rid-2>",
-    "<image-rid-3>"
-])
-```
-
-Each call to `add_dataset_members` automatically increments the dataset's minor version.
-
-## Step 6: Upload and Finalize (REQUIRED)
-
-**Critical**: Nothing is persisted until you upload!
-
-```
-upload_execution_outputs()
-```
-
-This:
-- Finalizes the execution record
-- Persists all dataset relationships
-- Records provenance (who created what, when)
-
-## Step 7: Verify the Dataset
-
-Confirm everything was created correctly:
-
-```
-# Check the dataset exists
-get_dataset("<dataset-rid>")
-
-# View members
-list_dataset_members("<dataset-rid>")
-
-# Check version
-get_dataset_version_history("<dataset-rid>")
-
-# Get URL to view in browser
-get_chaise_url("<dataset-rid>")
-```
-
-## Complete Example: Single Dataset
-
-```
-# 1. Create execution (creates/references workflow automatically)
-create_execution(
-    "Image Dataset Creation",
-    "Preprocessing",
-    "Create initial training dataset from uploaded images"
-)
-
-# 2. Register element type if needed
-add_dataset_element_type("Image")
-
-# 3. Create the dataset
-create_execution_dataset(
-    "Training Images v1",
-    ["Training"]
-)
-# Returns: "1-ABC"
-
-# 4. Query for images to add
-query_table("Image", columns=["RID", "Filename"], limit=50)
-# Returns list of images with RIDs
-
-# 5. Add images to dataset
-add_dataset_members("1-ABC", [
-    "2-D01", "2-D02", "2-D03", "2-D04", "2-D05"
-])
-
-# 6. Upload to finalize
-upload_execution_outputs()
-
-# 7. Verify
-get_dataset("1-ABC")
-list_dataset_members("1-ABC")
-```
-
-## Complete Example: Train/Test Split
-
-```
-# 1. Create execution
-create_execution(
-    "Train/Test Split",
-    "Preprocessing",
-    "Split images into 80/20 train/test sets"
-)
-
-# 2. Ensure element types registered
-add_dataset_element_type("Image")
-
-# 3. Create parent dataset
-create_execution_dataset("Complete Image Set", ["Complete"])
-# Returns: "1-PARENT"
-
-# 4. Add all images to parent
-add_dataset_members("1-PARENT", [
-    "2-D01", "2-D02", "2-D03", "2-D04", "2-D05",
-    "2-D06", "2-D07", "2-D08", "2-D09", "2-D10"
-])
-
-# 5. Create training dataset
-create_execution_dataset("Training Set (80%)", ["Training"])
-# Returns: "1-TRAIN"
-add_dataset_members("1-TRAIN", [
-    "2-D01", "2-D02", "2-D03", "2-D04",
-    "2-D05", "2-D06", "2-D07", "2-D08"
-])
-
-# 6. Create test dataset
-create_execution_dataset("Test Set (20%)", ["Testing"])
-# Returns: "1-TEST"
-add_dataset_members("1-TEST", ["2-D09", "2-D10"])
-
-# 7. Upload to finalize
-upload_execution_outputs()
-
-# 8. Link children to parent
-add_dataset_child("1-PARENT", "1-TRAIN")
-add_dataset_child("1-PARENT", "1-TEST")
-
-# 9. Verify
-get_dataset("1-PARENT")  # Shows children
-list_dataset_children("1-PARENT")
-```
-
-## Python API Equivalent
-
-For reference, the same workflow in Python:
-
-```python
-from deriva_ml import DerivaML
-from deriva_ml.execution import ExecutionConfiguration, Workflow
-
-ml = DerivaML(hostname="example.org", catalog_id="1")
-
-# Create execution with context manager
-config = ExecutionConfiguration(
-    workflow=Workflow(
-        name="Dataset Curation",
-        workflow_type="Preprocessing",
-        description="Create curated dataset"
-    )
-)
-
-with ml.create_execution(config) as exe:
-    # Ensure element type registered
-    ml.add_dataset_element_type("Image")
-
-    # Create dataset
-    dataset = exe.create_execution_dataset(
-        description="Training Images v1",
-        dataset_types=["Training"]
-    )
-
-    # Add members
-    ml.add_dataset_members(dataset.rid, ["2-D01", "2-D02", "2-D03"])
-
-# Upload AFTER context manager exits
-exe.upload_execution_outputs()
-
-# Verify
-print(ml.get_dataset(dataset.rid))
-```
-
-## Common Issues
-
-### "Element type not registered"
-```
-add_dataset_element_type("<table-name>")
-```
-
-### "Dataset not found after creation"
-Did you call `upload_execution_outputs()`? Nothing persists without it.
-
-### "Workflow type not found"
-```
-list_workflow_types()  # See available types
-add_workflow_type("MyType", "Description")  # Add new type if needed
-```
-
-### "Dataset type not found"
-```
-list_vocabulary_terms("Dataset_Type")  # See available types
-add_term("Dataset_Type", "MyType", "Description")  # Add new type
-```
-
-## Summary Checklist
-
-- [ ] Connected to catalog
-- [ ] Created execution with workflow name and type
-- [ ] Registered element types for tables being used
-- [ ] Created dataset with description and types
-- [ ] Added members (records) to dataset
-- [ ] Called `upload_execution_outputs()` to finalize
-- [ ] Verified dataset exists and has correct members
-"""
-
-    @mcp.prompt(
         name="query-catalog-data",
         description="Step-by-step guide for querying and exploring data in a Deriva catalog",
     )
@@ -4109,17 +3745,18 @@ Returns flat data with prefixed column names:
 - `Subject.Name`, `Subject.Age`
 - `Diagnosis.Label`
 
-### Query Dataset Tables
+### Query Table Data
 ```
-get_dataset_table("<dataset-rid>", "Image", limit=500)
+query_table("Image", limit=500)
 ```
 
 ## Step 6: Vocabulary Lookups
 
 ### List Vocabulary Terms
 ```
-list_vocabulary_terms("Dataset_Type")
-list_vocabulary_terms("Workflow_Type")
+# Read vocabulary resources
+deriva-ml://vocabulary/Dataset_Type
+deriva-ml://vocabulary/Workflow_Type
 ```
 
 ### Find a Term
@@ -4189,7 +3826,6 @@ get_dataset_version_history("<dataset-rid>")
 
 # Query specific version
 list_dataset_members("<dataset-rid>", version="1.0.0")
-get_dataset_table("<dataset-rid>", "Image", version="1.0.0")
 denormalize_dataset("<dataset-rid>", ["Image"], version="1.0.0")
 ```
 
@@ -4212,10 +3848,10 @@ get_chaise_url("1-ABC")
 connect_catalog("example.org", "1")
 
 # 2. List available datasets
-list_datasets()
+find_datasets()
 
 # 3. Get dataset details
-get_dataset("1-ABC")
+lookup_dataset("1-ABC")
 
 # 4. See what tables have data
 list_dataset_members("1-ABC")
@@ -4266,515 +3902,6 @@ get_table_schema("<table>")  # See column names
 """
 
     @mcp.prompt(
-        name="customize-chaise-ui",
-        description="Guide for customizing the Chaise web interface using annotations",
-    )
-    def customize_chaise_ui_prompt() -> str:
-        """Guide for customizing Chaise UI with annotations."""
-        return """# Customizing the Chaise Web Interface
-
-This guide covers how to customize the Chaise web UI for your DerivaML catalog
-using annotations. Annotations control display names, column visibility,
-sorting, and more.
-
-## Prerequisites
-- Connected to a DerivaML catalog
-- Understanding of your schema structure (`list_tables()`, `get_table_schema()`)
-
-## Quick Start: Apply Default Annotations
-
-DerivaML provides a convenience method for common customizations:
-
-```
-apply_catalog_annotations(
-    navbar_brand_text="My ML Project",
-    head_title="ML Catalog"
-)
-```
-
-This configures:
-- Navigation bar with organized menus
-- Display settings (underscores as spaces)
-- Default landing page
-- Bulk upload configuration
-
-## Step 1: Understand Display Contexts
-
-Annotations are context-sensitive. Common contexts:
-
-| Context | Where Used | Example |
-|---------|-----------|---------|
-| `compact` | Table listings | Search results |
-| `detailed` | Record page | Single record view |
-| `entry` | Forms | Create/edit forms |
-| `filter` | Facet panel | Search filters |
-| `*` | Default | Applies everywhere |
-
-## Step 2: Customize Display Names
-
-Make table and column names more readable:
-
-### Table Display Names
-Set via the `display` annotation on the table:
-```json
-{
-  "tag:misd.isi.edu,2015:display": {
-    "name": "Medical Images",
-    "comment": "Collection of medical imaging data"
-  }
-}
-```
-
-### Column Display Names
-Set via the `display` annotation on the column:
-```json
-{
-  "tag:misd.isi.edu,2015:display": {
-    "name": "File Name",
-    "comment": "Original filename of the uploaded image"
-  }
-}
-```
-
-### Automatic Name Styling
-Apply to catalog or schema for all nested elements:
-```json
-{
-  "tag:misd.isi.edu,2015:display": {
-    "name_style": {
-      "underline_space": true,
-      "title_case": true
-    }
-  }
-}
-```
-This converts `image_file_name` to "Image File Name".
-
-## Step 3: Configure Visible Columns
-
-Control which columns appear in different contexts:
-
-```json
-{
-  "tag:isrd.isi.edu,2016:visible-columns": {
-    "compact": ["RID", "Name", "Status", "RCT"],
-    "detailed": ["RID", "Name", "Description", "Status", "Subject", "RCT", "RMT"],
-    "entry": ["Name", "Description", "Status", "Subject"]
-  }
-}
-```
-
-**Tips:**
-- `compact`: Keep it short (4-6 columns) for listings
-- `detailed`: Show all relevant columns
-- `entry`: Only editable columns (exclude system columns)
-
-## Step 4: Configure Facets (Search Filters)
-
-Add facets to the filter panel:
-
-```json
-{
-  "tag:isrd.isi.edu,2016:visible-columns": {
-    "filter": {
-      "and": [
-        {"source": "Status", "open": true},
-        {"source": "Subject", "entity": true},
-        {"source": "RCT", "ux_mode": "ranges"}
-      ]
-    }
-  }
-}
-```
-
-**Facet options:**
-- `open`: Expanded by default
-- `entity`: Show as linked entity (for foreign keys)
-- `ux_mode`: `choices` (checklist), `ranges` (slider), `check_presence`
-- `choices`: Pre-selected values
-- `markdown_name`: Custom facet title
-
-## Step 5: Configure Related Tables
-
-Control which related tables appear on the record page:
-
-```json
-{
-  "tag:isrd.isi.edu,2016:visible-foreign-keys": {
-    "detailed": [
-      ["schema", "Image_Subject_fkey"],
-      ["schema", "Diagnosis_Image_fkey"]
-    ]
-  }
-}
-```
-
-This shows tables that reference the current record.
-
-## Step 6: Configure Table Display
-
-Set default sorting and row display:
-
-```json
-{
-  "tag:isrd.isi.edu,2016:table-display": {
-    "row_order": [
-      {"column": "RCT", "descending": true}
-    ],
-    "page_size": 25
-  }
-}
-```
-
-## Step 7: Configure Asset Columns
-
-Mark columns that contain file URLs:
-
-```json
-{
-  "tag:isrd.isi.edu,2017:asset": {
-    "url_pattern": "/hatrac/data/{{{MD5}}}/{{{Filename}}}",
-    "filename_column": "Filename",
-    "byte_count_column": "Length",
-    "md5_column": "MD5",
-    "browser_upload": true
-  }
-}
-```
-
-This enables:
-- Download links
-- File previews (for images)
-- Drag-and-drop upload
-
-## Common Customization Patterns
-
-### Hide System Columns in Entry Forms
-```json
-{
-  "tag:isrd.isi.edu,2016:visible-columns": {
-    "entry": ["Name", "Description", "Value"]
-  }
-}
-```
-Excludes RID, RCT, RMT, RCB, RMB from forms.
-
-### Show Friendly NULL Display
-```json
-{
-  "tag:misd.isi.edu,2015:display": {
-    "show_null": {
-      "*": "N/A",
-      "entry": ""
-    }
-  }
-}
-```
-
-### Custom Column Formatting
-```json
-{
-  "tag:isrd.isi.edu,2016:column-display": {
-    "*": {
-      "markdown_pattern": "**{{{_self}}}**"
-    }
-  }
-}
-```
-
-### Foreign Key Display Name
-```json
-{
-  "tag:isrd.isi.edu,2016:foreign-key": {
-    "to_name": "Subject",
-    "from_name": "Images"
-  }
-}
-```
-
-## Applying Annotations
-
-### Option 1: Via DerivaML (Recommended for ML projects)
-
-The `apply_catalog_annotations()` tool sets up sensible defaults:
-```
-apply_catalog_annotations("My Project", "Project Catalog")
-```
-
-### Option 2: Via DERIVA Workbench (GUI)
-
-1. Launch `deriva-workbench`
-2. Connect to your catalog
-3. Browse to the table/column
-4. Right-click annotations → Add
-5. Edit using graphical or JSON editor
-6. Click Update to save
-
-### Option 3: Via Python API
-
-```python
-from deriva.core import ErmrestCatalog
-import deriva.core.ermrest_model as em
-
-catalog = ErmrestCatalog('https', 'example.org', '1')
-model = catalog.getCatalogModel()
-
-# Set table annotation
-table = model.table('domain', 'Image')
-table.annotations[em.tag.visible_columns] = {
-    "compact": ["RID", "Name", "Subject"],
-    "detailed": "*"
-}
-
-# Apply changes
-model.apply()
-```
-
-## Verification
-
-After applying annotations:
-
-1. **Get Chaise URL**: `get_chaise_url("Image")`
-2. **Open in browser** to verify changes
-3. **Test different contexts**: listings, record page, forms
-
-## Troubleshooting
-
-### Changes not appearing
-- Clear browser cache
-- Verify annotation was applied (check in workbench)
-- Check for typos in annotation keys
-
-### Column not showing
-- Check `visible-columns` annotation
-- Verify column exists in table
-- Check context (compact vs detailed)
-
-### Facet not working
-- Verify source column exists
-- Check facet configuration syntax
-- Try simpler configuration first
-
-## Best Practices
-
-1. **Start with defaults**: Use `apply_catalog_annotations()` first
-2. **Customize incrementally**: Change one thing at a time
-3. **Test in Chaise**: Verify each change visually
-4. **Document changes**: Keep notes on customizations
-5. **Use workbench**: For complex visual editing
-6. **Backup annotations**: Use dump/restore in workbench
-
-## Related Resources
-
-- `deriva-ml://docs/chaise-annotations` - Annotation reference
-- `deriva-ml://docs/ermrest-model-management` - Schema management
-- DERIVA Workbench - GUI annotation editor
-"""
-
-    @mcp.prompt(
-        name="pre-execution-checklist",
-        description="REQUIRED checklist before running ML executions - verifies git state and version, requires user confirmation",
-    )
-    def pre_execution_checklist_prompt() -> str:
-        """Pre-execution checklist requiring user confirmation."""
-        return """# Pre-Execution Checklist (REQUIRED)
-
-**IMPORTANT**: This checklist MUST be completed before running any ML execution.
-You MUST get explicit user confirmation before proceeding.
-
-## Why This Matters
-
-For reproducibility, every execution must be traceable to:
-1. A specific **git commit** (exact code version)
-2. A **semantic version tag** (human-readable version)
-3. A **clean working tree** (no uncommitted changes)
-
-Without this, you cannot reproduce results or know what code produced them.
-
----
-
-## Step 1: Check Git Status
-
-Run this command and report the results to the user:
-
-```bash
-git status --porcelain
-```
-
-### If output is EMPTY (clean):
-✅ Working tree is clean - proceed to Step 2
-
-### If output shows changes:
-⚠️ **STOP** - There are uncommitted changes!
-
-Report to the user:
-- Which files are modified/untracked
-- Ask: "There are uncommitted changes. Should I commit these before proceeding?"
-
-If user confirms, commit the changes:
-```bash
-git add .
-git commit -m "<descriptive message>"
-```
-
----
-
-## Step 2: Check Current Version
-
-Run this command:
-
-```bash
-git describe --tags --always 2>/dev/null || echo "No tags found"
-```
-
-Report the current version to the user.
-
-### If version ends with `-g<hash>` (e.g., `v1.2.3-5-gabcd123`):
-⚠️ There are commits since the last version tag.
-
-Ask the user: "The current version is `<version>`. Should I bump the version before proceeding?"
-
-If user confirms, bump the version:
-```bash
-# For bug fixes/small changes:
-uv run bump-my-version bump patch
-
-# For new features/config changes:
-uv run bump-my-version bump minor
-
-# For breaking changes:
-uv run bump-my-version bump major
-```
-
-Then push the tag:
-```bash
-git push && git push --tags
-```
-
-### If version is a clean tag (e.g., `v1.2.3`):
-✅ Version is current - proceed to Step 3
-
----
-
-## Step 3: Verify Lock File
-
-Check that `uv.lock` is committed and current:
-
-```bash
-# Regenerate lock file
-uv lock
-
-# Check if it changed
-git status --porcelain uv.lock
-```
-
-### If `uv.lock` changed:
-⚠️ Lock file was out of date. Commit it:
-```bash
-git add uv.lock
-git commit -m "Update uv.lock"
-```
-
----
-
-## Step 4: Final Verification
-
-Run these commands and report results:
-
-```bash
-# Show final commit
-git log -1 --oneline
-
-# Show version
-git describe --tags --always
-
-# Confirm clean state
-git status --porcelain
-```
-
----
-
-## Step 5: USER CONFIRMATION REQUIRED
-
-**You MUST ask the user explicitly:**
-
-> I have verified the repository state:
-> - **Commit**: `<commit hash and message>`
-> - **Version**: `<version tag>`
-> - **Status**: Clean working tree
->
-> **Is it OK to proceed with the ML execution?**
-
-**Wait for explicit user confirmation** (e.g., "yes", "proceed", "ok").
-
-### If user says NO:
-- Ask what changes they want to make first
-- Do NOT proceed with execution
-
-### If user says YES:
-- ✅ Proceed with the execution
-- The execution will be traceable to this exact code version
-
----
-
-## Quick Reference
-
-| Check | Command | Expected |
-|-------|---------|----------|
-| Clean tree | `git status --porcelain` | Empty output |
-| Current version | `git describe --tags` | Clean tag (no `-g<hash>`) |
-| Lock file | `git status uv.lock` | Not modified |
-
-## After Execution
-
-After the execution completes, remind the user:
-- The execution is linked to version `<version>`
-- Results can be reproduced by checking out this version
-- Consider tagging successful experiments
-
----
-
-## Example Interaction
-
-```
-Assistant: Let me verify the repository state before running the execution.
-
-[Runs git status --porcelain]
-Output: M src/model.py
-
-There are uncommitted changes:
-- Modified: src/model.py
-
-Should I commit these changes before proceeding?
-
-User: Yes, commit them with message "Fix learning rate bug"
-
-[Commits changes]
-[Runs git describe --tags]
-Output: v1.2.3-1-gabcd123
-
-The version is v1.2.3-1-gabcd123, which indicates 1 commit since v1.2.3.
-Should I bump the version? (patch/minor/major)
-
-User: Bump patch
-
-[Runs bump-my-version bump patch]
-[Pushes tags]
-
-I have verified the repository state:
-- Commit: abcd123 Fix learning rate bug
-- Version: v1.2.4
-- Status: Clean working tree
-
-Is it OK to proceed with the ML execution?
-
-User: Yes, proceed
-
-[Proceeds with execution]
-```
-"""
-
-    @mcp.prompt(
         name="work-with-assets",
         description="Step-by-step guide to working with assets (files) - lookup, provenance, and management",
     )
@@ -4806,7 +3933,7 @@ URL/checksum tracking and provenance. Follow this guide to work with assets.
 Find what asset tables exist in the catalog:
 
 ```
-list_asset_tables()
+# Read deriva-ml://catalog/asset-tables resource
 ```
 
 Returns: `[{"name": "Image", "schema": "domain"}, {"name": "Model", "schema": "domain"}, ...]`
@@ -4831,7 +3958,7 @@ find_assets(asset_type="Training_Data")    # By type
 ### Look Up Specific Asset
 
 ```
-lookup_asset("<asset-rid>")
+# Read deriva-ml://asset/<asset-rid> resource
 ```
 
 Returns detailed info: RID, table, filename, URL, types, execution that created it.
@@ -4855,7 +3982,7 @@ list_asset_executions("<asset-rid>", asset_role="Input")
 ### View Available Types
 
 ```
-list_asset_types()
+# Read deriva-ml://vocabulary/Asset_Type resource
 ```
 
 ### Add New Type
@@ -4985,7 +4112,7 @@ for table, assets in uploaded.items():
 
 - `list_assets()` - List assets in a table
 - `find_assets()` - Search assets with filters
-- `lookup_asset()` - Get asset details
+- `deriva-ml://asset/{rid}` resource - Get asset details
 - `list_asset_executions()` - Asset provenance
 - `asset_file_path()` - Register output files
 - `upload_execution_outputs()` - Upload registered files
@@ -5182,8 +4309,8 @@ ml._update_status(Status.failed, "Crashed: <error>", "<execution-rid>")
 
 **Solution**:
 ```
-# List available terms
-list_vocabulary_terms("<vocabulary-name>")
+# Read vocabulary terms from resource
+deriva-ml://vocabulary/<vocabulary-name>
 
 # Add missing term
 add_term("<vocabulary>", "<term>", "<description>")
@@ -5209,7 +4336,7 @@ get_catalog_info()
 
 4. **List recent executions**:
 ```
-list_executions()
+find_executions()  # or read deriva-ml://catalog/executions resource
 ```
 
 5. **Check working directory**:
@@ -5433,5 +4560,866 @@ abbreviated or clearer parameter names:
 3. **Use `list_*` for enumeration within a context**
 4. **Use `get_*` when you need transformed output**
 5. **Check `list_feature_names()` before creating features**
-6. **Check `list_vocabulary_terms()` before adding terms**
+6. **Check `deriva-ml://vocabulary/{name}` resource before adding terms**
+"""
+
+    @mcp.prompt(
+        name="maintain-experiment-notes",
+        description="Maintain a running summary of experiment work in experiment-notes.md - use PROACTIVELY to track progress",
+    )
+    def maintain_experiment_notes_prompt() -> str:
+        """Guide for maintaining experiment notes throughout a session."""
+        return """# Maintaining Experiment Notes
+
+**PROACTIVE USAGE**: Update `experiment-notes.md` throughout the session to maintain
+a running summary of what the user is working on. This file serves as persistent
+documentation that helps with:
+- Continuity between sessions
+- Onboarding other team members
+- Tracking experiment history and decisions
+- Documenting catalog configuration and structure
+
+## File Location
+
+Create/update `experiment-notes.md` in the project root directory.
+
+## When to Update
+
+Update the notes file:
+- At the **start** of a session (add session header with date)
+- After **significant actions** (creating datasets, running experiments, adding features)
+- When **decisions are made** (why a particular approach was chosen)
+- When **problems are encountered** and solved
+- At the **end** of a session (summarize what was accomplished)
+
+## File Structure
+
+```markdown
+# Experiment Notes
+
+## Project Overview
+Brief description of the ML project and its goals.
+
+**Catalog**: `<hostname>` / `<catalog_id>`
+**Repository**: `<repo_url>`
+
+---
+
+## Catalog Structure
+
+### Vocabularies
+- `<VocabularyName>`: <description of terms>
+
+### Asset Tables
+- `<TableName>`: <what files it stores>
+
+### Features
+- `<TableName>.<FeatureName>`: <what it labels>
+
+### Datasets
+| Name | RID | Type | Description |
+|------|-----|------|-------------|
+| ... | ... | ... | ... |
+
+---
+
+## Session Log
+
+### YYYY-MM-DD: <Brief Title>
+
+**Goal**: What the user wanted to accomplish
+
+**Actions**:
+- Created dataset `<name>` (RID: `<rid>`)
+- Configured experiment `<name>` with parameters...
+- Ran training with results...
+
+**Decisions**:
+- Chose X over Y because...
+
+**Issues & Solutions**:
+- Problem: ...
+- Solution: ...
+
+**Next Steps**:
+- [ ] Task 1
+- [ ] Task 2
+
+---
+
+### YYYY-MM-DD: <Previous Session>
+...
+```
+
+## Update Guidelines
+
+### Session Start
+```markdown
+### YYYY-MM-DD: <Infer title from user's first request>
+
+**Goal**: <What user wants to accomplish today>
+```
+
+### After Creating Catalog Entities
+
+When creating datasets, features, vocabularies, or assets, update the
+appropriate section:
+
+```markdown
+**Actions**:
+- Created dataset `training_split_v2` (RID: `4HM`)
+  - Type: Training
+  - 5,000 images from CIFAR-10
+  - Version: 1.0.0
+```
+
+Also update the Catalog Structure section if this is a new entity type.
+
+### After Running Experiments
+
+```markdown
+**Actions**:
+- Ran experiment `cifar10_quick` (Execution RID: `5JK`)
+  - Config: epochs=3, lr=0.001, batch=64
+  - Dataset: `training_split_v2` (4HM)
+  - Result: 72% accuracy on test set
+```
+
+### When Decisions Are Made
+
+```markdown
+**Decisions**:
+- Using labeled split dataset instead of unlabeled because we need
+  ground truth for ROC curve analysis
+- Chose learning rate 0.001 based on sweep results showing best
+  convergence
+```
+
+### When Problems Are Solved
+
+```markdown
+**Issues & Solutions**:
+- Problem: "Dataset not found" error when running experiment
+- Solution: Dataset version was not pinned in config; added explicit
+  version="1.0.0" to DatasetSpecConfig
+```
+
+### Session End
+
+```markdown
+**Summary**: Completed initial training runs, identified best learning
+rate (0.001), created ROC analysis notebook.
+
+**Next Steps**:
+- [ ] Run extended training with best hyperparameters
+- [ ] Generate prediction probabilities for full test set
+- [ ] Create comparative analysis across model architectures
+```
+
+## Example Session Update
+
+After user asks "help me create a training dataset":
+
+1. **Before action**: Add session header if not present
+2. **After action**: Update notes
+
+```markdown
+### 2024-01-15: Create Training Dataset
+
+**Goal**: Set up training data for CIFAR-10 experiments
+
+**Actions**:
+- Created dataset `cifar10_training` (RID: `4HM`)
+  - Type: Training, Labeled_Training
+  - Contains 45,000 images from CIFAR-10 training partition
+  - Features: Image_Class (ground truth labels)
+  - Version: 1.0.0
+
+**Catalog Structure Update**:
+- Added to Datasets section:
+  | cifar10_training | 4HM | Training | 45k labeled training images |
+```
+
+## Reading Existing Notes
+
+At session start, read the existing `experiment-notes.md` to understand:
+- What catalog is being used
+- What datasets/features already exist
+- What was done in previous sessions
+- Any pending tasks from last session
+
+## Tips
+
+- Keep entries concise but informative
+- Include RIDs for easy reference
+- Document the "why" not just the "what"
+- Update incrementally, don't wait until session end
+- Use checkboxes for actionable next steps
+- Link to relevant executions in the catalog
+"""
+
+    @mcp.prompt(
+        name="generate-descriptions",
+        description="ALWAYS use: How to generate meaningful descriptions for catalog entities when user doesn't provide one",
+    )
+    def generate_descriptions_prompt() -> str:
+        """Guide for generating descriptions for catalog entities."""
+        return """# Generating Descriptions for Catalog Entities
+
+**CRITICAL**: Every catalog entity that accepts a description MUST have one.
+If the user doesn't provide a description, YOU MUST generate a meaningful one
+based on context from the repository, conversation, and catalog state.
+
+**Related prompt**: For hydra-zen configuration file syntax (`with_description()`,
+`zen_meta`), see the `add-config-descriptions` prompt.
+
+## Why Descriptions Matter
+
+1. **Discoverability** - Users and AI assistants can find and understand entities
+2. **Reproducibility** - Future users can understand what data/experiments contain
+3. **Documentation** - Descriptions serve as inline documentation
+4. **Provenance** - Descriptions capture intent and context at creation time
+
+## Markdown Support
+
+Descriptions support **GitHub-flavored Markdown** which renders in the Chaise web UI.
+Use markdown to improve readability:
+
+- **Headers** for sections: `## Overview`
+- **Bold/italic** for emphasis: `**important**`, `*note*`
+- **Lists** for multiple items: `- Item 1\\n- Item 2`
+- **Tables** for structured data: `| Col1 | Col2 |`
+- **Code** for technical terms: `` `model.pt` ``
+- **Links** for references: `[link text](url)`
+
+**Example with markdown**:
+```markdown
+## Training Dataset
+
+Contains **45,000 labeled images** from CIFAR-10.
+
+### Contents
+- 10 object categories
+- 32x32 RGB images
+- Ground truth `Image_Class` labels
+
+### Usage
+Use for training CNN classifiers. Pair with `cifar10_test` for evaluation.
+```
+
+## Entities That Require Descriptions
+
+### Datasets
+- `create_dataset(description=...)`
+- `DatasetSpecConfig` in hydra-zen configs (use `with_description()`)
+
+### Executions/Workflows
+- `create_execution(description=...)`
+- `Workflow(description=...)`
+
+### Features
+- `create_feature(description=...)`
+
+### Vocabulary Terms
+- `add_term(description=...)`
+
+### Tables and Columns
+- `create_table(description=...)` for table
+- Column definitions with `description` field
+- `set_table_description()`, `set_column_description()`
+
+### Assets (when uploaded)
+- Asset metadata `Description` field
+
+### Configurations (hydra-zen)
+- `with_description()` for asset/dataset lists
+- `zen_meta={"description": ...}` for model configs
+
+## How to Generate Descriptions
+
+### Step 1: Gather Context
+
+Before creating any entity, gather context from:
+
+1. **User's request** - What did they ask for?
+2. **Repository structure** - What does the codebase do?
+3. **Existing catalog entities** - What patterns exist?
+4. **Configuration files** - What do configs reveal about the project?
+5. **Conversation history** - What decisions were made?
+
+### Step 2: Generate Description
+
+Create a description that answers:
+- **What** is this entity?
+- **Why** was it created?
+- **How** should it be used?
+- **What** does it contain (for datasets/assets)?
+
+### Step 3: Confirm with User
+
+Present the generated description and ask for confirmation:
+
+> I'll create the dataset with this description:
+> "Training partition of CIFAR-10 with 45,000 labeled images. Contains
+> ground truth Image_Class labels. Use for model training experiments."
+>
+> Is this description accurate, or would you like to modify it?
+
+## Description Templates by Entity Type
+
+### Datasets
+
+**Template**:
+```
+<Purpose> of <source data> with <count> <items>. <Key characteristics>.
+<Usage guidance>.
+```
+
+**Examples**:
+- "Training partition of CIFAR-10 with 45,000 labeled images. Contains ground truth class labels for 10 categories. Use for model training."
+- "Test split containing 5,000 images with held-out labels for evaluation. Derived from cifar10_full dataset."
+- "Curated subset of fundus images showing diabetic retinopathy grades 2-4. Created for severity classification training."
+
+### Executions/Workflows
+
+Workflow descriptions benefit greatly from markdown formatting:
+
+**Simple format**:
+```
+<Action> <target> using <method/model>. <Key parameters>. <Expected outputs>.
+```
+
+**Rich markdown format** (recommended for complex workflows):
+```markdown
+## ResNet-50 Training
+
+Train image classifier on CIFAR-10 dataset.
+
+### Parameters
+| Parameter | Value |
+|-----------|-------|
+| Learning Rate | 0.001 |
+| Batch Size | 64 |
+| Epochs | 50 |
+
+### Outputs
+- `model.pt` - Trained model weights
+- `metrics.json` - Training/validation metrics
+```
+
+**Examples**:
+- "Train ResNet-50 on CIFAR-10 training set. Using learning rate 0.001, batch size 64, 50 epochs. Outputs: model weights, training metrics."
+- "Generate prediction probabilities for test images using trained model from execution 4HM. Outputs: probability CSV for ROC analysis."
+- "Preprocess raw images: resize to 224x224, normalize to ImageNet stats. Outputs: processed image dataset."
+
+### Features
+
+**Template**:
+```
+<What it labels> for <target table>. Values from <vocabulary>. <Usage context>.
+```
+
+**Examples**:
+- "Diagnostic classification for fundus images. Values: Normal, Mild_DR, Moderate_DR, Severe_DR, Proliferative_DR. Used for training diagnostic models."
+- "Quality assessment labels for retinal images. Values: Good, Acceptable, Poor, Ungradable. Used to filter training data."
+- "Ground truth segmentation mask availability. Values: Has_Mask, No_Mask. Indicates which images have expert annotations."
+
+### Vocabulary Terms
+
+**Template**:
+```
+<Definition of the term>. <When to use it>. <Relationship to other terms if relevant>.
+```
+
+**Examples**:
+- "Images suitable for model training with clear features and correct labeling. Use for primary training datasets."
+- "Preliminary model weights from early training. Use for transfer learning or continued training, not production inference."
+- "Automated prediction without manual verification. May require expert review before clinical use."
+
+### Tables
+
+**Template**:
+```
+<What records represent>. <Key relationships>. <Primary use case>.
+```
+
+**Examples**:
+- "Research subjects enrolled in the study. Links to Image table via Subject_ID. Used for demographic analysis and cohort selection."
+- "Imaging devices used for data collection. Referenced by Image.Device_ID. Tracks device-specific calibration and quality metrics."
+
+### Columns
+
+**Template**:
+```
+<What the value represents>. <Format/units if applicable>. <Constraints or valid values>.
+```
+
+**Examples**:
+- "Patient age at time of imaging in years. Integer, range 0-120."
+- "Acquisition timestamp in UTC. ISO 8601 format."
+- "Foreign key to Subject table. Required for all clinical images."
+
+### Configuration Descriptions (hydra-zen)
+
+**For asset lists** (`with_description()`):
+
+Use triple quotes for multi-line markdown descriptions:
+```python
+description = (
+    "## Learning Rate Sweep Results\\n\\n"
+    "Model weights from hyperparameter sweep experiment.\\n\\n"
+    "| Asset | Learning Rate | Notes |\\n"
+    "|-------|---------------|-------|\\n"
+    "| RID1 | 0.001 | Baseline, stable convergence |\\n"
+    "| RID2 | 0.01 | Fast convergence, slight instability |\\n\\n"
+    "Use with `roc_analysis` notebook to compare performance."
+)
+with_description(["RID1", "RID2"], description)
+```
+
+**For model configs** (`zen_meta`):
+```python
+model_store(
+    MyConfig,
+    name="quick",
+    epochs=3,
+    zen_meta={
+        "description": (
+            "**Quick validation config** for testing pipeline.\\n\\n"
+            "- Epochs: 3\\n"
+            "- Batch size: 64\\n\\n"
+            "Use before full training runs to verify setup."
+        )
+    }
+)
+```
+
+## Contextual Description Generation
+
+### From Repository Analysis
+
+If creating entities for a new project, analyze:
+- `README.md` - Project purpose and goals
+- `src/configs/` - Existing configuration patterns
+- `src/models/` - Model architecture details
+- `notebooks/` - Analysis workflows
+
+**Example**: If README mentions "diabetic retinopathy classification",
+generate dataset descriptions like:
+"Fundus images for diabetic retinopathy classification. Contains [N] images
+with severity grades from the [source] dataset."
+
+### From Catalog State
+
+Query existing entities to match patterns:
+```
+find_datasets()  # See existing dataset description styles
+# Read deriva-ml://vocabulary/Dataset_Type resource to understand categories
+lookup_experiment(rid)  # See how similar experiments are described
+```
+
+### From Conversation Context
+
+Use information from the current session:
+- User's stated goals
+- Decisions made about data splits
+- Parameter choices and rationale
+- Problem context (what they're trying to solve)
+
+## Prompting for Missing Descriptions
+
+When calling tools that accept descriptions, ALWAYS include one:
+
+**WRONG**:
+```
+create_dataset(
+    dataset_types=["Training"],
+    # No description!
+)
+```
+
+**CORRECT**:
+```
+create_dataset(
+    dataset_types=["Training"],
+    description="Training partition with 45,000 labeled CIFAR-10 images for CNN classification experiments."
+)
+```
+
+## Quality Checklist
+
+Before finalizing a description, verify:
+
+- [ ] **Specific**: Avoids vague terms like "data" or "stuff"
+- [ ] **Informative**: Answers what, why, and how
+- [ ] **Accurate**: Matches the actual content/purpose
+- [ ] **Concise**: 1-3 sentences, no unnecessary words
+- [ ] **Consistent**: Matches style of existing descriptions in catalog
+- [ ] **Actionable**: Helps users know when to use this entity
+
+## Example Workflow
+
+User: "Create a dataset from the test images"
+
+Assistant thinks:
+1. What test images? Check catalog for image tables and existing datasets
+2. What's the project? Check README/configs - it's CIFAR-10 classification
+3. Why test dataset? Likely for model evaluation
+4. Any special characteristics? Check if labeled or unlabeled split
+
+Assistant responds:
+> I'll create a test dataset. Based on the CIFAR-10 project structure and
+> existing datasets, I'll use this description:
+>
+> "Test partition of CIFAR-10 with 10,000 labeled images for model evaluation.
+> Contains ground truth class labels for computing accuracy and generating
+> ROC curves. Complements the cifar10_training dataset."
+>
+> Does this accurately describe the dataset you want to create?
+
+User: "Yes, create it"
+"""
+
+    @mcp.prompt(
+        name="semantic-awareness",
+        description="ALWAYS use: Check for existing entities and suggest alternatives before creating new tables, vocabularies, features, or datasets",
+    )
+    def semantic_awareness_prompt() -> str:
+        """Guide for semantic lookup and duplicate prevention."""
+        return """# Semantic Awareness for Catalog Operations
+
+**CRITICAL**: Before creating ANY new catalog entity (table, vocabulary term, feature,
+dataset, workflow), you MUST check for existing entities that might serve the same
+purpose. This prevents duplicate/redundant entities and promotes reuse.
+
+## Core Principle
+
+The semantics of catalog entities are determined by:
+- **Tables**: table name, description, column names, and column descriptions
+- **Vocabularies**: term name, synonyms, and description
+- **Features**: feature name, target table, and associated vocabulary
+- **Datasets**: dataset types, description, and member composition
+- **Workflows**: workflow name, type, and description
+
+## Semantic Lookup Process
+
+### Before Creating ANY Entity
+
+1. **Gather semantic intent** from the user's request
+2. **Search existing entities** using names, descriptions, and synonyms
+3. **Present matches** to the user with similarity explanation
+4. **Suggest reuse** if appropriate matches exist
+5. **Only create new** if no suitable entity exists
+
+---
+
+## Step 1: Semantic Search by Entity Type
+
+### For Tables
+
+Before `create_table()`, check existing tables:
+
+```
+# Read schema resource for all tables with descriptions
+deriva-ml://catalog/schema
+
+# Get specific table details
+get_table_schema("<table_name>")
+get_table_columns("<table_name>")
+```
+
+**Search for semantic matches**:
+- Table names similar to requested name
+- Tables with similar column structures
+- Tables with similar descriptions
+- Tables in the same domain area
+
+**Example check**:
+```
+User wants: "Create a table for patient demographics"
+
+Search existing tables for:
+- Names containing: patient, subject, person, individual, demographic
+- Descriptions mentioning: demographic, personal, patient info
+- Columns like: age, gender, birth_date, name
+
+Found: "Subject" table with columns Age, Gender, Enrollment_Date
+→ Suggest: "The 'Subject' table already exists with demographic columns.
+   Should we add columns to it, or do you need a separate table?"
+```
+
+### For Vocabulary Terms
+
+Before `add_term()`, check existing terms AND synonyms:
+
+```
+# Read vocabulary with all terms and synonyms
+deriva-ml://vocabulary/<vocab_name>
+
+# Check if term exists (searches names AND synonyms)
+lookup_term("<vocab_name>", "<term_name>")
+```
+
+**Search for semantic matches**:
+- Exact term name match
+- Term synonyms that match the requested name
+- Terms with similar descriptions
+- Terms in related vocabularies
+
+**Example check**:
+```
+User wants: add_term("Image_Type", "Xray", "X-ray medical images")
+
+Search existing terms:
+- lookup_term("Image_Type", "Xray") → Not found
+- lookup_term("Image_Type", "X-ray") → Found! Has synonym "Xray"
+- Check description similarity
+
+Found: "X-ray" term already exists with synonym "Xray"
+→ Suggest: "The term 'X-ray' already exists and includes 'Xray' as a synonym.
+   Did you mean to use the existing term, or add a different synonym?"
+```
+
+### For Features
+
+Before `create_feature()`, check existing features:
+
+```
+# List all features for the target table
+deriva-ml://table/<table_name>/features
+
+# Get detailed feature info
+deriva-ml://feature/<table_name>/<feature_name>
+
+# List all registered feature names
+list_feature_names()
+```
+
+**Search for semantic matches**:
+- Features on the same target table
+- Features with similar names across tables
+- Features using similar vocabularies
+
+**Example check**:
+```
+User wants: create_feature("Image", "Diagnosis", ...)
+
+Search existing features:
+- deriva-ml://table/Image/features → Found "Disease_Classification"
+- Check if "Diagnosis" is similar to existing feature names
+
+Found: "Disease_Classification" feature on Image table
+→ Suggest: "The Image table already has a 'Disease_Classification' feature.
+   Is 'Diagnosis' intended to be different, or should we use the existing feature?"
+```
+
+### For Datasets
+
+Before `create_dataset()`, check existing datasets:
+
+```
+# List all datasets with types and descriptions
+deriva-ml://catalog/datasets
+
+# Search datasets
+find_datasets()
+
+# Get specific dataset details
+deriva-ml://dataset/<rid>
+```
+
+**Search for semantic matches**:
+- Datasets with similar types
+- Datasets with similar descriptions
+- Datasets with overlapping members
+
+**Example check**:
+```
+User wants: Create training dataset from CIFAR-10 images
+
+Search existing datasets:
+- find_datasets() → Check types containing "Training"
+- Check descriptions mentioning "CIFAR" or "training"
+
+Found: "cifar10_training" dataset (RID: 4HM) - "Training partition with 45k images"
+→ Suggest: "A CIFAR-10 training dataset already exists (RID: 4HM).
+   Should we use it, create a new version, or create a different dataset?"
+```
+
+### For Workflows
+
+Before `create_workflow()`, check existing workflows:
+
+```
+# List all workflows
+deriva-ml://catalog/workflows
+
+# Search by URL or checksum
+lookup_workflow("<url_or_checksum>")
+```
+
+**Search for semantic matches**:
+- Workflows with similar names
+- Workflows with the same type
+- Workflows with similar descriptions
+
+---
+
+## Step 2: Present Matches to User
+
+When matches are found, present them clearly:
+
+### Format for Presenting Matches
+
+```markdown
+## Existing Entities Found
+
+I found existing entities that might match your request:
+
+### 1. [Entity Name] (RID: XXX)
+- **Type**: [entity type]
+- **Description**: [description]
+- **Why it matches**: [explanation of semantic similarity]
+
+### 2. [Another Entity] (RID: YYY)
+- **Type**: [entity type]
+- **Description**: [description]
+- **Why it matches**: [explanation]
+
+## Options
+
+1. **Use existing**: Use [Entity Name] as-is
+2. **Extend existing**: Add to [Entity Name] (e.g., new columns, new members)
+3. **Create new**: Create a new entity if these don't meet your needs
+
+Which would you prefer?
+```
+
+---
+
+## Step 3: Semantic Validation on Creation
+
+If creating a new entity, validate semantic consistency:
+
+### Table Creation Checklist
+
+- [ ] Table name follows naming conventions (PascalCase, descriptive)
+- [ ] Table name doesn't conflict with existing tables
+- [ ] Description clearly explains the table's purpose
+- [ ] Column names are meaningful and consistent with existing patterns
+- [ ] Column descriptions explain what each column contains
+- [ ] Foreign keys reference valid existing tables
+
+### Vocabulary Term Checklist
+
+- [ ] Term name doesn't conflict with existing term names
+- [ ] Term name doesn't conflict with existing synonyms
+- [ ] Synonyms don't conflict with other term names
+- [ ] Description clearly defines the term's meaning
+- [ ] Term fits semantically within the vocabulary's domain
+
+### Feature Creation Checklist
+
+- [ ] Feature name is unique for the target table
+- [ ] Feature name is descriptive of what it labels
+- [ ] Referenced vocabulary table exists
+- [ ] Feature description explains its purpose
+- [ ] Target table is appropriate for this feature
+
+### Dataset Creation Checklist
+
+- [ ] Dataset types are valid (exist in Dataset_Type vocabulary)
+- [ ] Description explains what the dataset contains
+- [ ] No existing dataset serves the same purpose
+- [ ] Member composition is well-defined
+
+---
+
+## Semantic Search Patterns
+
+### Search by Name Similarity
+
+Look for entities with names that:
+- Are exact matches (case-insensitive)
+- Contain the search term as a substring
+- Share common prefixes/suffixes
+- Use synonymous terms (e.g., "patient" vs "subject")
+
+### Search by Description Similarity
+
+Look for descriptions that:
+- Contain similar keywords
+- Describe similar purposes
+- Reference similar data types or domains
+
+### Search by Structure Similarity
+
+For tables, look for:
+- Similar column names
+- Similar column types
+- Similar foreign key relationships
+
+For features, look for:
+- Same target table
+- Similar vocabulary types
+- Similar labeling purposes
+
+---
+
+## Example Workflow: Creating a New Feature
+
+```
+User: "I need to add quality labels to the Image table"
+
+Assistant actions:
+1. Check existing features on Image table:
+   → Read deriva-ml://table/Image/features
+   → Found: "Image_Quality" feature already exists
+
+2. Check the existing feature details:
+   → Read deriva-ml://feature/Image/Image_Quality
+   → Uses vocabulary: Image_Quality_Type with terms: Good, Acceptable, Poor, Ungradable
+
+3. Present to user:
+   "I found an existing 'Image_Quality' feature on the Image table that labels
+   images with quality assessments (Good, Acceptable, Poor, Ungradable).
+
+   Does this match what you need, or do you need a different type of quality label?"
+
+User: "That's exactly what I need, use that"
+
+→ Reuse existing feature instead of creating duplicate
+```
+
+---
+
+## Quick Reference: Resources for Semantic Search
+
+| Entity Type | Resource for Discovery | Key Semantic Fields |
+|-------------|------------------------|---------------------|
+| Tables | `deriva-ml://catalog/schema` | name, description, columns |
+| Table Details | `get_table_schema()`, `get_table_columns()` | column names, types, descriptions |
+| Vocabularies | `deriva-ml://catalog/vocabularies` | all vocabs with terms |
+| Vocab Terms | `deriva-ml://vocabulary/{name}` | term name, synonyms, description |
+| Features | `deriva-ml://table/{table}/features` | feature name, vocabulary |
+| Feature Details | `deriva-ml://feature/{table}/{feature}` | structure, columns |
+| Datasets | `deriva-ml://catalog/datasets` | types, description |
+| Dataset Details | `deriva-ml://dataset/{rid}` | members, hierarchy |
+| Workflows | `deriva-ml://catalog/workflows` | name, type, description |
+| Assets | `deriva-ml://catalog/assets` | tables, types |
+| Asset Details | `deriva-ml://asset/{rid}` | filename, types, provenance |
+
+## Summary
+
+**Always follow this pattern**:
+
+1. **STOP** before any creation operation
+2. **SEARCH** for existing entities with similar semantics
+3. **PRESENT** matches to the user with clear explanations
+4. **SUGGEST** reuse when appropriate
+5. **CREATE** only when no suitable entity exists
+6. **VALIDATE** semantic consistency of new entities
+
+This prevents catalog pollution, promotes consistency, and helps users discover
+existing resources they may not know about.
 """

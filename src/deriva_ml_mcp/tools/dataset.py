@@ -46,6 +46,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
+
     from deriva_ml_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-ml-mcp")
@@ -242,7 +243,12 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_dataset_members(dataset_rid: str, version: str | None = None) -> str:
+    async def list_dataset_members(
+        dataset_rid: str,
+        version: str | None = None,
+        recurse: bool = False,
+        limit: int | None = None,
+    ) -> str:
         """List all dataset elements (records) grouped by table type.
 
         Dataset elements are records from domain tables that have been added to this
@@ -253,17 +259,20 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             dataset_rid: The RID of the dataset.
             version: Semantic version to query (e.g., "1.0.0"). If not specified,
                 uses the current version.
+            recurse: If True, include members from nested child datasets.
+            limit: Maximum number of members to return per table (default: no limit).
 
         Returns:
             JSON object mapping table names to arrays of {RID} objects.
 
         Example:
             list_dataset_members("1-ABC") -> {"Image": [{"RID": "2-DEF"}, ...], "Subject": [...]}
+            list_dataset_members("1-ABC", recurse=True) -> includes members from child datasets
         """
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
-            members = dataset.list_dataset_members(version=version)
+            members = dataset.list_dataset_members(version=version, recurse=recurse, limit=limit)
             result = {}
             for table_name, items in members.items():
                 result[table_name] = [{"RID": m["RID"]} for m in items]
@@ -311,6 +320,42 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to add dataset members: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def delete_dataset_members(
+        dataset_rid: str,
+        member_rids: list[str],
+    ) -> str:
+        """Remove records from a dataset. Auto-increments minor version.
+
+        Removes the specified records from the dataset's membership. The records
+        themselves are not deleted from the catalog, only their association with
+        this dataset is removed.
+
+        Removing members automatically increments the dataset's minor version for change tracking.
+
+        Args:
+            dataset_rid: The RID of the dataset to remove members from.
+            member_rids: List of RIDs to remove (e.g., ["2-ABC", "2-DEF", "2-GHI"]).
+
+        Returns:
+            JSON with status, removed_count, dataset_rid.
+
+        Example:
+            delete_dataset_members("1-ABC", ["2-DEF", "2-GHI"]) -> removes 2 records from dataset
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            dataset = ml.lookup_dataset(dataset_rid)
+            dataset.delete_dataset_members(members=member_rids)
+            return json.dumps({
+                "status": "success",
+                "removed_count": len(member_rids),
+                "dataset_rid": dataset_rid,
+            })
+        except Exception as e:
+            logger.error(f"Failed to delete dataset members: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
@@ -477,25 +522,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_dataset_element_types() -> str:
-        """List which tables are registered as dataset element types.
-
-        Only records from registered element types can be added to datasets.
-        Use add_dataset_element_type() to register additional domain tables.
-
-        Returns:
-            JSON array of table names that can contain dataset elements.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            element_types = ml.list_dataset_element_types()
-            result = [t.name for t in element_types]
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to list element types: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def add_dataset_element_type(table_name: str) -> str:
         """Register a domain table as a dataset element type.
 
@@ -561,38 +587,60 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_dataset_children(dataset_rid: str) -> str:
+    async def list_dataset_children(
+        dataset_rid: str,
+        recurse: bool = False,
+        version: str | None = None,
+    ) -> str:
         """List all nested child datasets.
 
         Args:
             dataset_rid: RID of the parent dataset.
+            recurse: If True, recursively list all descendants (children of children).
+            version: Semantic version to query (e.g., "1.0.0"). If not specified,
+                uses the current version.
 
         Returns:
             JSON array of child datasets with {rid, description, dataset_types, current_version}.
+
+        Example:
+            list_dataset_children("1-ABC") -> direct children only
+            list_dataset_children("1-ABC", recurse=True) -> all descendants
         """
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
-            children = dataset.list_dataset_children()
+            children = dataset.list_dataset_children(recurse=recurse, version=version)
             return json.dumps([_serialize_dataset(c) for c in children])
         except Exception as e:
             logger.error(f"Failed to list dataset children: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_dataset_parents(dataset_rid: str) -> str:
+    async def list_dataset_parents(
+        dataset_rid: str,
+        recurse: bool = False,
+        version: str | None = None,
+    ) -> str:
         """List all parent datasets that contain this dataset as a child.
 
         Args:
             dataset_rid: RID of the child dataset.
+            recurse: If True, recursively list all ancestors (parents of parents).
+            version: Semantic version to query (e.g., "1.0.0"). If not specified,
+                uses the current version.
 
         Returns:
             JSON array of parent datasets with {rid, description, dataset_types, current_version}.
+
+        Example:
+            list_dataset_parents("1-ABC") -> direct parents only
+            list_dataset_parents("1-ABC", recurse=True) -> all ancestors
         """
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
-            parents = dataset.list_dataset_parents()
+            parents = dataset.list_dataset_parents(recurse=recurse, version=version)
             return json.dumps([_serialize_dataset(p) for p in parents])
         except Exception as e:
             logger.error(f"Failed to list dataset parents: {e}")

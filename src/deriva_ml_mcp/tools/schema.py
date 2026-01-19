@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
+
     from deriva_ml_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-ml-mcp")
@@ -77,7 +78,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 ])
         """
         try:
-            from deriva_ml import TableDefinition, ColumnDefinition, ForeignKeyDefinition, BuiltinTypes
+            from deriva_ml import BuiltinTypes, ColumnDefinition, ForeignKeyDefinition, TableDefinition
 
             ml = conn_manager.get_active_or_raise()
 
@@ -161,7 +162,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             create_asset_table("Image", [{"name": "Width", "type": "int4"}], ["Subject"])
         """
         try:
-            from deriva_ml import ColumnDefinition, BuiltinTypes
+            from deriva_ml import BuiltinTypes, ColumnDefinition
 
             ml = conn_manager.get_active_or_raise()
 
@@ -205,31 +206,6 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             })
         except Exception as e:
             logger.error(f"Failed to create asset table: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def list_asset_tables() -> str:
-        """List all asset tables in the catalog.
-
-        Returns the names of all tables that are asset tables (tables with
-        file attachments like Image, Model, etc.). Use this to discover
-        what types of assets exist in the catalog.
-
-        Returns:
-            JSON array of {name, schema} for each asset table.
-
-        Example:
-            list_asset_tables() -> [{"name": "Image", "schema": "domain"}, ...]
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            tables = ml.list_asset_tables()
-            return json.dumps([
-                {"name": t.name, "schema": t.schema.name}
-                for t in tables
-            ])
-        except Exception as e:
-            logger.error(f"Failed to list asset tables: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
@@ -287,43 +263,6 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             return json.dumps(executions)
         except Exception as e:
             logger.error(f"Failed to list asset executions: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def lookup_asset(asset_rid: str) -> str:
-        """Look up an asset by its RID.
-
-        Returns detailed information about a specific asset including its
-        metadata, types, and the execution that created it.
-
-        Args:
-            asset_rid: RID of the asset to look up.
-
-        Returns:
-            JSON with asset details: {asset_rid, asset_table, filename, url,
-            length, md5, description, asset_types, execution_rid, chaise_url}.
-
-        Example:
-            lookup_asset("3JSE") -> detailed info about this asset
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            asset = ml.lookup_asset(asset_rid)
-
-            return json.dumps({
-                "asset_rid": asset.asset_rid,
-                "asset_table": asset.asset_table,
-                "filename": asset.filename,
-                "url": asset.url,
-                "length": asset.length,
-                "md5": asset.md5,
-                "description": asset.description,
-                "asset_types": asset.asset_types,
-                "execution_rid": asset.execution_rid,
-                "chaise_url": asset.get_chaise_url(),
-            })
-        except Exception as e:
-            logger.error(f"Failed to lookup asset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
@@ -429,29 +368,6 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_asset_types() -> str:
-        """List available asset types from the Asset_Type vocabulary.
-
-        Returns:
-            JSON array of {name, description} for each asset type.
-        """
-        try:
-            from deriva_ml import MLVocab
-
-            ml = conn_manager.get_active_or_raise()
-            terms = ml.list_vocabulary_terms(MLVocab.asset_type)
-            result = []
-            for term in terms:
-                result.append({
-                    "name": term.name,
-                    "description": term.description,
-                })
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to list asset types: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def add_asset_type(type_name: str, description: str) -> str:
         """Add a new asset type to the Asset_Type vocabulary.
 
@@ -483,6 +399,69 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             })
         except Exception as e:
             logger.error(f"Failed to add asset type: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def add_asset_type_to_asset(asset_rid: str, type_name: str) -> str:
+        """Add an asset type to a specific asset.
+
+        Associates an asset with a type from the Asset_Type vocabulary. An asset
+        can have multiple types.
+
+        Args:
+            asset_rid: RID of the asset to modify.
+            type_name: Name of the asset type to add (must exist in Asset_Type vocab).
+
+        Returns:
+            JSON with status, asset_rid, and updated types list.
+
+        Example:
+            add_asset_type_to_asset("3JSE", "Training_Data")
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            asset = ml.lookup_asset(asset_rid)
+            asset.add_asset_type(type_name)
+
+            return json.dumps({
+                "status": "added",
+                "asset_rid": asset_rid,
+                "type_name": type_name,
+                "asset_types": asset.asset_types,
+            })
+        except Exception as e:
+            logger.error(f"Failed to add asset type to asset: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def remove_asset_type_from_asset(asset_rid: str, type_name: str) -> str:
+        """Remove an asset type from a specific asset.
+
+        Removes the association between an asset and a type.
+
+        Args:
+            asset_rid: RID of the asset to modify.
+            type_name: Name of the asset type to remove.
+
+        Returns:
+            JSON with status, asset_rid, and updated types list.
+
+        Example:
+            remove_asset_type_from_asset("3JSE", "Training_Data")
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            asset = ml.lookup_asset(asset_rid)
+            asset.remove_asset_type(type_name)
+
+            return json.dumps({
+                "status": "removed",
+                "asset_rid": asset_rid,
+                "type_name": type_name,
+                "asset_types": asset.asset_types,
+            })
+        except Exception as e:
+            logger.error(f"Failed to remove asset type from asset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
@@ -685,8 +664,8 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             add_column("Subject", "Age", "int4", nullok=True, comment="Subject age in years")
         """
         try:
-            from deriva_ml.model.handles import TableHandle
             from deriva_ml.core.enums import BuiltinTypes
+            from deriva_ml.model.handles import TableHandle
 
             ml = conn_manager.get_active_or_raise()
             table = ml.model.name_to_table(table_name)

@@ -502,6 +502,27 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
+        "deriva-ml://catalog/dataset-element-types",
+        name="Dataset Element Types",
+        description="Tables that can contain dataset elements",
+        mime_type="application/json",
+    )
+    def get_dataset_element_types() -> str:
+        """Return all dataset element type tables."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            tables = list(ml.list_dataset_element_types())
+            return json.dumps([
+                {"name": t.name, "schema": t.schema.name, "comment": t.comment or ""}
+                for t in tables
+            ], indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
         "deriva-ml://catalog/workflows",
         name="Catalog Workflows",
         description="All registered workflows in the catalog",
@@ -524,6 +545,27 @@ multirun_config(
                     "description": wf.description,
                 })
             return json.dumps(workflows, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/workflow-types",
+        name="Workflow Types",
+        description="Available workflow type vocabulary terms",
+        mime_type="application/json",
+    )
+    def get_workflow_types() -> str:
+        """Return all workflow type terms."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            terms = ml.list_vocabulary_terms("Workflow_Type")
+            return json.dumps([
+                {"name": t.name, "description": t.description, "rid": t.rid}
+                for t in terms
+            ], indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -556,11 +598,11 @@ multirun_config(
     @mcp.resource(
         "deriva-ml://dataset/{dataset_rid}",
         name="Dataset Details",
-        description="Detailed information about a specific dataset",
+        description="Detailed information about a specific dataset including nested relationships",
         mime_type="application/json",
     )
     def get_dataset_details(dataset_rid: str) -> str:
-        """Return detailed information about a dataset."""
+        """Return detailed information about a dataset including children and parents."""
         ml = conn_manager.get_active_connection()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
@@ -569,6 +611,8 @@ multirun_config(
             ds = ml.lookup_dataset(dataset_rid)
             members = ds.list_dataset_members()
             history = ds.dataset_history()
+            children = ds.list_dataset_children()
+            parents = ds.list_dataset_parents()
 
             return json.dumps({
                 "rid": ds.dataset_rid,
@@ -576,11 +620,88 @@ multirun_config(
                 "types": ds.dataset_types,
                 "current_version": str(ds.current_version),
                 "member_counts": {k: len(v) for k, v in members.items()},
+                "children": [
+                    {
+                        "rid": c.dataset_rid,
+                        "description": c.description,
+                        "types": c.dataset_types,
+                    }
+                    for c in children
+                ],
+                "parents": [
+                    {
+                        "rid": p.dataset_rid,
+                        "description": p.description,
+                        "types": p.dataset_types,
+                    }
+                    for p in parents
+                ],
                 "version_history": [
                     {
-                        "version": str(h.dataset_version),
+                        "version": str(h.version) if h.version else None,
+                        "description": h.description,
                         "snapshot": h.snapshot,
-                        "minid": h.minid,
+                    }
+                    for h in history
+                ],
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://dataset/{dataset_rid}/members",
+        name="Dataset Members",
+        description="All elements (records) belonging to a specific dataset, grouped by table",
+        mime_type="application/json",
+    )
+    def get_dataset_members(dataset_rid: str) -> str:
+        """Return all dataset members grouped by table."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            ds = ml.lookup_dataset(dataset_rid)
+            members = ds.list_dataset_members()
+
+            return json.dumps({
+                "dataset_rid": ds.dataset_rid,
+                "description": ds.description,
+                "current_version": str(ds.current_version),
+                "members": {
+                    table_name: [{"RID": m["RID"]} for m in items]
+                    for table_name, items in members.items()
+                },
+                "member_counts": {k: len(v) for k, v in members.items()},
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://dataset/{dataset_rid}/versions",
+        name="Dataset Version History",
+        description="Complete version history for a dataset with semantic versions and snapshots",
+        mime_type="application/json",
+    )
+    def get_dataset_versions(dataset_rid: str) -> str:
+        """Return complete version history for a dataset."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            ds = ml.lookup_dataset(dataset_rid)
+            history = ds.dataset_history()
+
+            return json.dumps({
+                "dataset_rid": ds.dataset_rid,
+                "description": ds.description,
+                "current_version": str(ds.current_version),
+                "versions": [
+                    {
+                        "version": str(h.version) if h.version else None,
+                        "description": h.description,
+                        "snapshot": h.snapshot,
                     }
                     for h in history
                 ],
@@ -613,6 +734,32 @@ multirun_config(
                 }
                 for f in features
             ], indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://feature/{table_name}/{feature_name}",
+        name="Feature Details",
+        description="Detailed information about a specific feature",
+        mime_type="application/json",
+    )
+    def get_feature_details(table_name: str, feature_name: str) -> str:
+        """Return detailed information about a feature."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            feature = ml.lookup_feature(table_name, feature_name)
+            return json.dumps({
+                "name": feature.feature_name,
+                "target_table": feature.target_table.name,
+                "feature_table": feature.feature_table.name,
+                "asset_columns": [c.name for c in feature.asset_columns],
+                "term_columns": [c.name for c in feature.term_columns],
+                "value_columns": [c.name for c in feature.value_columns],
+                "optional": feature.optional,
+            }, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -807,6 +954,27 @@ multirun_config(
     # =========================================================================
 
     @mcp.resource(
+        "deriva-ml://catalog/asset-tables",
+        name="Asset Tables",
+        description="List of all asset tables in the catalog",
+        mime_type="application/json",
+    )
+    def get_asset_tables() -> str:
+        """Return list of all asset tables."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            tables = ml.list_asset_tables()
+            return json.dumps([
+                {"name": t.name, "schema": t.schema.name, "comment": t.comment or ""}
+                for t in tables
+            ], indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
         "deriva-ml://catalog/assets",
         name="Catalog Assets",
         description="Summary of all asset tables and their contents",
@@ -918,6 +1086,367 @@ multirun_config(
                 "description": exe.configuration.description if exe.configuration else "",
                 "nested_executions": [n["Nested_Execution"] for n in nested],
                 "parent_executions": [p["Execution"] for p in parents],
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    # =========================================================================
+    # Catalog Metadata Resources (converted from tools)
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://catalog/info",
+        name="Catalog Info",
+        description="Details about the active catalog: hostname, schemas, project name",
+        mime_type="application/json",
+    )
+    def get_catalog_info() -> str:
+        """Return details about the active catalog."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            conn_info = conn_manager.get_active_connection_info()
+            result = {
+                "hostname": ml.host_name,
+                "catalog_id": str(ml.catalog_id),
+                "domain_schema": ml.domain_schema,
+                "ml_schema": ml.ml_schema,
+                "project_name": ml.project_name,
+            }
+            if conn_info:
+                result["workflow_rid"] = conn_info.workflow_rid
+                result["execution_rid"] = (
+                    conn_info.execution.execution_rid if conn_info.execution else None
+                )
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/users",
+        name="Catalog Users",
+        description="All users who have access to the active catalog",
+        mime_type="application/json",
+    )
+    def get_catalog_users() -> str:
+        """Return list of users with catalog access."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            users = ml.user_list()
+            return json.dumps(users, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/connections",
+        name="Active Connections",
+        description="All open catalog connections and which is active",
+        mime_type="application/json",
+    )
+    def get_connections() -> str:
+        """Return list of all open connections."""
+        connections = conn_manager.list_connections()
+        return json.dumps(connections, indent=2)
+
+    @mcp.resource(
+        "deriva-ml://chaise-url/{table_or_rid}",
+        name="Chaise URL",
+        description="Web UI URL for viewing a table or specific record in Chaise",
+        mime_type="application/json",
+    )
+    def get_chaise_url(table_or_rid: str) -> str:
+        """Return the Chaise web interface URL for a table or RID."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            # First try as a table name
+            try:
+                url = ml.chaise_url(table_or_rid)
+                return json.dumps({"url": url, "table_or_rid": table_or_rid})
+            except Exception:
+                # If not a table name, try as a RID
+                result = ml.resolve_rid(table_or_rid)
+                schema_name = result.table.schema.name
+                table_name = result.table.name
+                base_url = f"https://{ml.host_name}/chaise/record/#{ml.catalog_id}"
+                url = f"{base_url}/{schema_name}:{table_name}/RID={result.rid}"
+                return json.dumps({"url": url, "table_or_rid": table_or_rid})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://rid/{rid}",
+        name="RID Resolution",
+        description="Find which table a RID belongs to and get its Chaise URL",
+        mime_type="application/json",
+    )
+    def resolve_rid(rid: str) -> str:
+        """Resolve a RID to its table and Chaise URL."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            result = ml.resolve_rid(rid)
+            schema_name = result.table.schema.name
+            table_name = result.table.name
+            base_url = f"https://{ml.host_name}/chaise/record/#{ml.catalog_id}"
+            url = f"{base_url}/{schema_name}:{table_name}/RID={result.rid}"
+            return json.dumps({
+                "rid": rid,
+                "schema": schema_name,
+                "table": table_name,
+                "url": url,
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://cite/{rid}",
+        name="Citation URL",
+        description="Generate a permanent citation URL for a RID with optional snapshot",
+        mime_type="application/json",
+    )
+    def get_citation_url(rid: str) -> str:
+        """Generate permanent and current citation URLs for a RID."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            # Get both permanent (with snapshot) and current URLs
+            permanent_url = ml.cite(rid, current=False)
+            current_url = ml.cite(rid, current=True)
+            return json.dumps({
+                "rid": rid,
+                "permanent_url": permanent_url,
+                "current_url": current_url,
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://registry/{hostname}",
+        name="Catalog Registry",
+        description="All catalogs and aliases available on a Deriva server",
+        mime_type="application/json",
+    )
+    def get_catalog_registry(hostname: str) -> str:
+        """List all catalogs and aliases on a server."""
+        try:
+            from deriva.core import DerivaServer, get_credential
+
+            server = DerivaServer("https", hostname, credentials=get_credential(hostname))
+            registry_catalog = server.connect_ermrest(0)
+            pb = registry_catalog.getPathBuilder()
+            registry = pb.schemas["ermrest"].tables["registry"]
+            entries = list(registry.entities().fetch())
+
+            catalogs = []
+            aliases = []
+
+            for entry in entries:
+                if entry.get("deleted_on"):
+                    continue
+                if entry.get("is_catalog"):
+                    catalogs.append({
+                        "id": entry["id"],
+                        "name": entry.get("name"),
+                        "description": entry.get("description"),
+                        "is_persistent": entry.get("is_persistent"),
+                    })
+                elif entry.get("alias_target"):
+                    aliases.append({
+                        "id": entry["id"],
+                        "alias_target": entry["alias_target"],
+                        "name": entry.get("name"),
+                        "description": entry.get("description"),
+                    })
+
+            return json.dumps({
+                "hostname": hostname,
+                "catalogs": catalogs,
+                "aliases": aliases,
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://alias/{hostname}/{alias_name}",
+        name="Catalog Alias",
+        description="Metadata for a catalog alias including target and owner",
+        mime_type="application/json",
+    )
+    def get_catalog_alias(hostname: str, alias_name: str) -> str:
+        """Get metadata for a catalog alias."""
+        try:
+            from deriva.core import DerivaServer, get_credential
+
+            server = DerivaServer("https", hostname, credentials=get_credential(hostname))
+            alias = server.connect_ermrest_alias(alias_name)
+            metadata = alias.retrieve()
+            return json.dumps({
+                "hostname": hostname,
+                **metadata,
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    # =========================================================================
+    # Execution Resources (converted from tools)
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://execution/{execution_rid}/inputs",
+        name="Execution Inputs",
+        description="Input datasets and assets for an execution",
+        mime_type="application/json",
+    )
+    def get_execution_inputs(execution_rid: str) -> str:
+        """Return input datasets and assets for an execution."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            execution = ml.lookup_execution(execution_rid)
+
+            # Get input datasets
+            input_datasets = []
+            for ds in execution.list_input_datasets():
+                input_datasets.append({
+                    "rid": ds.dataset_rid,
+                    "description": ds.description,
+                    "types": ds.dataset_types,
+                    "version": str(ds.current_version) if ds.current_version else None,
+                })
+
+            # Get input assets
+            input_assets = []
+            for asset in execution.list_input_assets():
+                input_assets.append({
+                    "rid": asset.rid,
+                    "table": asset.table_name,
+                    "filename": asset.filename,
+                })
+
+            return json.dumps({
+                "execution_rid": execution_rid,
+                "input_datasets": input_datasets,
+                "input_assets": input_assets,
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://experiment/{execution_rid}",
+        name="Experiment Details",
+        description="Experiment analysis for an execution with Hydra configuration",
+        mime_type="application/json",
+    )
+    def get_experiment_details(execution_rid: str) -> str:
+        """Return experiment summary for an execution."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            exp = ml.lookup_experiment(execution_rid)
+            return json.dumps(exp.summary(), indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/experiments",
+        name="Catalog Experiments",
+        description="All experiments (executions with Hydra config) in the catalog",
+        mime_type="application/json",
+    )
+    def get_catalog_experiments() -> str:
+        """Return all experiments in the catalog."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            experiments = list(ml.find_experiments())
+            result = []
+            for exp in experiments[:50]:  # Limit to 50
+                result.append(exp.summary())
+
+            return json.dumps({
+                "count": len(result),
+                "experiments": result,
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://storage/summary",
+        name="Storage Summary",
+        description="Local storage usage summary for DerivaML",
+        mime_type="application/json",
+    )
+    def get_storage_summary() -> str:
+        """Return storage usage summary."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            summary = ml.get_storage_summary()
+            return json.dumps(summary, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://storage/cache",
+        name="Cache Size",
+        description="Dataset cache directory size and statistics",
+        mime_type="application/json",
+    )
+    def get_cache_stats() -> str:
+        """Return cache size statistics."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            stats = ml.get_cache_size()
+            return json.dumps(stats, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://storage/execution-dirs",
+        name="Execution Directories",
+        description="List of execution working directories with sizes",
+        mime_type="application/json",
+    )
+    def get_execution_dirs() -> str:
+        """Return list of execution directories."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            dirs = ml.list_execution_dirs()
+
+            # Convert datetime to ISO format
+            for d in dirs:
+                if 'modified' in d:
+                    d['modified'] = d['modified'].isoformat()
+
+            return json.dumps({
+                "count": len(dirs),
+                "execution_dirs": dirs,
             }, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})

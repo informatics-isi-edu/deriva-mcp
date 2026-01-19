@@ -73,6 +73,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
+
     from deriva_ml_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-ml-mcp")
@@ -125,8 +126,8 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             create_execution("CIFAR Training", "Training", "Train ResNet on CIFAR-10", ["1-ABC"])
         """
         try:
-            from deriva_ml.execution.execution_configuration import ExecutionConfiguration
             from deriva_ml.dataset.aux_classes import DatasetSpec
+            from deriva_ml.execution.execution_configuration import ExecutionConfiguration
 
             ml = conn_manager.get_active_or_raise()
 
@@ -455,73 +456,135 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def get_experiment(execution_rid: str) -> str:
-        """Get experiment analysis for an execution.
+    async def download_asset(
+        asset_rid: str,
+        dest_dir: str | None = None,
+    ) -> str:
+        """Download an asset file from the catalog to the local filesystem.
 
-        Creates an Experiment object that provides convenient access to
-        execution metadata, configuration choices, model parameters, and
-        inputs/outputs. This is useful for analyzing completed executions.
+        Downloads the file associated with an asset record to the execution's
+        working directory (or a specified directory). Records the download as
+        an input for provenance tracking.
 
         Args:
-            execution_rid: RID of the execution to analyze.
+            asset_rid: RID of the asset to download (e.g., "1-ABC").
+            dest_dir: Optional destination directory. If not provided, uses
+                the execution's working directory.
 
         Returns:
-            JSON with experiment summary including:
-            - name: Experiment name from config_choices.model_config
-            - execution_rid: The execution RID
-            - description: Execution description
-            - status: Execution status
-            - config_choices: Dictionary of Hydra config names used
-            - model_config: Dictionary of model hyperparameters
-            - input_datasets: List of input dataset info
-            - url: Chaise URL to view execution
+            JSON with:
+            - file_path: Local path to the downloaded file
+            - filename: Name of the file
+            - asset_table: The asset table name (e.g., "Model", "Image")
+            - asset_types: List of asset type labels
 
         Example:
-            get_experiment("47BE")
+            download_asset("1-ABC")  # Download to execution working dir
+            download_asset("1-ABC", "/tmp/models")  # Download to specific dir
         """
         try:
-            from deriva_ml.experiment import Experiment
+            from pathlib import Path
 
-            ml = conn_manager.get_active_or_raise()
-            exp = Experiment(ml, execution_rid)
+            key = _get_execution_key()
+            if key not in _active_executions:
+                return json.dumps({
+                    "status": "error",
+                    "message": "No active execution. Use create_execution first.",
+                })
+
+            execution = _active_executions[key]
+
+            # Use provided dest_dir or default to execution working dir
+            if dest_dir:
+                destination = Path(dest_dir)
+            else:
+                destination = execution.working_dir
+
+            asset_path = execution.download_asset(
+                asset_rid=asset_rid,
+                dest_dir=destination,
+            )
 
             return json.dumps({
-                "status": "success",
-                **exp.summary(),
+                "status": "downloaded",
+                "execution_rid": execution.execution_rid,
+                "asset_rid": asset_rid,
+                "file_path": str(asset_path.asset_path),
+                "filename": asset_path.file_name,
+                "asset_table": asset_path.asset_table,
+                "asset_types": asset_path.asset_types,
             })
         except Exception as e:
-            logger.error(f"Failed to get experiment: {e}")
+            logger.error(f"Failed to download asset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_executions(limit: int = 50) -> str:
-        """List recent executions in the catalog.
+    async def find_executions(
+        workflow_rid: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> str:
+        """List all executions in the catalog with optional filtering.
+
+        Returns all executions, not just experiments with Hydra config. Use this
+        for finding any workflow run. Use find_experiments() if you specifically
+        want ML experiments with Hydra configuration.
 
         Args:
+            workflow_rid: Optional workflow RID to filter by.
+            status: Optional status filter ("pending", "running", "completed", "failed").
             limit: Max number to return (default: 50).
 
         Returns:
-            JSON array of {rid, workflow, status, description, duration}.
+            JSON array of {execution_rid, workflow_rid, status, description}.
+
+        Example:
+            find_executions()  # All executions
+            find_executions(status="completed")  # Completed only
+            find_executions(workflow_rid="1-ABC")  # For specific workflow
         """
         try:
-            ml = conn_manager.get_active_or_raise()
-            pb = ml.pathBuilder()
-            execution_path = pb.schemas[ml.ml_schema].Execution
+            from deriva_ml.core.definitions import Status
 
-            executions = list(execution_path.entities().fetch(limit=limit))
+            ml = conn_manager.get_active_or_raise()
+
+            # Map status string to enum if provided
+            status_enum = None
+            if status:
+                status_map = {
+                    "pending": Status.pending,
+                    "running": Status.running,
+                    "completed": Status.completed,
+                    "failed": Status.failed,
+                    "initializing": Status.initializing,
+                    "created": Status.created,
+                }
+                status_enum = status_map.get(status.lower())
+
+            executions = list(ml.find_executions(
+                workflow_rid=workflow_rid,
+                status=status_enum,
+            ))
+
+            # Limit results
+            executions = executions[:limit]
+
             result = []
             for exe in executions:
                 result.append({
-                    "execution_rid": exe.get("RID"),
-                    "workflow": exe.get("Workflow"),
-                    "status": exe.get("Status"),
-                    "status_detail": exe.get("Status_Detail"),
-                    "description": exe.get("Description"),
-                    "duration": exe.get("Duration"),
+                    "execution_rid": exe.execution_rid,
+                    "workflow_rid": exe.workflow_rid,
+                    "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
+                    "description": exe.configuration.description if exe.configuration else None,
                 })
-            return json.dumps(result)
+
+            return json.dumps({
+                "status": "success",
+                "count": len(result),
+                "executions": result,
+            })
         except Exception as e:
-            logger.error(f"Failed to list executions: {e}")
+            logger.error(f"Failed to find executions: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
@@ -852,64 +915,6 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
     """Register storage management tools with the MCP server."""
 
     @mcp_server.tool()
-    def get_storage_summary() -> str:
-        """Get a summary of local storage usage for DerivaML.
-
-        Returns information about the working directory, cache directory,
-        and execution directories including sizes and file counts.
-
-        Returns:
-            JSON object with storage statistics including:
-            - working_dir: Path to working directory
-            - cache_dir: Path to cache directory
-            - cache_size_mb: Cache size in megabytes
-            - cache_file_count: Number of files in cache
-            - execution_dir_count: Number of execution directories
-            - execution_size_mb: Total size of execution directories in MB
-            - total_size_mb: Combined storage usage in MB
-
-        Example:
-            get_storage_summary()
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            summary = ml.get_storage_summary()
-            return json.dumps({
-                "status": "success",
-                **summary,
-            })
-        except Exception as e:
-            logger.error(f"Failed to get storage summary: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp_server.tool()
-    def get_cache_size() -> str:
-        """Get the size of the dataset cache directory.
-
-        The cache stores downloaded dataset bags for reuse across executions.
-
-        Returns:
-            JSON object with:
-            - total_bytes: Total cache size in bytes
-            - total_mb: Total cache size in megabytes
-            - file_count: Number of files in cache
-            - dir_count: Number of directories in cache
-
-        Example:
-            get_cache_size()
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            stats = ml.get_cache_size()
-            return json.dumps({
-                "status": "success",
-                **stats,
-            })
-        except Exception as e:
-            logger.error(f"Failed to get cache size: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp_server.tool()
     def clear_cache(older_than_days: int | None = None) -> str:
         """Clear the dataset cache directory.
 
@@ -941,44 +946,6 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
             })
         except Exception as e:
             logger.error(f"Failed to clear cache: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp_server.tool()
-    def list_execution_dirs() -> str:
-        """List execution working directories.
-
-        Returns information about each execution directory including
-        size, file count, and modification time. Useful for identifying
-        orphaned or incomplete execution outputs.
-
-        Returns:
-            JSON array of execution directories, each with:
-            - execution_rid: The execution RID (directory name)
-            - path: Full path to the directory
-            - size_bytes: Total size in bytes
-            - size_mb: Total size in megabytes
-            - modified: Last modification time (ISO format)
-            - file_count: Number of files
-
-        Example:
-            list_execution_dirs()
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            dirs = ml.list_execution_dirs()
-
-            # Convert datetime to ISO format for JSON serialization
-            for d in dirs:
-                if 'modified' in d:
-                    d['modified'] = d['modified'].isoformat()
-
-            return json.dumps({
-                "status": "success",
-                "count": len(dirs),
-                "execution_dirs": dirs,
-            })
-        except Exception as e:
-            logger.error(f"Failed to list execution dirs: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp_server.tool()

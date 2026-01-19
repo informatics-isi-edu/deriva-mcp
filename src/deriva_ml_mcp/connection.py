@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from deriva_ml import DerivaML, DerivaMLException
 
 if TYPE_CHECKING:
-    from deriva_ml.execution import Execution
+    pass
 
 logger = logging.getLogger("deriva-ml-mcp")
 

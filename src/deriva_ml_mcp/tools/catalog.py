@@ -10,25 +10,10 @@ from deriva.core import DerivaServer, get_credential
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
+
     from deriva_ml_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-ml-mcp")
-
-
-def _get_catalog_registry(hostname: str) -> list[dict[str, Any]]:
-    """Query the catalog registry (catalog 0) to get all catalogs and aliases.
-
-    Args:
-        hostname: Server hostname to query.
-
-    Returns:
-        List of registry entries with catalog/alias information.
-    """
-    server = DerivaServer("https", hostname, credentials=get_credential(hostname))
-    registry_catalog = server.connect_ermrest(0)
-    pb = registry_catalog.getPathBuilder()
-    registry = pb.schemas["ermrest"].tables["registry"]
-    return list(registry.entities().fetch())
 
 
 def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
@@ -93,12 +78,6 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         return json.dumps({"status": "no_active_connection"})
 
     @mcp.tool()
-    async def list_connections() -> str:
-        """List all open catalog connections and show which is active."""
-        connections = conn_manager.list_connections()
-        return json.dumps(connections)
-
-    @mcp.tool()
     async def set_active_catalog(hostname: str, catalog_id: str) -> str:
         """Switch the active catalog when multiple catalogs are connected.
 
@@ -115,103 +94,6 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             "status": "error",
             "message": f"No connection found for {hostname}:{catalog_id}",
         })
-
-    @mcp.tool()
-    async def get_catalog_info() -> str:
-        """Get details about the active catalog: hostname, schemas, project name, and MCP execution."""
-        try:
-            ml = conn_manager.get_active_or_raise()
-            conn_info = conn_manager.get_active_connection_info()
-
-            result = {
-                "hostname": ml.host_name,
-                "catalog_id": ml.catalog_id,
-                "domain_schema": ml.domain_schema,
-                "ml_schema": ml.ml_schema,
-                "project_name": ml.project_name,
-            }
-
-            # Add workflow/execution info if available
-            if conn_info:
-                result["workflow_rid"] = conn_info.workflow_rid
-                result["execution_rid"] = (
-                    conn_info.execution.execution_rid if conn_info.execution else None
-                )
-
-            return json.dumps(result)
-        except Exception as e:
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def list_users() -> str:
-        """List all users who have access to the active catalog."""
-        try:
-            ml = conn_manager.get_active_or_raise()
-            users = ml.user_list()
-            return json.dumps(users)
-        except Exception as e:
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def get_chaise_url(table_or_rid: str) -> str:
-        """Get a web UI URL for viewing a table or specific record in Chaise.
-
-        Args:
-            table_or_rid: Either a table name (e.g., "Image", "Dataset") or
-                a RID (e.g., "1-ABC", "W-XYZ") for a specific record.
-
-        Returns:
-            JSON with url field containing the Chaise web interface URL.
-
-        Examples:
-            get_chaise_url("Image") -> URL to browse all images
-            get_chaise_url("1-ABC") -> URL to view specific record 1-ABC
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            # First try as a table name
-            try:
-                url = ml.chaise_url(table_or_rid)
-                return json.dumps({"url": url, "table_or_rid": table_or_rid})
-            except Exception:
-                # If not a table name, try as a RID
-                result = ml.resolve_rid(table_or_rid)
-                schema_name = result.table.schema.name
-                table_name = result.table.name
-                base_url = f"https://{ml.host_name}/chaise/record/#{ml.catalog_id}"
-                url = f"{base_url}/{schema_name}:{table_name}/RID={result.rid}"
-                return json.dumps({"url": url, "table_or_rid": table_or_rid})
-        except Exception as e:
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def resolve_rid(rid: str) -> str:
-        """Find which table a RID belongs to and get its Chaise URL.
-
-        Args:
-            rid: Resource Identifier (e.g., "1-ABC", "W-XYZ").
-
-        Returns:
-            JSON with rid, schema, table, and url fields.
-
-        Example:
-            resolve_rid("1-ABC") -> {"schema": "domain", "table": "Image", ...}
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            result = ml.resolve_rid(rid)
-            schema_name = result.table.schema.name
-            table_name = result.table.name
-            base_url = f"https://{ml.host_name}/chaise/record/#{ml.catalog_id}"
-            url = f"{base_url}/{schema_name}:{table_name}/RID={result.rid}"
-            return json.dumps({
-                "rid": rid,
-                "schema": schema_name,
-                "table": table_name,
-                "url": url,
-            })
-        except Exception as e:
-            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def create_catalog(
@@ -376,65 +258,6 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
 
     @mcp.tool()
-    async def list_catalog_registry(hostname: str) -> str:
-        """List all catalogs and aliases available on a Deriva server.
-
-        Queries the ERMrest registry (catalog 0) to retrieve information about
-        all catalogs and aliases on the server. This is useful for discovering
-        available catalogs before connecting.
-
-        Args:
-            hostname: Server hostname (e.g., "www.eye-ai.org", "dev.eye-ai.org").
-
-        Returns:
-            JSON with:
-            - catalogs: List of actual catalogs with id, name, description, is_persistent
-            - aliases: List of aliases with id (alias name), alias_target (catalog id), name
-
-        Example:
-            list_catalog_registry("www.eye-ai.org")
-            -> {"catalogs": [{"id": "2", "name": "eye-ai", ...}],
-                "aliases": [{"id": "eye-ai", "alias_target": "2", ...}]}
-        """
-        try:
-            entries = _get_catalog_registry(hostname)
-
-            catalogs = []
-            aliases = []
-
-            for entry in entries:
-                # Skip deleted entries
-                if entry.get("deleted_on"):
-                    continue
-
-                if entry.get("is_catalog"):
-                    catalogs.append({
-                        "id": entry["id"],
-                        "name": entry.get("name"),
-                        "description": entry.get("description"),
-                        "is_persistent": entry.get("is_persistent"),
-                    })
-                elif entry.get("alias_target"):
-                    aliases.append({
-                        "id": entry["id"],
-                        "alias_target": entry["alias_target"],
-                        "name": entry.get("name"),
-                        "description": entry.get("description"),
-                    })
-
-            return json.dumps({
-                "hostname": hostname,
-                "catalogs": catalogs,
-                "aliases": aliases,
-            })
-        except Exception as e:
-            logger.error(f"Failed to list catalog registry: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
-
-    @mcp.tool()
     async def create_catalog_alias(
         hostname: str,
         alias_name: str,
@@ -487,41 +310,6 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
 
     @mcp.tool()
-    async def get_catalog_alias(
-        hostname: str,
-        alias_name: str,
-    ) -> str:
-        """Get metadata for a catalog alias.
-
-        Retrieves the alias configuration including its target catalog and owner.
-
-        Args:
-            hostname: Server hostname (e.g., "www.eye-ai.org").
-            alias_name: The alias identifier to look up.
-
-        Returns:
-            JSON with alias metadata: id, alias_target, owner.
-
-        Example:
-            get_catalog_alias("www.eye-ai.org", "my-project")
-            -> {"id": "my-project", "alias_target": "45", "owner": [...]}
-        """
-        try:
-            server = DerivaServer("https", hostname, credentials=get_credential(hostname))
-            alias = server.connect_ermrest_alias(alias_name)
-            metadata = alias.retrieve()
-            return json.dumps({
-                "hostname": hostname,
-                **metadata,
-            })
-        except Exception as e:
-            logger.error(f"Failed to get catalog alias: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
-
-    @mcp.tool()
     async def update_catalog_alias(
         hostname: str,
         alias_name: str,
@@ -548,7 +336,6 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             -> {"status": "updated", "alias": "my-project", "target": "50"}
         """
         try:
-            from deriva.core.ermrest_model import NoChange
 
             server = DerivaServer("https", hostname, credentials=get_credential(hostname))
             alias = server.connect_ermrest_alias(alias_name)

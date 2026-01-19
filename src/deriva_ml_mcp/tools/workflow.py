@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
+
     from deriva_ml_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-ml-mcp")
@@ -15,32 +16,6 @@ logger = logging.getLogger("deriva-ml-mcp")
 
 def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     """Register workflow management tools with the MCP server."""
-
-    @mcp.tool()
-    async def find_workflows() -> str:
-        """Find all registered workflows with their types and versions.
-
-        Returns:
-            JSON array of {rid, name, workflow_type, version, description, url, checksum}.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            workflows = ml.find_workflows()
-            result = []
-            for w in workflows:
-                result.append({
-                    "workflow_rid": w.rid,
-                    "name": w.name,
-                    "workflow_type": w.workflow_type,
-                    "version": w.version,
-                    "description": w.description,
-                    "url": w.url,
-                    "checksum": w.checksum,
-                })
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to find workflows: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def lookup_workflow(url_or_checksum: str) -> str:
@@ -101,29 +76,6 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             })
         except Exception as e:
             logger.error(f"Failed to create workflow: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def list_workflow_types() -> str:
-        """List available workflow types from the Workflow_Type vocabulary.
-
-        Returns:
-            JSON array of {name, description} for each workflow type.
-        """
-        try:
-            from deriva_ml import MLVocab
-
-            ml = conn_manager.get_active_or_raise()
-            terms = ml.list_vocabulary_terms(MLVocab.workflow_type)
-            result = []
-            for term in terms:
-                result.append({
-                    "name": term.name,
-                    "description": term.description,
-                })
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to list workflow types: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()

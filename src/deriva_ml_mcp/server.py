@@ -7,26 +7,25 @@ exposing DerivaML operations as MCP tools that can be used by LLM applications.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from deriva_ml_mcp.connection import ConnectionManager
+from deriva_ml_mcp.prompts import register_prompts
+from deriva_ml_mcp.resources import register_resources
 from deriva_ml_mcp.tools import (
     register_annotation_tools,
     register_catalog_tools,
+    register_data_tools,
     register_dataset_tools,
-    register_vocabulary_tools,
-    register_workflow_tools,
+    register_devtools,
+    register_execution_tools,
     register_feature_tools,
     register_schema_tools,
-    register_execution_tools,
     register_storage_tools,
-    register_data_tools,
-    register_devtools,
+    register_vocabulary_tools,
+    register_workflow_tools,
 )
-from deriva_ml_mcp.resources import register_resources
-from deriva_ml_mcp.prompts import register_prompts
 
 # Configure logging - NEVER use print() in STDIO MCP servers
 logging.basicConfig(
