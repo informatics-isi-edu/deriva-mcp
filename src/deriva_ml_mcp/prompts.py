@@ -1538,6 +1538,245 @@ list_asset_executions("<asset-rid>", "Input")   # Only using executions
 Returns executions with their role (Input/Output).
 """
 
+    # =========================================================================
+    # Dataset Versioning Prompt
+    # =========================================================================
+
+    @mcp.prompt(
+        name="dataset-versioning",
+        description="CRITICAL: Dataset version management rules - explicit versions for experiments, increment after catalog changes",
+    )
+    def dataset_versioning_prompt() -> str:
+        """Comprehensive guide for dataset versioning best practices."""
+        return """# Dataset Versioning Best Practices
+
+**CRITICAL**: Dataset versioning is essential for reproducible ML experiments.
+Follow these rules carefully to ensure experiments are reproducible and results
+can be traced back to exact data snapshots.
+
+---
+
+## Core Versioning Rules
+
+### Rule 1: Always Use Explicit Versions for Real Experiments
+
+**NEVER use "current" or "latest" version for production experiments.**
+
+```python
+# CORRECT: Explicit version for reproducibility
+DatasetSpecConfig(rid="1-ABC", version="1.2.0")
+
+# WRONG: Implicit version - results may not be reproducible
+DatasetSpecConfig(rid="1-ABC")  # Gets "current" version - AVOID for real runs
+```
+
+**When to use explicit versions:**
+- Running actual training/inference experiments
+- Creating results you want to reference later
+- Publishing or sharing experiment results
+- Any run that should be reproducible
+
+**When "current" version is acceptable (development only):**
+- Quick debugging or testing configuration
+- Exploring data before committing to a version
+- Dry runs (`dry_run=true`)
+
+### Rule 2: Increment Version After Catalog Changes
+
+**Dataset versions are snapshots of catalog state at version creation time.**
+
+If you modify the catalog (add features, fix labels, add images), those changes
+are NOT visible in existing dataset versions. You MUST increment the version
+to capture changes.
+
+```
+Workflow:
+1. User adds quality labels to images in catalog
+2. Existing dataset version 1.0.0 does NOT include new labels
+3. Call increment_dataset_version() to create version 1.1.0
+4. Version 1.1.0 now includes the new labels
+5. Update config files to use version 1.1.0
+```
+
+**MCP Tool:**
+```
+increment_dataset_version(
+    "<dataset-rid>",
+    "Added quality labels to 500 images for QA workflow",  # REQUIRED description
+    "minor"  # or "major" for breaking changes, "patch" for fixes
+)
+```
+
+### Rule 3: Always Provide Version Descriptions
+
+When incrementing versions, the description is **REQUIRED** and should explain:
+- What changed in this version
+- Why the change was made
+- Impact on users of this dataset
+
+**Good descriptions:**
+```
+"Added 500 new training images from batch 3 collection"
+"Fixed incorrect class labels on 23 images identified in QA review"
+"Added Image_Quality feature with Good/Fair/Poor classifications"
+"Schema change: added 'acquisition_date' column to Image table"
+"Removed 15 duplicate images found during deduplication"
+```
+
+**Bad descriptions:**
+```
+"Updated"  # Too vague
+"v2"       # Not descriptive
+""         # Empty - NEVER do this
+```
+
+---
+
+## Version Management Workflow
+
+### After Creating a Dataset
+
+```
+1. Create dataset → returns RID and initial version (e.g., "1.0.0")
+2. Add to config file with EXPLICIT version:
+
+   datasets_store(
+       [DatasetSpecConfig(rid="2-XYZ", version="1.0.0", materialize=True)],
+       name="my_training_data",
+   )
+```
+
+### After Modifying Catalog Data
+
+```
+1. Make catalog changes (add features, fix labels, add images)
+2. Increment dataset version with description:
+
+   increment_dataset_version(
+       "2-XYZ",
+       "Added quality labels and fixed 12 mislabeled images",
+       "minor"
+   )
+
+3. Update config file to new version:
+
+   # OLD
+   DatasetSpecConfig(rid="2-XYZ", version="1.0.0")
+
+   # NEW
+   DatasetSpecConfig(rid="2-XYZ", version="1.1.0")
+
+4. Commit config changes before running experiments
+```
+
+### Updating Config Files to Current Version
+
+If you need to update a config file to use the current dataset version:
+
+```
+1. Look up current version:
+   lookup_dataset("<rid>")  → returns current_version
+
+2. Update config:
+   DatasetSpecConfig(rid="<rid>", version="<current_version>")
+
+3. Commit the change before running experiments
+```
+
+**Prompt for LLM:**
+"Update my dataset configs to use current versions" should:
+1. Read the dataset config file
+2. For each DatasetSpecConfig, call `lookup_dataset()` to get current_version
+3. Update the version parameter to match
+4. Show the changes to the user for approval
+5. Remind user to commit before running experiments
+
+---
+
+## Version Components (Semantic Versioning)
+
+| Component | When to Use | Example Change |
+|-----------|-------------|----------------|
+| **major** | Breaking changes, schema modifications | Added new required column |
+| **minor** | New data, features, or non-breaking changes | Added 500 images, new labels |
+| **patch** | Bug fixes, label corrections | Fixed 10 mislabeled images |
+
+---
+
+## Checking Version History
+
+```
+# Get full version history with descriptions
+get_dataset_version_history("<dataset-rid>")
+
+# Returns:
+[
+  {"version": "1.2.0", "created": "2024-01-15", "description": "Added quality labels"},
+  {"version": "1.1.0", "created": "2024-01-10", "description": "Fixed mislabeled images"},
+  {"version": "1.0.0", "created": "2024-01-01", "description": "Initial dataset"}
+]
+```
+
+---
+
+## Common Mistakes to Avoid
+
+### Mistake 1: Running experiments without explicit version
+```python
+# WRONG - version will vary, results not reproducible
+datasets = [DatasetSpecConfig(rid="1-ABC")]
+```
+
+### Mistake 2: Expecting changes to appear in old versions
+```
+# Catalog change made
+add_feature_value(...)
+
+# WRONG - version 1.0.0 doesn't include new feature values
+# Must increment version first
+```
+
+### Mistake 3: Empty or vague version descriptions
+```python
+# WRONG
+increment_dataset_version("1-ABC", "")  # No description
+increment_dataset_version("1-ABC", "update")  # Too vague
+```
+
+### Mistake 4: Not updating config after version increment
+```
+# Incremented version to 1.1.0
+# But config still says version="1.0.0"
+# Experiment will use old data!
+```
+
+---
+
+## Quick Reference
+
+| Action | Command |
+|--------|---------|
+| Check current version | `lookup_dataset("<rid>")` |
+| View version history | `get_dataset_version_history("<rid>")` |
+| Increment version | `increment_dataset_version("<rid>", "<description>", "<component>")` |
+| Query specific version | `list_dataset_members("<rid>", version="X.Y.Z")` |
+| Download specific version | `download_dataset("<rid>", version="X.Y.Z")` |
+
+---
+
+## Summary Checklist
+
+Before running an experiment:
+- [ ] Dataset version is explicitly specified (not "current")
+- [ ] Config file has been updated if version was incremented
+- [ ] Code changes are committed (for provenance tracking)
+
+After modifying catalog data:
+- [ ] Called `increment_dataset_version()` with meaningful description
+- [ ] Updated config files to new version
+- [ ] Committed config changes
+"""
+
     @mcp.prompt(
         name="configure-experiment",
         description="Comprehensive guide to configure ML experiments, multiruns, and sweeps with hydra-zen and DerivaML",
@@ -5746,21 +5985,116 @@ Use these MCP resources to get full templates:
 
 ## Important Notes
 
-1. **Version pinning**: Always include the `version` parameter in DatasetSpecConfig.
-   Use `lookup_dataset()` to get the current version.
-
-2. **Materialize flag**: Set `materialize=True` for datasets that need local files,
+1. **Materialize flag**: Set `materialize=True` for datasets that need local files,
    `False` for metadata-only access.
 
-3. **Description quality**: Include provenance information in asset descriptions:
+2. **Description quality**: Include provenance information in asset descriptions:
    - Source execution RID
    - Model configuration used
    - Key hyperparameters
    - Performance metrics if available
 
-4. **Naming consistency**: Follow existing naming patterns in the config files.
+3. **Naming consistency**: Follow existing naming patterns in the config files.
    Check what conventions are already in use.
 
-5. **Git commit**: After updating configs, remind the user to commit changes
+4. **Git commit**: After updating configs, remind the user to commit changes
    before running experiments (DerivaML tracks code provenance).
+
+---
+
+## CRITICAL: Dataset Version Management
+
+**See the `dataset-versioning` prompt for complete version management rules.**
+
+### Key Version Rules for Config Files
+
+#### Rule 1: ALWAYS Use Explicit Versions for Real Experiments
+
+```python
+# CORRECT: Explicit version for reproducibility
+DatasetSpecConfig(rid="1-ABC", version="1.2.0")
+
+# WRONG: No version - results may not be reproducible
+DatasetSpecConfig(rid="1-ABC")  # AVOID for production runs
+```
+
+**Only omit version for:**
+- Quick debugging (with `dry_run=true`)
+- Exploratory data analysis
+- Development testing
+
+#### Rule 2: Update Configs After Version Increments
+
+When the catalog is modified and a dataset version is incremented:
+
+1. Increment the version with description:
+   ```
+   increment_dataset_version("2-XYZ", "Added quality labels to all images", "minor")
+   → New version: 1.1.0
+   ```
+
+2. Update the config file:
+   ```python
+   # OLD
+   DatasetSpecConfig(rid="2-XYZ", version="1.0.0")
+
+   # NEW - updated to latest version
+   DatasetSpecConfig(rid="2-XYZ", version="1.1.0")
+   ```
+
+3. Commit the config change before running experiments
+
+#### Rule 3: Provide "Update to Current Version" Workflow
+
+When user requests: "Update my dataset configs to use current versions"
+
+1. Read the dataset config file
+2. For each DatasetSpecConfig:
+   - Call `lookup_dataset("<rid>")` to get `current_version`
+   - Compare with configured version
+3. Show proposed changes:
+   ```python
+   # Changes to configs/datasets.py:
+   # - cifar10_training: 1.0.0 → 1.2.0
+   # - cifar10_test: 1.1.0 → 1.2.0 (no change needed)
+   ```
+4. Apply changes if user approves
+5. Remind user to commit before running experiments
+
+### Version Update Example
+
+```
+User: "I added quality labels to the images. Update my configs to use the new data."
+
+Assistant workflow:
+1. Increment dataset version:
+   increment_dataset_version(
+       "2-ABC",
+       "Added Image_Quality labels (Good/Fair/Poor) to all 5000 images",
+       "minor"
+   )
+   → Version 1.0.0 → 1.1.0
+
+2. Update configs/datasets.py:
+   # Before
+   DatasetSpecConfig(rid="2-ABC", version="1.0.0")
+
+   # After
+   DatasetSpecConfig(rid="2-ABC", version="1.1.0")
+
+3. Response:
+   "I've incremented the dataset version to 1.1.0 (added quality labels) and
+   updated your config. Please commit these changes before running experiments:
+
+   git add configs/datasets.py
+   git commit -m 'Update dataset version to 1.1.0 with quality labels'
+   "
+```
+
+### Why This Matters
+
+- **Reproducibility**: Explicit versions ensure the same data is used each time
+- **Provenance**: Version history shows what changed and when
+- **Debugging**: If results differ, you can check if data versions match
+- **Collaboration**: Team members use the same data snapshot
 """

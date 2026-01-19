@@ -391,28 +391,65 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     @mcp.tool()
     async def increment_dataset_version(
         dataset_rid: str,
-        component: str = "minor",
         description: str = "",
+        component: str = "minor",
     ) -> str:
         """Manually increment a dataset's semantic version (major.minor.patch).
 
+        **Description Handling (follows generate-descriptions prompt guidelines):**
+
+        1. If user provides description: Use it, potentially improving for clarity
+        2. If description is empty: Generate from conversation context:
+           - What catalog operations were performed since last version?
+           - What was the user's stated goal for these changes?
+           - Summarize the changes made (e.g., "Added X, fixed Y, modified Z")
+
+        **Description Generation Guidelines:**
+        - Include WHAT changed (added images, fixed labels, new features)
+        - Include WHY if known (QA review, batch import, schema update)
+        - Include IMPACT if relevant (affects N records, breaking change)
+        - Use markdown for complex descriptions (lists, tables)
+
+        Use this tool when:
+        - You've modified catalog data and want changes visible in a dataset
+        - You need to capture a snapshot of the current catalog state
+        - You want to create a reproducible checkpoint before making changes
+
         Args:
             dataset_rid: The RID of the dataset.
+            description: What changed in this version. If empty, LLM should generate
+                from context. Good descriptions include:
+                - What was added, modified, or fixed
+                - Why the change was made (if known)
+                - Impact on users of this dataset
+
+                Examples of good descriptions:
+                - "Added 500 new labeled training images from batch 3"
+                - "Fixed incorrect labels on 23 images identified in QA review"
+                - "Schema change: added 'quality_score' column to Image table"
+                - "Captured snapshot before label correction workflow"
+
             component: Which part to increment: "major", "minor", or "patch".
-            description: Description of what changed in this version.
+                - major: Breaking changes or schema modifications
+                - minor: New data added or non-breaking changes (default)
+                - patch: Bug fixes or label corrections
 
         Returns:
-            JSON with status, new_version, dataset_rid.
+            JSON with status, new_version, previous_version, dataset_rid, description.
 
         Examples:
-            increment_dataset_version("1-ABC", "major", "Schema change")  -> 2.0.0
-            increment_dataset_version("1-ABC", "patch", "Fixed labels")   -> 1.0.1
+            increment_dataset_version("1-ABC", "Added quality labels to all images", "minor")
+            increment_dataset_version("1-ABC", "Fixed mislabeled cat images", "patch")
+            increment_dataset_version("1-ABC", "Schema change: new metadata columns", "major")
         """
         try:
             from deriva_ml.dataset.aux_classes import VersionPart
 
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
+
+            # Capture previous version before incrementing
+            previous_version = dataset.current_version
 
             component_map = {
                 "major": VersionPart.major,
@@ -428,7 +465,10 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({
                 "status": "success",
                 "new_version": str(new_version) if new_version else None,
+                "previous_version": str(previous_version) if previous_version else None,
                 "dataset_rid": dataset_rid,
+                "description": description,
+                "component": component,
             })
         except Exception as e:
             logger.error(f"Failed to increment version: {e}")
