@@ -379,6 +379,24 @@ if executions:
     exp.display_markdown()  # Show full experiment details
 ```
 
+## Citation URLs
+
+**Use `ml.cite()` to generate permanent URLs to catalog entities:**
+
+```python
+# Get permanent citation URL (with snapshot timestamp)
+url = ml.cite(rid)  # Returns: https://host/id/catalog/RID@snaptime
+
+# Get URL to current catalog state (no snapshot)
+url = ml.cite(rid, current=True)  # Returns: https://host/id/catalog/RID
+```
+
+The `cite()` method:
+- Accepts either a RID string or a dictionary with a 'RID' key
+- By default returns a permanent URL with snapshot timestamp for reproducibility
+- With `current=True`, returns a URL to the current catalog state (useful for linking to live data)
+- Validates that the RID exists in the catalog
+
 ## Before Calling Tools
 
 **Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
