@@ -1034,6 +1034,16 @@ multirun_config(
             asset = ml.lookup_asset(asset_rid)
             executions = ml.list_asset_executions(asset_rid)
 
+            # Convert ExecutionRecord objects to dicts for JSON serialization
+            execution_list = []
+            for exe in executions:
+                execution_list.append({
+                    "execution_rid": exe.execution_rid,
+                    "workflow_rid": exe.workflow_rid,
+                    "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
+                    "description": exe.description,
+                })
+
             return json.dumps({
                 "rid": asset.asset_rid,
                 "table": asset.asset_table,
@@ -1043,7 +1053,7 @@ multirun_config(
                 "md5": asset.md5,
                 "description": asset.description,
                 "types": asset.asset_types,
-                "executions": executions,
+                "executions": execution_list,
                 "chaise_url": asset.get_chaise_url(),
             }, indent=2)
         except Exception as e:

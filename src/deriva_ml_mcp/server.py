@@ -439,9 +439,51 @@ asset = ml.lookup_asset(asset_path.asset_rid)
 executions = asset.list_executions(asset_role='Output')
 
 if executions:
-    exp = ml.lookup_experiment(executions[0]['Execution'])
+    # executions returns ExecutionRecord objects with execution_rid attribute
+    exp = ml.lookup_experiment(executions[0].execution_rid)
     exp.display_markdown()  # Show full experiment details
 ```
+
+## Asset Management
+
+**Use `lookup_asset()` to get detailed asset information:**
+
+```python
+# Look up an asset by RID
+asset = ml.lookup_asset("3JSE")
+print(f"File: {asset.filename}, Table: {asset.asset_table}")
+print(f"Types: {asset.asset_types}")
+print(f"Created by: {asset.execution_rid}")
+
+# Find executions that used this asset
+executions = asset.list_executions()
+for exe in executions:
+    print(f"Execution {exe.execution_rid}: {exe.description}")
+```
+
+**Asset methods return typed objects:**
+- `ml.list_assets(table)` returns `list[Asset]`
+- `ml.find_assets()` returns iterable of `Asset` objects
+- `asset.list_executions()` returns `list[ExecutionRecord]`
+- `ml.list_asset_executions(rid)` returns `list[ExecutionRecord]`
+
+## ExecutionRecord vs Execution
+
+DerivaML has two execution classes for different use cases:
+
+**ExecutionRecord** - Lightweight catalog state representation:
+- Returned by `ml.lookup_execution()`, `asset.list_executions()`, etc.
+- Has `execution_rid`, `workflow_rid`, `status`, `description` properties
+- Use for querying and viewing execution metadata
+- Supports `update_status()` for updating catalog state
+
+**Execution** - Full lifecycle management:
+- Returned by `ml.create_execution()` and `ml.restore_execution()`
+- Includes working directory, asset upload, dataset download
+- Use for running ML workflows with provenance tracking
+
+When you need to query execution history, the methods return ExecutionRecord objects.
+When you need to run a workflow, use create_execution() or restore_execution().
 
 ## Citation URLs
 

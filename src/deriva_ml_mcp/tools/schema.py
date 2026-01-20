@@ -216,7 +216,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             asset_table: Name of the asset table (e.g., "Image", "Model").
 
         Returns:
-            JSON array of {RID, Filename, URL, Length, MD5, Asset_Type}.
+            JSON array of {asset_rid, filename, url, length, md5, asset_types, asset_table}.
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -224,16 +224,64 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             result = []
             for asset in assets:
                 result.append({
-                    "RID": asset.get("RID"),
-                    "Filename": asset.get("Filename"),
-                    "URL": asset.get("URL"),
-                    "Length": asset.get("Length"),
-                    "MD5": asset.get("MD5"),
-                    "Asset_Type": asset.get("Asset_Type", []),
+                    "asset_rid": asset.asset_rid,
+                    "filename": asset.filename,
+                    "url": asset.url,
+                    "length": asset.length,
+                    "md5": asset.md5,
+                    "asset_types": asset.asset_types,
+                    "asset_table": asset.asset_table,
+                    "description": asset.description,
                 })
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to list assets: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def lookup_asset(asset_rid: str) -> str:
+        """Look up an asset by its RID from any asset table.
+
+        Returns detailed information about a specific asset including its
+        metadata, types, and the execution that created it (if tracked).
+
+        Args:
+            asset_rid: RID of the asset to look up (e.g., "3JSE").
+
+        Returns:
+            JSON with asset details:
+            - asset_rid: The asset's RID
+            - asset_table: Which table contains this asset (e.g., "Image", "Model")
+            - filename: Original filename
+            - url: URL to download the file
+            - length: File size in bytes
+            - md5: MD5 checksum
+            - description: Asset description
+            - asset_types: List of asset type vocabulary terms
+            - execution_rid: RID of execution that created this asset (if tracked)
+            - chaise_url: URL to view in Chaise web interface
+
+        Example:
+            lookup_asset("3JSE") -> detailed asset information
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            asset = ml.lookup_asset(asset_rid)
+
+            return json.dumps({
+                "asset_rid": asset.asset_rid,
+                "asset_table": asset.asset_table,
+                "filename": asset.filename,
+                "url": asset.url,
+                "length": asset.length,
+                "md5": asset.md5,
+                "description": asset.description,
+                "asset_types": asset.asset_types,
+                "execution_rid": asset.execution_rid,
+                "chaise_url": asset.get_chaise_url(),
+            })
+        except Exception as e:
+            logger.error(f"Failed to lookup asset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
@@ -250,8 +298,9 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             asset_role: Optional filter: "Input" or "Output". If omitted, returns all.
 
         Returns:
-            JSON array of {Execution, Asset_Role} records showing which executions
-            are associated with this asset and their role.
+            JSON array of execution records showing which executions are associated
+            with this asset. Each record includes execution_rid, workflow_rid,
+            status, and description.
 
         Example:
             list_asset_executions("3JSE") -> finds all executions that created/used this asset
@@ -260,7 +309,16 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             ml = conn_manager.get_active_or_raise()
             executions = ml.list_asset_executions(asset_rid, asset_role=asset_role)
-            return json.dumps(executions)
+
+            result = []
+            for exe in executions:
+                result.append({
+                    "execution_rid": exe.execution_rid,
+                    "workflow_rid": exe.workflow_rid,
+                    "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
+                    "description": exe.description,
+                })
+            return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to list asset executions: {e}")
             return json.dumps({"status": "error", "message": str(e)})

@@ -544,3 +544,45 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "status": "error",
                 "message": str(e),
             })
+
+    @mcp.tool()
+    async def cite(rid: str, current: bool = False) -> str:
+        """Generate a citation URL for a catalog entity.
+
+        Creates a permanent, citable URL for any catalog entity (dataset,
+        execution, asset, etc.). By default, includes a snapshot timestamp
+        for reproducibility. Use current=True for a link to the live data.
+
+        Args:
+            rid: RID of the entity to cite (e.g., "1-ABC").
+            current: If True, return URL to current state without snapshot.
+                If False (default), return permanent URL with snapshot timestamp.
+
+        Returns:
+            JSON with:
+            - url: The citation URL
+            - rid: The entity RID
+            - is_snapshot: Whether URL includes snapshot timestamp
+
+        Examples:
+            cite("1-ABC")
+            -> {"url": "https://host/id/catalog/1-ABC@2024-01-15", "is_snapshot": true}
+
+            cite("1-ABC", current=True)
+            -> {"url": "https://host/id/catalog/1-ABC", "is_snapshot": false}
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            url = ml.cite(rid, current=current)
+
+            return json.dumps({
+                "url": url,
+                "rid": rid,
+                "is_snapshot": not current,
+            })
+        except Exception as e:
+            logger.error(f"Failed to generate citation URL: {e}")
+            return json.dumps({
+                "status": "error",
+                "message": str(e),
+            })

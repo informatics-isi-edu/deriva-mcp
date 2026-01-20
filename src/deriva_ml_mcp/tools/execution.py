@@ -575,7 +575,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                     "execution_rid": exe.execution_rid,
                     "workflow_rid": exe.workflow_rid,
                     "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
-                    "description": exe.configuration.description if exe.configuration else None,
+                    "description": exe.description,
                 })
 
             return json.dumps({
@@ -840,7 +840,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             recurse: If True, return all descendants (children, grandchildren, etc.).
 
         Returns:
-            JSON array of {rid, workflow, status, sequence} for each child.
+            JSON array of {execution_rid, workflow_rid, status, description} for each child.
 
         Example:
             list_nested_executions("1-PARENT")  # Direct children only
@@ -857,7 +857,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                     "execution_rid": child.execution_rid,
                     "workflow_rid": child.workflow_rid,
                     "status": child.status.value if hasattr(child.status, 'value') else str(child.status),
-                    "description": child.configuration.description if child.configuration else None,
+                    "description": child.description,
                 })
 
             return json.dumps({
@@ -882,7 +882,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             recurse: If True, return all ancestors (parents, grandparents, etc.).
 
         Returns:
-            JSON array of {rid, workflow, status} for each parent.
+            JSON array of {execution_rid, workflow_rid, status, description} for each parent.
 
         Example:
             list_parent_executions("1-CHILD")  # Direct parents only
@@ -899,7 +899,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                     "execution_rid": parent.execution_rid,
                     "workflow_rid": parent.workflow_rid,
                     "status": parent.status.value if hasattr(parent.status, 'value') else str(parent.status),
-                    "description": parent.configuration.description if parent.configuration else None,
+                    "description": parent.description,
                 })
 
             return json.dumps({
@@ -910,6 +910,44 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             })
         except Exception as e:
             logger.error(f"Failed to list parent executions: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def lookup_experiment(execution_rid: str) -> str:
+        """Look up an experiment (execution with Hydra configuration) by RID.
+
+        Returns detailed information about an experiment including its Hydra
+        configuration, model parameters, input datasets/assets, and output assets.
+
+        Use this to get full details about a specific ML experiment. For listing
+        multiple experiments, use find_experiments().
+
+        Args:
+            execution_rid: RID of the experiment/execution to look up.
+
+        Returns:
+            JSON with experiment details:
+            - name: Experiment name from config
+            - execution_rid: The execution RID
+            - description: Execution description
+            - status: Execution status
+            - config_choices: Dictionary of Hydra config names used
+            - model_config: Dictionary of model hyperparameters
+            - input_datasets: List of input dataset summaries
+            - input_assets: List of input asset summaries
+            - output_assets: List of output asset summaries
+            - url: Chaise URL to view execution
+
+        Example:
+            lookup_experiment("1-ABC") -> full experiment details with config
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            exp = ml.lookup_experiment(execution_rid)
+
+            return json.dumps(exp.summary())
+        except Exception as e:
+            logger.error(f"Failed to lookup experiment: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
 

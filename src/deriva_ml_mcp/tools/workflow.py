@@ -103,26 +103,76 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def lookup_workflow(url_or_checksum: str) -> str:
-        """Find a workflow by its source URL or code checksum.
+    async def lookup_workflow(workflow_rid: str) -> str:
+        """Look up a workflow by its RID to get full details.
 
         Args:
-            url_or_checksum: Either a URL or MD5 checksum to search for.
+            workflow_rid: RID of the workflow to look up.
 
         Returns:
-            JSON with found=true/false and rid if found.
+            JSON with workflow details including name, type, URL, checksum,
+            description, and version.
 
         Example:
-            lookup_workflow("https://github.com/org/repo/blob/main/train.py")
+            lookup_workflow("1-ABC") -> full workflow details
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            rid = ml.lookup_workflow(url_or_checksum)
-            if rid:
-                return json.dumps({"found": True, "workflow_rid": rid})
-            return json.dumps({"found": False, "workflow_rid": None})
+            workflow = ml.lookup_workflow(workflow_rid)
+
+            return json.dumps({
+                "rid": workflow.rid,
+                "name": workflow.name,
+                "workflow_type": workflow.workflow_type,
+                "description": workflow.description,
+                "url": workflow.url,
+                "checksum": workflow.checksum,
+                "version": workflow.version,
+                "is_notebook": workflow.is_notebook,
+            })
         except Exception as e:
             logger.error(f"Failed to lookup workflow: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def lookup_workflow_by_url(url: str) -> str:
+        """Find a workflow by its source URL.
+
+        Search for a workflow that was registered with the given source URL.
+        Use this to check if a workflow for a specific script or notebook
+        already exists before creating a new one.
+
+        Args:
+            url: The source URL to search for (e.g., GitHub URL to script).
+
+        Returns:
+            JSON with:
+            - found: True if workflow exists, False otherwise
+            - workflow: Full workflow details if found
+
+        Example:
+            lookup_workflow_by_url("https://github.com/org/repo/blob/main/train.py")
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            workflow = ml.lookup_workflow_by_url(url)
+
+            if workflow:
+                return json.dumps({
+                    "found": True,
+                    "workflow": {
+                        "rid": workflow.rid,
+                        "name": workflow.name,
+                        "workflow_type": workflow.workflow_type,
+                        "description": workflow.description,
+                        "url": workflow.url,
+                        "checksum": workflow.checksum,
+                        "version": workflow.version,
+                    },
+                })
+            return json.dumps({"found": False, "workflow": None})
+        except Exception as e:
+            logger.error(f"Failed to lookup workflow by URL: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
