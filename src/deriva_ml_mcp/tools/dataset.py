@@ -991,23 +991,32 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         first by dataset type (from nested dataset hierarchy), then by grouping values.
 
         The `group_by` parameter specifies how to create subdirectories. Each name
-        can be either:
+        can be one of the following formats:
 
         - **Column name**: A column on the asset table (e.g., "label", "modality").
           The column's value becomes the subdirectory name.
-        - **Feature name**: A feature defined on the asset table. The feature's
+        - **Feature name**: A feature defined on the asset table (e.g., "Diagnosis").
+          Uses the first term column from the feature table. The feature's
           controlled vocabulary term value becomes the subdirectory name.
+        - **Feature.column**: A specific column from a multi-term feature
+          (e.g., "Image_Diagnosis.Diagnosis_Image"). Use this format when a feature
+          has multiple term columns and you need to specify which column to use
+          for grouping. This is essential for features like Image_Diagnosis that
+          have columns like [Image_Quality, Diagnosis_Tag, Diagnosis_Status, Diagnosis_Image].
 
-        Column names are checked first, then feature names.
+        Column names are checked first, then feature names (with optional column specifier).
 
         Args:
             dataset_rid: RID of the dataset to restructure.
             asset_table: Name of the asset table (e.g., "Image").
             output_dir: Base directory for restructured assets.
             group_by: Column names or feature names to group by. Creates nested
-                subdirectories in the order specified. For example,
-                ["modality", "Diagnosis"] creates paths like
-                "output/training/MRI/Normal/image.jpg".
+                subdirectories in the order specified. Supports formats:
+                - "column_name" - direct column on asset table
+                - "FeatureName" - uses first term column from feature
+                - "FeatureName.column_name" - uses specific column from feature
+                Example: ["modality", "Image_Diagnosis.Diagnosis_Image"] creates
+                paths like "output/training/MRI/Normal/image.jpg".
             use_symlinks: If True (default), create symlinks to downloaded files.
                 If False, copy files. Symlinks save disk space but require the
                 downloaded dataset to remain in place.
@@ -1027,7 +1036,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             or has multiple values for an asset.
 
         Examples:
-            Organize images by a "Diagnosis" feature::
+            Organize images by a simple "Diagnosis" feature::
 
                 restructure_assets(
                     dataset_rid="1-ABC",
@@ -1037,7 +1046,17 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 )
                 # Creates: ./ml_data/training/Normal/img1.jpg
                 #          ./ml_data/training/Abnormal/img2.jpg
-                #          ./ml_data/testing/Normal/img3.jpg
+
+            Organize by a specific column from a multi-term feature::
+
+                restructure_assets(
+                    dataset_rid="1-ABC",
+                    asset_table="Image",
+                    output_dir="./ml_data",
+                    group_by=["Image_Diagnosis.Diagnosis_Image"]
+                )
+                # Creates: ./ml_data/training/No Glaucoma/img1.jpg
+                #          ./ml_data/training/Suspected Glaucoma/img2.jpg
 
             Organize by column then feature::
 
