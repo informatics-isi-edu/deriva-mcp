@@ -18,6 +18,91 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
     """Register workflow management tools with the MCP server."""
 
     @mcp.tool()
+    async def list_workflow_types() -> str:
+        """List all workflow type vocabulary terms.
+
+        Returns all terms from the Workflow_Type vocabulary. Use this to
+        discover available workflow types before creating a workflow.
+
+        Returns:
+            JSON array of {name, description, rid, synonyms}.
+
+        Example:
+            list_workflow_types() -> [
+                {"name": "Training", "description": "ML model training workflows", ...},
+                {"name": "Inference", "description": "Model inference workflows", ...}
+            ]
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            terms = ml.list_vocabulary_terms("Workflow_Type")
+            return json.dumps([
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "rid": t.rid,
+                    "synonyms": list(t.synonyms) if t.synonyms else [],
+                }
+                for t in terms
+            ])
+        except Exception as e:
+            logger.error(f"Failed to list workflow types: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def find_workflows(
+        workflow_type: str | None = None,
+        description_pattern: str | None = None,
+        limit: int = 50,
+    ) -> str:
+        """Find workflows with optional filtering.
+
+        Search for existing workflows by type or description pattern. Use this
+        before creating a new workflow to check if a suitable one already exists.
+
+        Args:
+            workflow_type: Filter by workflow type (e.g., "Training", "Inference").
+            description_pattern: Case-insensitive substring match on description.
+            limit: Maximum number of results (default: 50).
+
+        Returns:
+            JSON array of {rid, name, workflow_type, description, url, checksum}.
+
+        Examples:
+            find_workflows(workflow_type="Training")
+            find_workflows(description_pattern="CIFAR")
+            find_workflows()
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            workflows = ml.list_workflows()
+            results = []
+            for wf in workflows:
+                # Apply filters
+                if workflow_type and wf.workflow_type != workflow_type:
+                    continue
+                if description_pattern:
+                    pattern_lower = description_pattern.lower()
+                    desc = wf.description or ""
+                    name = wf.name or ""
+                    if pattern_lower not in desc.lower() and pattern_lower not in name.lower():
+                        continue
+                results.append({
+                    "rid": wf.rid,
+                    "name": wf.name,
+                    "workflow_type": wf.workflow_type,
+                    "description": wf.description,
+                    "url": wf.url,
+                    "checksum": wf.checksum,
+                })
+                if len(results) >= limit:
+                    break
+            return json.dumps(results)
+        except Exception as e:
+            logger.error(f"Failed to find workflows: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def lookup_workflow(url_or_checksum: str) -> str:
         """Find a workflow by its source URL or code checksum.
 

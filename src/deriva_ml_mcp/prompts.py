@@ -96,6 +96,25 @@ exe.upload_execution_outputs()
 
 MCP tools mirror the Python API. Use the execution tools in this order:
 
+### Step 0 (Optional): Find or Reuse a Workflow
+
+Before creating an execution, optionally check for existing workflows:
+
+```
+# List available workflow types
+list_workflow_types()
+
+# Search for similar workflows by type or description
+find_workflows(workflow_type="Training")
+find_workflows(description_pattern="ResNet")
+
+# Check if workflow exists by URL/checksum (for code-tracked workflows)
+lookup_workflow("https://github.com/org/repo/blob/main/train.py")
+```
+
+If a suitable workflow exists, you can reuse it. The `create_execution` tool will
+create a new workflow automatically if the exact name/type/description doesn't exist.
+
 ### Step 1: Create the Execution
 
 ```
@@ -108,7 +127,8 @@ create_execution(
 )
 ```
 
-Use the `deriva-ml://catalog/workflow-types` resource to see available workflow types.
+Use `list_workflow_types()` or the `deriva-ml://catalog/workflow-types` resource
+to see available workflow types. Use `add_workflow_type()` to create a new type if needed.
 
 ### Step 2: Do Your ML Work
 
@@ -159,6 +179,8 @@ upload_execution_outputs()
 - Use `update_execution_status(status, message)` for progress updates
 - Use `restore_execution(rid)` to resume a previous execution
 - Use `find_executions()` or the `deriva-ml://catalog/executions` resource to see past workflow runs
+- Use `find_workflows()` to discover existing workflows before creating new ones
+- Use `list_workflow_types()` to see available workflow type categories
 - In Python, always prefer the context manager over manual start/stop
 """
 

@@ -96,6 +96,20 @@ Always call `connect_catalog` before using other tools. This establishes the con
 2. `start_execution` / `stop_execution` - Manage execution lifecycle
 3. `upload_execution_outputs` - Upload results to the catalog
 
+**Managing workflows:**
+
+Executions require a workflow, and workflows require a workflow type. The hierarchy is:
+- **Workflow_Type** → vocabulary term (e.g., "Training", "Inference")
+- **Workflow** → reusable workflow definition
+- **Execution** → instance of a workflow run
+
+Before creating an execution:
+1. `list_workflow_types()` - See available workflow types
+2. `find_workflows()` - Search for existing workflows by type or description
+3. `lookup_workflow()` - Check if workflow exists by URL/checksum
+4. `create_workflow()` - Create new workflow if needed (or let `create_execution` create it)
+5. `add_workflow_type()` - Add new workflow type if needed
+
 **Provenance queries:**
 - `list_dataset_executions` - Find all executions that used a dataset
 - `list_asset_executions` - Find executions that created/used an asset
