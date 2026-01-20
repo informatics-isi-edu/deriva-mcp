@@ -709,20 +709,27 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         version: str,
         materialize: bool = True,
     ) -> str:
-        """Download a dataset bag for use in this execution.
+        """Download a dataset version as a BDBag for use in this execution.
 
-        Downloads a dataset as a BDBag to the execution's working directory.
-        The download is recorded as an input for provenance tracking.
+        Creates a self-contained BDBag archive of the specified dataset version
+        and records it as an input for provenance tracking. The bag includes
+        all dataset members, nested datasets (recursively), feature values,
+        vocabulary terms, and asset files.
+
+        The bag captures the exact catalog state at the version's snapshot time,
+        ensuring reproducibility regardless of later catalog changes.
 
         Args:
             dataset_rid: RID of the dataset to download.
             version: Semantic version to download (e.g., "1.0.0"). Required.
-                Use get_dataset() to find the current_version if needed.
-            materialize: Fetch all referenced asset files (default: True).
+                Use lookup_dataset() to find the current_version if needed.
+            materialize: If True (default), fetch all referenced asset files
+                (images, model weights, etc.) from Hatrac storage. If False,
+                bag contains only metadata and remote file references.
 
         Returns:
-            JSON with dataset bag attributes including dataset_rid, version,
-            description, dataset_types, execution_rid, and bag_path.
+            JSON with bag attributes: dataset_rid, version, description,
+            dataset_types, execution_rid, and bag_path (local filesystem path).
         """
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec

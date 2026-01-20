@@ -26,16 +26,16 @@ partition the same underlying data. Children share the parent's elements.
 **Dataset Versions** (Semantic Versioning):
 Datasets use major.minor.patch versioning for reproducibility:
 - **Patch** (0.0.X): Metadata-only changes (descriptions, corrections)
-- **Minor** (0.X.0): Added or removed elements (auto-incremented by add_dataset_members)
+- **Minor** (0.X.0): Added or removed elements, types (auto-incremented)
 - **Major** (X.0.0): Schema changes, breaking changes to data structure
 
 Each version captures a catalog snapshot, allowing queries against historical states.
+The same version always returns the same data, regardless of later catalog changes.
 
 **Dataset Bags (BDBags)**:
-Exported, portable packages containing dataset elements and metadata. Bags can be:
-- Downloaded locally for offline ML training
-- Shared via MINID (Minimal Viable Identifier) for reproducibility
-- Materialized to fetch all referenced asset files
+A BDBag is a self-describing, portable archive of a specific dataset version. Use
+`download_dataset()` to export a dataset as a BDBag. See server instructions for
+detailed documentation on BDBag contents and usage.
 """
 
 from __future__ import annotations
@@ -724,21 +724,29 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         version: str,
         materialize: bool = True,
     ) -> str:
-        """Download a dataset as a BDBag for local processing.
+        """Download a dataset version as a BDBag for local processing.
 
-        Downloads the dataset to a local directory. Use this for standalone
-        processing outside an execution context. For tracked ML workflows,
-        use download_execution_dataset instead.
+        Creates a self-contained BDBag archive of the specified dataset version.
+        The bag includes all dataset members, nested datasets (recursively),
+        feature values for members, vocabulary terms, and asset files.
+
+        The bag captures the exact catalog state at the version's snapshot time,
+        ensuring reproducibility regardless of later catalog changes.
+
+        Use this for standalone processing outside an execution context. For
+        tracked ML workflows, use download_execution_dataset instead.
 
         Args:
             dataset_rid: RID of the dataset to download.
             version: Semantic version to download (e.g., "1.0.0"). Required.
-                Use get_dataset() to find the current_version if needed.
-            materialize: Fetch all referenced asset files (default: True).
+                Use lookup_dataset() to find the current_version if needed.
+            materialize: If True (default), fetch all referenced asset files
+                (images, model weights, etc.) from Hatrac storage. If False,
+                bag contains only metadata and remote file references.
 
         Returns:
-            JSON with dataset bag attributes including dataset_rid, version,
-            description, dataset_types, execution_rid, and bag_path.
+            JSON with bag attributes: dataset_rid, version, description,
+            dataset_types, execution_rid, and bag_path (local filesystem path).
         """
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec

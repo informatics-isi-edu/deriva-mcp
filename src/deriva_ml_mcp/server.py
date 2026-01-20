@@ -181,6 +181,54 @@ DatasetSpecConfig(rid="28EA")  # ERROR: missing required 'version'
 - To include recent changes, call `increment_dataset_version` first, then use the new version number
 - This ensures reproducibility: the same version always returns the same data
 
+## Dataset Bags (BDBags)
+
+A **BDBag** (Big Data Bag) is a self-describing, portable archive of a specific dataset version.
+Use `download_dataset(dataset_rid, version)` to export a dataset as a BDBag for local processing.
+
+**A BDBag for a specific version contains:**
+
+1. **All dataset members** - Records from domain tables (e.g., Image, Subject) that belong to the dataset
+2. **Nested datasets** - Child datasets are included recursively with all their members
+3. **Asset files** - Binary files (images, model weights, etc.) referenced by members, fetched when `materialize=True`
+4. **Feature values** - All feature annotations for dataset members (e.g., Image_Classification labels)
+5. **Vocabulary terms** - Controlled vocabulary terms used by features
+6. **Catalog snapshot metadata** - The exact catalog state at the version's creation time
+
+**Key characteristics:**
+
+- **Version-specific**: A bag captures the dataset at a specific version's snapshot time
+- **Self-contained**: Contains everything needed to reproduce the dataset offline
+- **Checksummed**: All files have cryptographic checksums for integrity verification
+- **Portable**: Can be shared, archived, or transferred to other systems
+
+**Materialization:**
+
+When `materialize=True` (the default), the bag fetches all referenced asset files from Hatrac storage.
+This creates a fully self-contained archive. With `materialize=False`, the bag contains only
+metadata and remote file references (smaller but requires network access to use).
+
+**Caching:**
+
+Bags are cached locally by checksum in the DerivaML cache directory. When you download the same
+dataset version again, the cached bag is reused without re-downloading. This makes repeated
+access to the same dataset version very fast. The cache key is `{dataset_rid}_{checksum}`.
+
+**MINID support:**
+
+Bags can be registered with a MINID (Minimal Viable Identifier) for permanent, citable references.
+This requires S3 bucket configuration on the catalog.
+
+**Example workflow:**
+```python
+# Download dataset for local ML training
+download_dataset("ABC123", version="1.2.0", materialize=True)
+# Returns: {"bag_path": "/path/to/Dataset_ABC123", ...}
+
+# The bag contains all members, nested datasets, features, and asset files
+# at the exact catalog state when version 1.2.0 was created
+```
+
 ## Running Models with deriva-ml-run
 
 The `deriva-ml-run` CLI executes ML models with full provenance tracking. It uses hydra-zen configuration for all parameters.
