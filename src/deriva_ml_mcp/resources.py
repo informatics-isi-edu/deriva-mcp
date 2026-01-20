@@ -4,6 +4,7 @@ This module provides resource registration functions that expose
 DerivaML information as MCP resources for LLM applications.
 
 Resources provide read-only access to:
+- Server version information
 - Configuration templates for hydra-zen (static)
 - Catalog information (dynamic, queries actual catalog)
 - Documentation from GitHub repositories (dynamic, fetched with caching)
@@ -15,12 +16,30 @@ import json
 
 from mcp.server.fastmcp import FastMCP
 
+from deriva_ml_mcp import __version__
 from deriva_ml_mcp.connection import ConnectionManager
 from deriva_ml_mcp.github_docs import fetch_doc
 
 
 def register_resources(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     """Register all DerivaML resources with the MCP server."""
+
+    # =========================================================================
+    # Server Information
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://server/version",
+        name="Server Version",
+        description="DerivaML MCP server version information",
+        mime_type="application/json",
+    )
+    def get_server_version() -> str:
+        """Return the DerivaML MCP server version."""
+        return json.dumps({
+            "name": "deriva-ml-mcp",
+            "version": __version__,
+        }, indent=2)
 
     # =========================================================================
     # Static Resources - Configuration Templates
