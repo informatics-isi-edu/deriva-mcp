@@ -214,6 +214,9 @@ Bags are cached locally by checksum in the DerivaML cache directory. When you do
 dataset version again, the cached bag is reused without re-downloading. This makes repeated
 access to the same dataset version very fast. The cache key is `{dataset_rid}_{checksum}`.
 
+The cache location can be configured via the `cache_dir` argument when creating a DerivaML instance.
+If not specified, bags are cached in a default location within the user's home directory.
+
 **MINID support:**
 
 Bags can be registered with a MINID (Minimal Viable Identifier) for permanent, citable references.
