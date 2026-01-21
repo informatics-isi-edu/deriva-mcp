@@ -933,9 +933,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             - status: Execution status
             - config_choices: Dictionary of Hydra config names used
             - model_config: Dictionary of model hyperparameters
-            - input_datasets: List of input dataset summaries
-            - input_assets: List of input asset summaries
-            - output_assets: List of output asset summaries
+            - input_datasets: List of input dataset summaries (dataset_rid, description, version, dataset_types)
+            - input_assets: List of input asset summaries (asset_rid, asset_table, filename, description, asset_types, url)
+            - output_assets: List of output asset summaries (asset_rid, asset_table, filename, description, asset_types, url)
+            - metadata_assets: List of execution metadata assets (config files, hydra.yaml, etc.)
             - url: Chaise URL to view execution
 
         Example:
