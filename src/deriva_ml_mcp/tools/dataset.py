@@ -990,6 +990,18 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         suitable for ML frameworks like PyTorch ImageFolder. Assets are organized
         first by dataset type (from nested dataset hierarchy), then by grouping values.
 
+        **Handling datasets without types (prediction scenarios):**
+
+        If a dataset has no type defined, it is treated as Testing. This is common
+        for prediction/inference scenarios where you want to apply a trained model
+        to new unlabeled data.
+
+        **Handling missing labels:**
+
+        If an asset doesn't have a value for a group_by key (e.g., no label assigned),
+        it is placed in an "Unknown" directory. This allows restructure_assets to work
+        with unlabeled data for prediction.
+
         The `group_by` parameter specifies how to create subdirectories. Each name
         can be one of the following formats:
 
@@ -1068,6 +1080,17 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 )
                 # Creates: ./ml_data/training/MRI/Normal/img1.jpg
                 #          ./ml_data/training/CT/Abnormal/img2.jpg
+
+            Prediction scenario with unlabeled data::
+
+                restructure_assets(
+                    dataset_rid="1-XYZ",  # Dataset with no type
+                    asset_table="Image",
+                    output_dir="./prediction_data",
+                    group_by=["Diagnosis"]  # Assets have no labels
+                )
+                # Creates: ./prediction_data/testing/Unknown/img1.jpg
+                #          ./prediction_data/testing/Unknown/img2.jpg
         """
         from pathlib import Path
 
