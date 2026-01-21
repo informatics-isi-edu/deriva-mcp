@@ -990,6 +990,14 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         suitable for ML frameworks like PyTorch ImageFolder. Assets are organized
         first by dataset type (from nested dataset hierarchy), then by grouping values.
 
+        **Finding assets through foreign key relationships:**
+
+        Assets are found by traversing all foreign key paths from the dataset,
+        not just direct associations. For example, if a dataset contains Subjects,
+        and the schema has Subject -> Encounter -> Image relationships, this method
+        will find all Images reachable through those paths even though they are
+        not directly in a Dataset_Image association table.
+
         **Handling datasets without types (prediction scenarios):**
 
         If a dataset has no type defined, it is treated as Testing. This is common
