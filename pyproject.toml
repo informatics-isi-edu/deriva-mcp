@@ -49,6 +49,9 @@ bump-version = "deriva_ml_mcp.bump_version:main"
 requires = ["setuptools>=80", "setuptools_scm[toml]>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.uv.sources]
+deriva = {git = "https://github.com/informatics-isi-edu/deriva-py", branch = "master" }
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
