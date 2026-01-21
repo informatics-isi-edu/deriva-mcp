@@ -522,6 +522,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
     async def find_executions(
         workflow_rid: str | None = None,
         status: str | None = None,
+        description_pattern: str | None = None,
         limit: int = 50,
     ) -> str:
         """List all executions in the catalog with optional filtering.
@@ -533,6 +534,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         Args:
             workflow_rid: Optional workflow RID to filter by.
             status: Optional status filter ("pending", "running", "completed", "failed").
+            description_pattern: Case-insensitive substring match on description.
             limit: Max number to return (default: 50).
 
         Returns:
@@ -542,6 +544,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             find_executions()  # All executions
             find_executions(status="completed")  # Completed only
             find_executions(workflow_rid="1-ABC")  # For specific workflow
+            find_executions(description_pattern="CIFAR")  # Search by description
         """
         try:
             from deriva_ml.core.definitions import Status
@@ -566,17 +569,24 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 status=status_enum,
             ))
 
-            # Limit results
-            executions = executions[:limit]
-
             result = []
             for exe in executions:
+                # Apply description pattern filter
+                if description_pattern:
+                    pattern_lower = description_pattern.lower()
+                    desc = exe.description or ""
+                    if pattern_lower not in desc.lower():
+                        continue
+
                 result.append({
                     "execution_rid": exe.execution_rid,
                     "workflow_rid": exe.workflow_rid,
                     "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
                     "description": exe.description,
                 })
+
+                if len(result) >= limit:
+                    break
 
             return json.dumps({
                 "status": "success",
@@ -591,6 +601,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
     async def find_experiments(
         workflow_rid: str | None = None,
         status: str | None = None,
+        description_pattern: str | None = None,
         limit: int = 50,
     ) -> str:
         """List experiments (executions with Hydra configuration) in the catalog.
@@ -602,6 +613,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         Args:
             workflow_rid: Optional workflow RID to filter by.
             status: Optional status filter ("pending", "running", "completed", "failed").
+            description_pattern: Case-insensitive substring match on experiment name or description.
             limit: Max number to return (default: 50).
 
         Returns:
@@ -618,6 +630,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         Example:
             find_experiments()  # All experiments
             find_experiments(status="completed")  # Completed experiments only
+            find_experiments(description_pattern="CIFAR")  # Search by name or description
         """
         try:
             from deriva_ml.core.definitions import Status
@@ -643,13 +656,21 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 status=status_enum,
             ))
 
-            # Limit results
-            experiments = experiments[:limit]
-
-            # Build summaries
+            # Build summaries with filtering
             result = []
             for exp in experiments:
+                # Apply description pattern filter (searches name and description)
+                if description_pattern:
+                    pattern_lower = description_pattern.lower()
+                    name = exp.name or ""
+                    desc = exp.description or ""
+                    if pattern_lower not in name.lower() and pattern_lower not in desc.lower():
+                        continue
+
                 result.append(exp.summary())
+
+                if len(result) >= limit:
+                    break
 
             return json.dumps({
                 "status": "success",
