@@ -18,38 +18,6 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
     """Register workflow management tools with the MCP server."""
 
     @mcp.tool()
-    async def lookup_workflow(workflow_rid: str) -> str:
-        """Look up a workflow by its RID to get full details.
-
-        Args:
-            workflow_rid: RID of the workflow to look up.
-
-        Returns:
-            JSON with workflow details including name, type, URL, checksum,
-            description, and version.
-
-        Example:
-            lookup_workflow("1-ABC") -> full workflow details
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            workflow = ml.lookup_workflow(workflow_rid)
-
-            return json.dumps({
-                "rid": workflow.rid,
-                "name": workflow.name,
-                "workflow_type": workflow.workflow_type,
-                "description": workflow.description,
-                "url": workflow.url,
-                "checksum": workflow.checksum,
-                "version": workflow.version,
-                "is_notebook": workflow.is_notebook,
-            })
-        except Exception as e:
-            logger.error(f"Failed to lookup workflow: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def lookup_workflow_by_url(url: str) -> str:
         """Find a workflow by its source URL.
 

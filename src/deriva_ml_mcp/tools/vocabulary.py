@@ -18,33 +18,6 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
     """Register vocabulary management tools with the MCP server."""
 
     @mcp.tool()
-    async def lookup_term(vocabulary_name: str, term_name: str) -> str:
-        """Find a term by name or synonym in a vocabulary.
-
-        Args:
-            vocabulary_name: Name of the vocabulary table.
-            term_name: Term name or any of its synonyms to search for.
-
-        Returns:
-            JSON with name, description, synonyms, rid if found.
-
-        Example:
-            lookup_term("Dataset_Type", "train") -> finds "Training" if "train" is a synonym
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            term = ml.lookup_term(vocabulary_name, term_name)
-            return json.dumps({
-                "name": term.name,
-                "description": term.description,
-                "synonyms": list(term.synonyms) if term.synonyms else [],
-                "rid": term.rid,
-            })
-        except Exception as e:
-            logger.error(f"Failed to lookup term: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def add_term(
         vocabulary_name: str,
         term_name: str,

@@ -209,36 +209,6 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_assets(asset_table: str) -> str:
-        """List all assets in an asset table with their metadata.
-
-        Args:
-            asset_table: Name of the asset table (e.g., "Image", "Model").
-
-        Returns:
-            JSON array of {asset_rid, filename, url, length, md5, asset_types, asset_table}.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            assets = ml.list_assets(asset_table)
-            result = []
-            for asset in assets:
-                result.append({
-                    "asset_rid": asset.asset_rid,
-                    "filename": asset.filename,
-                    "url": asset.url,
-                    "length": asset.length,
-                    "md5": asset.md5,
-                    "asset_types": asset.asset_types,
-                    "asset_table": asset.asset_table,
-                    "description": asset.description,
-                })
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to list assets: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def list_asset_executions(asset_rid: str, asset_role: str | None = None) -> str:
         """List all executions associated with an asset.
 
@@ -275,65 +245,6 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to list asset executions: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def list_tables() -> str:
-        """List all tables in the domain schema with their properties.
-
-        Returns:
-            JSON array of {name, comment, is_vocabulary, is_asset, column_count}.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            tables = []
-            for table in ml.model.schemas[ml.domain_schema].tables.values():
-                tables.append({
-                    "name": table.name,
-                    "comment": table.comment or "",
-                    "is_vocabulary": ml.model.is_vocabulary(table),
-                    "is_asset": ml.model.is_asset(table),
-                    "column_count": len(list(table.columns)),
-                })
-            return json.dumps(tables)
-        except Exception as e:
-            logger.error(f"Failed to list tables: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def get_table_schema(table_name: str) -> str:
-        """Get the full schema of a table including all columns and their types.
-
-        Args:
-            table_name: Name of the table to describe.
-
-        Returns:
-            JSON with name, schema, comment, columns (with type info), is_vocabulary, is_asset.
-
-        Example:
-            get_table_schema("Image") -> shows all Image table columns and types
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-            columns = []
-            for col in table.columns:
-                columns.append({
-                    "name": col.name,
-                    "type": str(col.type.typename),
-                    "nullok": col.nullok,
-                    "comment": col.comment or "",
-                })
-            return json.dumps({
-                "name": table.name,
-                "schema": table.schema.name,
-                "comment": table.comment or "",
-                "columns": columns,
-                "is_vocabulary": ml.model.is_vocabulary(table),
-                "is_asset": ml.model.is_asset(table),
-            })
-        except Exception as e:
-            logger.error(f"Failed to get table schema: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()

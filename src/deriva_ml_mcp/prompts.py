@@ -108,7 +108,7 @@ Before creating an execution, optionally check for existing workflows:
 # Read the deriva-ml://catalog/workflows resource to see all workflows
 
 # Check if workflow exists by URL/checksum (for code-tracked workflows)
-lookup_workflow("https://github.com/org/repo/blob/main/train.py")
+lookup_workflow_by_url("https://github.com/org/repo/blob/main/train.py")
 ```
 
 If a suitable workflow exists, you can reuse it. The `create_execution` tool will
@@ -217,8 +217,8 @@ First, understand what data is available:
 For each table you want to use:
 
 ```
-# See columns and their types
-get_table_schema("<table-name>")
+# See columns and their types - use the resource
+# deriva-ml://table/<table-name>/schema
 ```
 
 ## Step 3: Choose Your Approach
@@ -1177,11 +1177,11 @@ create_table(
 After creation, verify the table structure:
 
 ```
-# List all tables
-list_tables()
+# List all tables - use the resource
+# deriva-ml://catalog/tables
 
-# Get detailed schema
-get_table_schema("Subject")
+# Get detailed schema - use the resource
+# deriva-ml://table/Subject/schema
 
 # Get Chaise URL to view in browser
 get_chaise_url("Subject")
@@ -1390,8 +1390,8 @@ add_dataset_type("<dataset-rid>", "Curated")
 # Remove a type
 remove_dataset_type("<dataset-rid>", "Draft")
 
-# List available types
-list_dataset_types()
+# List available types - use the resource
+# deriva-ml://catalog/dataset-types
 ```
 
 ## Step 7: Create Nested Datasets (Optional)
@@ -3202,7 +3202,8 @@ Edit `configs/assets.py` to specify pre-trained weights or other input files.
 
 **Find asset RIDs in the catalog:**
 ```
-list_assets("<asset_table>")  # e.g., "Model", "Checkpoint"
+# Use the resource: deriva-ml://table/<asset_table>/assets
+# e.g., deriva-ml://table/Model/assets, deriva-ml://table/Checkpoint/assets
 query_table("<asset_table>", columns=["RID", "Filename", "Description"])
 ```
 
@@ -3912,11 +3913,11 @@ from simple lookups to complex joins and aggregations.
 Before querying, explore what data is available:
 
 ```
-# List all tables in the domain schema
-list_tables()
+# List all tables in the domain schema - use the resource
+# deriva-ml://catalog/tables
 
-# Get details about a specific table
-get_table_schema("Image")
+# Get details about a specific table - use the resource
+# deriva-ml://table/Image/schema
 
 # See the full schema structure
 get_schema_description()
@@ -4018,8 +4019,8 @@ deriva-ml://vocabulary/Workflow_Type
 
 ### Find a Term
 ```
-lookup_term("Dataset_Type", "Training")
-lookup_term("Dataset_Type", "train")  # Works with synonyms
+# Use the resource: deriva-ml://vocabulary/Dataset_Type/Training
+# Also works with synonyms: deriva-ml://vocabulary/Dataset_Type/train
 ```
 
 ## Step 7: Feature Queries
@@ -4113,8 +4114,8 @@ connect_catalog("example.org", "1")
 # deriva-ml://dataset/1-ABC/members
 # Returns: {"Image": [...], "Subject": [...]}
 
-# 5. Check table structure
-get_table_schema("Image")
+# 5. Check table structure - use the resource
+# deriva-ml://table/Image/schema
 
 # 6. Query image data
 query_table("Image", columns=["RID", "Filename", "Subject"], limit=10)
@@ -4138,12 +4139,12 @@ get_chaise_url("1-ABC")
 
 ### "Table not found"
 ```
-list_tables()  # See available tables
+# Use the resource: deriva-ml://catalog/tables
 ```
 
 ### "Column not found"
 ```
-get_table_schema("<table>")  # See column names
+# Use the resource: deriva-ml://table/<table>/schema
 ```
 
 ### "No results returned"
@@ -4199,8 +4200,8 @@ Returns: `[{"name": "Image", "schema": "domain"}, {"name": "Model", "schema": "d
 ### List All Assets in a Table
 
 ```
-list_assets("Image")       # All images
-list_assets("Model")       # All models
+# Use the resource: deriva-ml://table/Image/assets
+# Or: deriva-ml://table/Model/assets
 ```
 
 ### Search with Filters
@@ -4362,14 +4363,14 @@ for table, assets in uploaded.items():
 - Always upload through executions for provenance
 - Read `deriva-ml://catalog/assets` resource for bulk discovery operations
 
-## Related Tools
+## Related Resources/Tools
 
-- `list_assets()` - List assets in a table
+- `deriva-ml://table/{table}/assets` resource - List assets in a table
 - `deriva-ml://catalog/assets` resource - All assets summary
 - `deriva-ml://asset/{rid}` resource - Get asset details
-- `list_asset_executions()` - Asset provenance
-- `asset_file_path()` - Register output files
-- `upload_execution_outputs()` - Upload registered files
+- `list_asset_executions()` tool - Asset provenance
+- `asset_file_path()` tool - Register output files
+- `upload_execution_outputs()` tool - Upload registered files
 """
 
     @mcp.prompt(
@@ -5375,8 +5376,8 @@ Before `create_table()`, check existing tables:
 # Read schema resource for all tables with descriptions
 deriva-ml://catalog/schema
 
-# Get specific table details
-get_table_schema("<table_name>")
+# Get specific table details - use the resources
+# deriva-ml://table/<table_name>/schema
 get_table_columns("<table_name>")
 ```
 
@@ -5408,8 +5409,8 @@ Before `add_term()`, check existing terms AND synonyms:
 # Read vocabulary with all terms and synonyms
 deriva-ml://vocabulary/<vocab_name>
 
-# Check if term exists (searches names AND synonyms)
-lookup_term("<vocab_name>", "<term_name>")
+# Check if term exists (searches names AND synonyms) - use the resource
+# deriva-ml://vocabulary/<vocab_name>/<term_name>
 ```
 
 **Search for semantic matches**:
@@ -5423,8 +5424,8 @@ lookup_term("<vocab_name>", "<term_name>")
 User wants: add_term("Image_Type", "Xray", "X-ray medical images")
 
 Search existing terms:
-- lookup_term("Image_Type", "Xray") → Not found
-- lookup_term("Image_Type", "X-ray") → Found! Has synonym "Xray"
+- deriva-ml://vocabulary/Image_Type/Xray → Not found
+- deriva-ml://vocabulary/Image_Type/X-ray → Found! Has synonym "Xray"
 - Check description similarity
 
 Found: "X-ray" term already exists with synonym "Xray"
@@ -5506,7 +5507,7 @@ Before `create_workflow()`, check existing workflows:
 deriva-ml://catalog/workflows
 
 # Search by URL or checksum
-lookup_workflow("<url_or_checksum>")
+lookup_workflow_by_url("<url>")
 ```
 
 **Search for semantic matches**:
@@ -5648,16 +5649,19 @@ User: "That's exactly what I need, use that"
 
 | Entity Type | Resource for Discovery | Key Semantic Fields |
 |-------------|------------------------|---------------------|
-| Tables | `deriva-ml://catalog/schema` | name, description, columns |
-| Table Details | `get_table_schema()`, `get_table_columns()` | column names, types, descriptions |
+| Tables | `deriva-ml://catalog/tables` | name, description, columns |
+| Table Details | `deriva-ml://table/{table}/schema`, `get_table_columns()` | column names, types, descriptions |
 | Vocabularies | `deriva-ml://catalog/vocabularies` | all vocabs with terms |
 | Vocab Terms | `deriva-ml://vocabulary/{name}` | term name, synonyms, description |
+| Term Lookup | `deriva-ml://vocabulary/{vocab}/{term}` | find by name or synonym |
 | Features | `deriva-ml://table/{table}/features` | feature name, vocabulary |
 | Feature Details | `deriva-ml://feature/{table}/{feature}` | structure, columns |
 | Datasets | `deriva-ml://catalog/datasets` | types, description |
 | Dataset Details | `deriva-ml://dataset/{rid}` | members, hierarchy |
 | Workflows | `deriva-ml://catalog/workflows` | name, type, description |
+| Workflow Details | `deriva-ml://workflow/{rid}` | name, type, URL, checksum |
 | Assets | `deriva-ml://catalog/assets` | tables, types |
+| Table Assets | `deriva-ml://table/{table}/assets` | all assets in a table |
 | Asset Details | `deriva-ml://asset/{rid}` | filename, types, provenance |
 
 ## Summary

@@ -779,38 +779,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     # ========================================================================
 
     @mcp.tool()
-    async def list_dataset_types() -> str:
-        """List all available dataset types from the Dataset_Type vocabulary.
-
-        Dataset types categorize datasets by their role in ML workflows
-        (e.g., "Training", "Testing", "Validation", "Complete").
-
-        Returns:
-            JSON array of {name, description, synonyms, rid} for each type.
-
-        Example:
-            list_dataset_types() -> [
-                {"name": "Training", "description": "Data for model training", ...},
-                {"name": "Testing", "description": "Held-out test data", ...}
-            ]
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            terms = ml.list_vocabulary_terms("Dataset_Type")
-            result = []
-            for term in terms:
-                result.append({
-                    "name": term.name,
-                    "description": term.description,
-                    "synonyms": term.synonyms or [],
-                    "rid": term.rid,
-                })
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to list dataset types: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def create_dataset_type_term(
         type_name: str,
         description: str,

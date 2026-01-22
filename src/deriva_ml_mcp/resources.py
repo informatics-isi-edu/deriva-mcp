@@ -610,6 +610,58 @@ multirun_config(
         except Exception as e:
             return json.dumps({"error": str(e)})
 
+    @mcp.resource(
+        "deriva-ml://catalog/tables",
+        name="Catalog Tables",
+        description="All tables in the domain schema with their properties",
+        mime_type="application/json",
+    )
+    def get_catalog_tables() -> str:
+        """Return all tables in the domain schema with metadata."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            tables = []
+            for table in ml.model.schemas[ml.domain_schema].tables.values():
+                tables.append({
+                    "name": table.name,
+                    "comment": table.comment or "",
+                    "is_vocabulary": ml.model.is_vocabulary(table),
+                    "is_asset": ml.model.is_asset(table),
+                    "column_count": len(list(table.columns)),
+                })
+            return json.dumps(tables, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/dataset-types",
+        name="Dataset Types",
+        description="Available dataset type vocabulary terms",
+        mime_type="application/json",
+    )
+    def get_dataset_types() -> str:
+        """Return all dataset type terms."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            terms = ml.list_vocabulary_terms("Dataset_Type")
+            return json.dumps([
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "synonyms": list(t.synonyms) if t.synonyms else [],
+                    "rid": t.rid,
+                }
+                for t in terms
+            ], indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
     # =========================================================================
     # Template Resources - Parameterized by dataset/table
     # =========================================================================
@@ -871,6 +923,119 @@ multirun_config(
                 }
                 for t in terms
             ], indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://vocabulary/{vocab_name}/{term_name}",
+        name="Vocabulary Term",
+        description="Details of a specific term in a vocabulary (supports lookup by name or synonym)",
+        mime_type="application/json",
+    )
+    def get_vocabulary_term(vocab_name: str, term_name: str) -> str:
+        """Return details of a specific vocabulary term."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            term = ml.lookup_term(vocab_name, term_name)
+            return json.dumps({
+                "name": term.name,
+                "description": term.description,
+                "synonyms": list(term.synonyms) if term.synonyms else [],
+                "rid": term.rid,
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://table/{table_name}/schema",
+        name="Table Schema",
+        description="Full schema of a table including all columns and their types",
+        mime_type="application/json",
+    )
+    def get_table_schema(table_name: str) -> str:
+        """Return the schema of a table with column details."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            table = ml.model.name_to_table(table_name)
+            columns = []
+            for col in table.columns:
+                columns.append({
+                    "name": col.name,
+                    "type": str(col.type.typename),
+                    "nullok": col.nullok,
+                    "comment": col.comment or "",
+                })
+            return json.dumps({
+                "name": table.name,
+                "schema": table.schema.name,
+                "comment": table.comment or "",
+                "columns": columns,
+                "is_vocabulary": ml.model.is_vocabulary(table),
+                "is_asset": ml.model.is_asset(table),
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://table/{table_name}/assets",
+        name="Table Assets",
+        description="All assets in a specific asset table",
+        mime_type="application/json",
+    )
+    def get_table_assets(table_name: str) -> str:
+        """Return all assets in an asset table."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            assets = ml.list_assets(table_name)
+            result = []
+            for asset in assets:
+                result.append({
+                    "asset_rid": asset.asset_rid,
+                    "filename": asset.filename,
+                    "url": asset.url,
+                    "length": asset.length,
+                    "md5": asset.md5,
+                    "asset_types": asset.asset_types,
+                    "asset_table": asset.asset_table,
+                    "description": asset.description,
+                })
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://workflow/{workflow_rid}",
+        name="Workflow Details",
+        description="Full details of a workflow by RID",
+        mime_type="application/json",
+    )
+    def get_workflow_details(workflow_rid: str) -> str:
+        """Return details of a workflow."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            workflow = ml.lookup_workflow(workflow_rid)
+            return json.dumps({
+                "rid": workflow.rid,
+                "name": workflow.name,
+                "workflow_type": workflow.workflow_type,
+                "description": workflow.description,
+                "url": workflow.url,
+                "checksum": workflow.checksum,
+                "version": workflow.version,
+                "is_notebook": workflow.is_notebook,
+            }, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
