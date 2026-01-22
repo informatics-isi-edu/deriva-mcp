@@ -506,8 +506,8 @@ wheels = [
 
 [[package]]
 name = "deriva"
-version = "1.7.11"
-source = { registry = "https://pypi.org/simple" }
+version = "1.7.12"
+source = { git = "https://github.com/informatics-isi-edu/deriva-py?branch=typed-interface#47188e88916b0b8c9e30159bee71429a844d8633" }
 dependencies = [
     { name = "bdbag" },
     { name = "fair-identifiers-client" },
@@ -520,15 +520,11 @@ dependencies = [
     { name = "requests" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f4/d9/de6844ad99c5934391e70da4ccd806bf9d2ebd75d4652beda555d9a21b18/deriva-1.7.11.tar.gz", hash = "sha256:bbac625a30329bce97c34d45d330027a5ff8c7d81e55d632f7b107750d090932", size = 212483, upload-time = "2025-09-29T18:54:20.047Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/16/91/be62c52b97ce8618ef2a70679b6ecd5c86006eb269ee9df9cc2cd2bf4bff/deriva-1.7.11-py3-none-any.whl", hash = "sha256:9c8b7afafa5c208b905968c02ccdf1a1f8f8546e950a08a6d0b5d428fd954048", size = 236006, upload-time = "2025-09-29T18:54:18.802Z" },
-]
 
 [[package]]
 name = "deriva-ml"
-version = "1.17.10.post137+g15120f5c4"
-source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git#15120f5c4b7fc9159e235f2d19bf4aad4c891ef6" }
+version = "1.17.10.post168+g3e15e0cd5"
+source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git?rev=typed-interface#3e15e0cd5879c2c6495048ae5906d2205ea2ea18" }
 dependencies = [
     { name = "bdbag" },
     { name = "bump-my-version" },
@@ -582,7 +578,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bump-my-version" },
-    { name = "deriva-ml", git = "https://github.com/informatics-isi-edu/deriva-ml.git" },
+    { name = "deriva-ml", git = "https://github.com/informatics-isi-edu/deriva-ml.git?rev=typed-interface" },
     { name = "kaggle", specifier = ">=1.8.3" },
     { name = "kaggle", marker = "extra == 'scripts'", specifier = ">=1.5.0" },
     { name = "mcp", specifier = ">=1.2.0" },
