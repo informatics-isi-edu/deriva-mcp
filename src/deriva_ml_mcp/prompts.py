@@ -1286,9 +1286,54 @@ Follow these steps to create and populate datasets.
 
 Key concepts:
 - **Dataset Elements**: Records from domain tables that belong to the dataset
-- **Dataset Types**: Labels like "Training", "Testing", "Validation"
+- **Dataset Types**: Labels like "Training", "Testing", "Validation" from a controlled vocabulary
 - **Nested Datasets**: Parent datasets can contain child datasets
 - **Versioning**: Semantic versioning (major.minor.patch) for reproducibility
+
+## Understanding Dataset Types
+
+Dataset Types are **controlled vocabulary terms** that categorize datasets for ML workflows.
+A dataset can have multiple types (e.g., both "Training" and "Labeled").
+
+### Standard Dataset Types
+
+Check available types with the `deriva-ml://catalog/dataset-types` resource. Common types include:
+
+| Type | Purpose |
+|------|---------|
+| Training | Data used to train models |
+| Testing | Held-out data for final evaluation |
+| Validation | Data for hyperparameter tuning |
+| Complete | Full dataset before splitting |
+| Labeled | Dataset includes ground truth labels |
+| Unlabeled | Dataset without ground truth (for inference) |
+
+### When to Use Multiple Types
+
+Datasets often need multiple types to fully describe them:
+- `["Training", "Labeled"]` - Training data with ground truth
+- `["Testing", "Unlabeled"]` - Test data without labels (blind evaluation)
+- `["Complete", "Labeled"]` - Full labeled dataset before train/test split
+
+### Creating Custom Dataset Types
+
+If standard types don't fit your workflow, create custom ones:
+
+```
+# Check existing types first
+# deriva-ml://catalog/dataset-types
+
+# Create a new type term
+create_dataset_type_term("Augmented", "Data created through augmentation")
+create_dataset_type_term("Curated", "Manually reviewed and cleaned data")
+```
+
+### Best Practices for Dataset Types
+
+1. **Be consistent** - Use the same type names across your project
+2. **Document custom types** - Always provide clear descriptions
+3. **Use "Labeled" vs "Unlabeled"** - Critical for knowing if ground truth is available
+4. **Consider workflow stages** - Types should reflect how data is used
 
 ## Step 1: Check for Existing Workflow (Optional)
 
@@ -1381,17 +1426,25 @@ upload_execution_outputs()
 
 ## Step 6: Manage Dataset Types
 
-Add or remove type labels:
+Types can be assigned at creation time or modified later:
 
 ```
-# Add a type
+# View available types - use the resource
+# deriva-ml://catalog/dataset-types
+
+# Add a type to existing dataset
 add_dataset_type("<dataset-rid>", "Curated")
 
 # Remove a type
 remove_dataset_type("<dataset-rid>", "Draft")
 
-# List available types - use the resource
-# deriva-ml://catalog/dataset-types
+# Create a new type term (if needed)
+create_dataset_type_term("Augmented", "Data created through augmentation")
+```
+
+**Tip**: Assign types at creation when possible:
+```
+create_dataset(description="...", dataset_types=["Training", "Labeled"])
 ```
 
 ## Step 7: Create Nested Datasets (Optional)
