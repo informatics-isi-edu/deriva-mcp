@@ -129,31 +129,6 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_feature_names() -> str:
-        """List all registered feature names from the Feature_Name vocabulary.
-
-        Feature names are controlled vocabulary terms that identify features across tables.
-        The same feature name can be used on multiple tables (e.g., "Quality" on both
-        Image and Subject tables).
-
-        Returns:
-            JSON array of {name, description} for each registered feature name.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            terms = ml.list_vocabulary_terms("Feature_Name")
-            result = []
-            for term in terms:
-                result.append({
-                    "name": term.name,
-                    "description": term.description,
-                })
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to list feature names: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def add_feature_value(
         table_name: str,
         feature_name: str,

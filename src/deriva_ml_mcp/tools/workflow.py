@@ -18,38 +18,6 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
     """Register workflow management tools with the MCP server."""
 
     @mcp.tool()
-    async def list_workflow_types() -> str:
-        """List all workflow type vocabulary terms.
-
-        Returns all terms from the Workflow_Type vocabulary. Use this to
-        discover available workflow types before creating a workflow.
-
-        Returns:
-            JSON array of {name, description, rid, synonyms}.
-
-        Example:
-            list_workflow_types() -> [
-                {"name": "Training", "description": "ML model training workflows", ...},
-                {"name": "Inference", "description": "Model inference workflows", ...}
-            ]
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            terms = ml.list_vocabulary_terms("Workflow_Type")
-            return json.dumps([
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "rid": t.rid,
-                    "synonyms": list(t.synonyms) if t.synonyms else [],
-                }
-                for t in terms
-            ])
-        except Exception as e:
-            logger.error(f"Failed to list workflow types: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def lookup_workflow(workflow_rid: str) -> str:
         """Look up a workflow by its RID to get full details.
 

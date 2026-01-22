@@ -130,32 +130,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def lookup_dataset(dataset_rid: str) -> str:
-        """Look up full details about a dataset including nested dataset relationships.
-
-        Returns dataset metadata plus its position in the dataset hierarchy:
-        - children: Nested datasets contained within this dataset
-        - parents: Datasets that contain this dataset as a nested child
-
-        Args:
-            dataset_rid: The RID of the dataset (e.g., "1-ABC").
-
-        Returns:
-            JSON with rid, description, dataset_types, current_version, children, parents.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            dataset = ml.lookup_dataset(dataset_rid)
-            result = _serialize_dataset(dataset)
-            # Add children and parents as serialized datasets
-            result["children"] = [_serialize_dataset(c) for c in dataset.list_dataset_children()]
-            result["parents"] = [_serialize_dataset(p) for p in dataset.list_dataset_parents()]
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to lookup dataset {dataset_rid}: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def get_dataset_spec(dataset_rid: str, version: str | None = None) -> str:
         """Generate a DatasetSpecConfig string for use in Python configuration files.
 
@@ -334,36 +308,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to delete dataset members: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def get_dataset_version_history(dataset_rid: str) -> str:
-        """Get all versions of a dataset for reproducibility tracking.
-
-        Returns the complete version history with semantic versions (major.minor.patch),
-        descriptions of changes, and catalog snapshots. Each snapshot allows querying
-        the exact state of data at that version.
-
-        Args:
-            dataset_rid: The RID of the dataset.
-
-        Returns:
-            JSON array of {version, description, snapshot} entries.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            dataset = ml.lookup_dataset(dataset_rid)
-            history = dataset.dataset_history()
-            result = []
-            for entry in history:
-                result.append({
-                    "version": str(entry.version) if entry.version else None,
-                    "description": entry.description,
-                    "snapshot": entry.snapshot,
-                })
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to get dataset history: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()

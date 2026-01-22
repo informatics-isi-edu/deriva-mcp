@@ -101,8 +101,8 @@ MCP tools mirror the Python API. Use the execution tools in this order:
 Before creating an execution, optionally check for existing workflows:
 
 ```
-# List available workflow types
-list_workflow_types()
+# List available workflow types - use the resource
+# deriva-ml://catalog/workflow-types
 
 # Search for similar workflows by type or description
 # Read the deriva-ml://catalog/workflows resource to see all workflows
@@ -126,8 +126,8 @@ create_execution(
 )
 ```
 
-Use `list_workflow_types()` or the `deriva-ml://catalog/workflow-types` resource
-to see available workflow types. Use `add_workflow_type()` to create a new type if needed.
+Use the `deriva-ml://catalog/workflow-types` resource to see available workflow types.
+Use `add_workflow_type()` to create a new type if needed.
 
 ### Step 2: Do Your ML Work
 
@@ -179,7 +179,7 @@ upload_execution_outputs()
 - Use `restore_execution(rid)` to resume a previous execution
 - Read `deriva-ml://catalog/executions` resource to see past workflow runs
 - Read `deriva-ml://catalog/workflows` resource to discover existing workflows before creating new ones
-- Use `list_workflow_types()` to see available workflow type categories
+- Read `deriva-ml://catalog/workflow-types` resource to see available workflow type categories
 - In Python, always prefer the context manager over manual start/stop
 """
 
@@ -205,11 +205,11 @@ First, understand what data is available:
 ```
 # Read the deriva-ml://catalog/datasets resource to list all datasets
 
-# Get details about your dataset
-lookup_dataset("<dataset-rid>")
+# Get details about your dataset - use the resource
+# deriva-ml://dataset/<dataset-rid>
 
-# See which tables have data in this dataset
-list_dataset_members("<dataset-rid>")
+# See which tables have data in this dataset - use the resource
+# deriva-ml://dataset/<dataset-rid>/members
 ```
 
 ## Step 2: Understand Table Structure
@@ -277,8 +277,8 @@ The denormalized data is ready for ML frameworks:
 For reproducible training, pin to a specific dataset version:
 
 ```
-# Check version history
-get_dataset_version_history("<dataset-rid>")
+# Check version history - use the resource
+# deriva-ml://dataset/<dataset-rid>/versions
 
 # Use specific version
 denormalize_dataset("<rid>", ["Image", "Label"], version="1.2.0")
@@ -885,8 +885,8 @@ See what features already exist:
 # Get details about a specific feature
 # Read deriva-ml://feature/{table_name}/{feature_name} resource
 
-# List all registered feature names
-list_feature_names()
+# List all registered feature names - use the resource
+# deriva-ml://catalog/features
 ```
 
 ## Step 2: Create Vocabulary (if needed)
@@ -1446,8 +1446,8 @@ add_dataset_child("<parent-rid>", "<testing-rid>")
 ## Step 8: Version Management
 
 ```
-# View version history
-get_dataset_version_history("<dataset-rid>")
+# View version history - use the resource
+# deriva-ml://dataset/<dataset-rid>/versions
 
 # Manually increment version
 increment_dataset_version("<dataset-rid>", "major", "Schema change")
@@ -1525,8 +1525,8 @@ upload_execution_outputs()
 add_dataset_child("1-ABC", "1-DEF")
 add_dataset_child("1-ABC", "1-GHI")
 
-# 8. Verify
-lookup_dataset("1-ABC")  # Shows children
+# 8. Verify - use resources to check
+# deriva-ml://dataset/1-ABC  # Shows children
 list_dataset_children("1-ABC")
 ```
 
@@ -1693,8 +1693,8 @@ When incrementing versions, the description is **REQUIRED** and should explain:
 If you need to update a config file to use the current dataset version:
 
 ```
-1. Look up current version:
-   lookup_dataset("<rid>")  → returns current_version
+1. Look up current version using the resource:
+   deriva-ml://dataset/<rid>  → returns current_version
 
 2. Update config:
    DatasetSpecConfig(rid="<rid>", version="<current_version>")
@@ -1705,7 +1705,7 @@ If you need to update a config file to use the current dataset version:
 **Prompt for LLM:**
 "Update my dataset configs to use current versions" should:
 1. Read the dataset config file
-2. For each DatasetSpecConfig, call `lookup_dataset()` to get current_version
+2. For each DatasetSpecConfig, read `deriva-ml://dataset/<rid>` to get current_version
 3. Update the version parameter to match
 4. Show the changes to the user for approval
 5. Remind user to commit before running experiments
@@ -1725,8 +1725,8 @@ If you need to update a config file to use the current dataset version:
 ## Checking Version History
 
 ```
-# Get full version history with descriptions
-get_dataset_version_history("<dataset-rid>")
+# Get full version history with descriptions - use the resource
+# deriva-ml://dataset/<dataset-rid>/versions
 
 # Returns:
 [
@@ -1775,8 +1775,8 @@ increment_dataset_version("1-ABC", "update")  # Too vague
 
 | Action | Command |
 |--------|---------|
-| Check current version | `lookup_dataset("<rid>")` |
-| View version history | `get_dataset_version_history("<rid>")` |
+| Check current version | `deriva-ml://dataset/<rid>` resource |
+| View version history | `deriva-ml://dataset/<rid>/versions` resource |
 | Increment version | `increment_dataset_version("<rid>", "<description>", "<component>")` |
 | Query specific version | `list_dataset_members("<rid>", version="X.Y.Z")` |
 | Download specific version | `download_dataset("<rid>", version="X.Y.Z")` |
@@ -1913,7 +1913,7 @@ datasets_store(
 ```
 
 **Getting descriptions from the catalog:**
-Use `lookup_dataset("<rid>")` to see the dataset's description and types.
+Use the `deriva-ml://dataset/<rid>` resource to see the dataset's description and types.
 This is a good starting point for your configuration description.
 
 ## Step 3: Configure Assets (Optional)
@@ -2201,14 +2201,14 @@ Configurations are composed in order (later overrides earlier):
 | Model configs (builds) | `zen_meta` | `zen_meta={"description": "desc"}` |
 
 **Getting descriptions from the catalog:**
-When adding a new configuration, use MCP tools to find good starting descriptions:
+When adding a new configuration, use MCP resources to find good starting descriptions:
 
 ```
 # For datasets - includes description and types
-lookup_dataset("<dataset-rid>")
+# deriva-ml://dataset/<dataset-rid>
 
 # For assets - includes filename, description, types, source execution
-# Read deriva-ml://asset/<asset-rid> resource
+# deriva-ml://asset/<asset-rid>
 
 # Then use these details in your configuration
 ```
@@ -2584,7 +2584,7 @@ Before writing descriptions, get details from the catalog:
 
 ### For Datasets
 ```
-lookup_dataset("<dataset-rid>")
+# Use the resource: deriva-ml://dataset/<dataset-rid>
 ```
 Returns: description, dataset_types, version, children/parents
 
@@ -3173,8 +3173,8 @@ Edit `configs/datasets.py` to specify the datasets for your experiment.
 **Find dataset RIDs in the catalog:**
 ```
 # Read deriva-ml://catalog/datasets resource for all datasets
-lookup_dataset("<rid>")
-get_dataset_version_history("<rid>")
+# deriva-ml://dataset/<rid>  # dataset details
+# deriva-ml://dataset/<rid>/versions  # version history
 ```
 
 **Update configuration:**
@@ -3388,9 +3388,9 @@ Remind the user:
 ## Troubleshooting
 
 ### "Dataset not found"
-- Verify RID exists: `lookup_dataset("<rid>")`
+- Verify RID exists: `deriva-ml://dataset/<rid>` resource
 - Check you're connected to correct catalog
-- Ensure version exists: `get_dataset_version_history("<rid>")`
+- Ensure version exists: `deriva-ml://dataset/<rid>/versions` resource
 
 ### "Asset not found"
 - Verify RID exists: read the asset resource
@@ -4078,8 +4078,8 @@ download_dataset("<dataset-rid>", materialize=True)
 Query data as it existed at a specific version:
 
 ```
-# Get version history
-get_dataset_version_history("<dataset-rid>")
+# Get version history - use the resource
+# deriva-ml://dataset/<dataset-rid>/versions
 
 # Query specific version
 list_dataset_members("<dataset-rid>", version="1.0.0")
@@ -4106,11 +4106,11 @@ connect_catalog("example.org", "1")
 
 # 2. Read deriva-ml://catalog/datasets resource to list available datasets
 
-# 3. Get dataset details
-lookup_dataset("1-ABC")
+# 3. Get dataset details - use the resource
+# deriva-ml://dataset/1-ABC
 
-# 4. See what tables have data
-list_dataset_members("1-ABC")
+# 4. See what tables have data - use the resource
+# deriva-ml://dataset/1-ABC/members
 # Returns: {"Image": [...], "Subject": [...]}
 
 # 5. Check table structure
@@ -4356,7 +4356,7 @@ for table, assets in uploaded.items():
 
 ## Tips
 
-- Use `lookup_asset` to get full details about any asset
+- Use `deriva-ml://asset/<rid>` resource to get full details about any asset
 - Use `list_asset_executions` to trace provenance
 - Asset types help organize and filter assets
 - Always upload through executions for provenance
@@ -4438,8 +4438,8 @@ get_catalog_info()
 
 # Read deriva-ml://catalog/datasets resource to list available datasets
 
-# Check if dataset exists
-lookup_dataset("<rid>")
+# Check if dataset exists - use the resource
+# deriva-ml://dataset/<rid>
 ```
 
 ## Problem: "Invalid RID"
@@ -4487,8 +4487,8 @@ deriva-globus-auth-utils token validate
 
 **Solution**:
 ```
-# Check version history
-get_dataset_version_history("<rid>")
+# Check version history - use the resource
+# deriva-ml://dataset/<rid>/versions
 
 # Pin to specific version
 config = ExecutionConfiguration(
@@ -4507,8 +4507,8 @@ config = ExecutionConfiguration(
 
 **Solution**:
 ```
-# List all feature names
-list_feature_names()
+# List all feature names - use the resource
+# deriva-ml://catalog/features
 
 # Read deriva-ml://table/Image/features resource to find features for Image table
 
@@ -4625,7 +4625,7 @@ dataset = ml.lookup_dataset("4HM")        # Returns Dataset
 asset = ml.lookup_asset("3JSE")           # Returns Asset
 term = ml.lookup_term("Image_Type", "X-ray")  # Returns VocabularyTerm
 workflow = ml.lookup_workflow("http://...")   # Returns Workflow RID
-feature = ml.# Read deriva-ml://feature/Image/Diagnosis resource  # Returns Feature
+feature = ml.lookup_feature("Image", "Diagnosis")  # Returns Feature
 ```
 
 **Pattern**: `lookup_<entity>(identifier) -> Entity`
@@ -4799,11 +4799,11 @@ validate: bool = True           # Validate input
 MCP tools follow the same naming but use underscores and sometimes
 abbreviated or clearer parameter names:
 
-| Python API | MCP Tool |
+| Python API | MCP Resource/Tool |
 |------------|----------|
-| `lookup_dataset(rid)` | `lookup_dataset(dataset_rid)` |
-| `find_datasets(deleted=True)` | Read `deriva-ml://catalog/datasets` resource |
-| `list_dataset_members()` | `list_dataset_members(dataset_rid)` |
+| `lookup_dataset(rid)` | `deriva-ml://dataset/<rid>` resource |
+| `find_datasets(deleted=True)` | `deriva-ml://catalog/datasets` resource |
+| `list_dataset_members()` | `list_dataset_members(dataset_rid)` tool |
 
 ## Tips for API Discovery
 
@@ -4811,7 +4811,7 @@ abbreviated or clearer parameter names:
 2. **Use `lookup_*` when you expect the item to exist**
 3. **Use `list_*` for enumeration within a context**
 4. **Use `get_*` when you need transformed output**
-5. **Check `list_feature_names()` before creating features**
+5. **Check `deriva-ml://catalog/features` resource before creating features**
 6. **Check `deriva-ml://vocabulary/{name}` resource before adding terms**
 """
 
@@ -5267,7 +5267,7 @@ Query existing entities to match patterns:
 ```
 # Read deriva-ml://catalog/datasets resource to see existing dataset description styles
 # Read deriva-ml://vocabulary/Dataset_Type resource to understand categories
-lookup_experiment(rid)  # See how similar experiments are described
+# Read deriva-ml://experiment/<rid> resource to see how similar experiments are described
 ```
 
 ### From Conversation Context
@@ -5444,7 +5444,7 @@ deriva-ml://table/<table_name>/features
 deriva-ml://feature/<table_name>/<feature_name>
 
 # List all registered feature names
-list_feature_names()
+deriva-ml://catalog/features
 ```
 
 **Search for semantic matches**:
@@ -6062,7 +6062,7 @@ When user requests: "Update my dataset configs to use current versions"
 
 1. Read the dataset config file
 2. For each DatasetSpecConfig:
-   - Call `lookup_dataset("<rid>")` to get `current_version`
+   - Read `deriva-ml://dataset/<rid>` resource to get `current_version`
    - Compare with configured version
 3. Show proposed changes:
    ```python
