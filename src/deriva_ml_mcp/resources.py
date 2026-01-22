@@ -759,26 +759,93 @@ multirun_config(
     @mcp.resource(
         "deriva-ml://feature/{table_name}/{feature_name}",
         name="Feature Details",
-        description="Detailed information about a specific feature",
+        description="Detailed information about a specific feature including column types and requirements",
         mime_type="application/json",
     )
     def get_feature_details(table_name: str, feature_name: str) -> str:
-        """Return detailed information about a feature."""
+        """Return detailed information about a feature.
+
+        Includes column details needed for add_feature_value:
+        - term_columns: columns accepting vocabulary terms (with vocab table name)
+        - asset_columns: columns accepting asset RIDs (with asset table name)
+        - value_columns: columns accepting direct values (with type)
+        - required_fields: fields that must be provided (non-nullable)
+        """
         ml = conn_manager.get_active_connection()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
         try:
             feature = ml.lookup_feature(table_name, feature_name)
+
+            # Get detailed column info with FK references and requirements
+            term_cols = {}
+            for col in feature.term_columns:
+                for fk in feature.feature_table.foreign_keys:
+                    if col in fk.foreign_key_columns:
+                        term_cols[col.name] = {
+                            "vocabulary_table": fk.pk_table.name,
+                            "required": not col.nullok,
+                        }
+                        break
+
+            asset_cols = {}
+            for col in feature.asset_columns:
+                for fk in feature.feature_table.foreign_keys:
+                    if col in fk.foreign_key_columns:
+                        asset_cols[col.name] = {
+                            "asset_table": fk.pk_table.name,
+                            "required": not col.nullok,
+                        }
+                        break
+
+            value_cols = {}
+            for col in feature.value_columns:
+                value_cols[col.name] = {
+                    "type": col.type.typename,
+                    "required": not col.nullok,
+                }
+
+            # Determine required fields
+            required_fields = [feature.target_table.name]  # Target is always required
+            required_fields.extend([c for c, info in term_cols.items() if info["required"]])
+            required_fields.extend([c for c, info in asset_cols.items() if info["required"]])
+            required_fields.extend([c for c, info in value_cols.items() if info["required"]])
+
             return json.dumps({
-                "name": feature.feature_name,
+                "feature_name": feature.feature_name,
                 "target_table": feature.target_table.name,
+                "target_column": feature.target_table.name,
                 "feature_table": feature.feature_table.name,
-                "asset_columns": [c.name for c in feature.asset_columns],
-                "term_columns": [c.name for c in feature.term_columns],
-                "value_columns": [c.name for c in feature.value_columns],
+                "term_columns": term_cols,
+                "asset_columns": asset_cols,
+                "value_columns": value_cols,
+                "required_fields": required_fields,
                 "optional": feature.optional,
             }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://feature/{table_name}/{feature_name}/values",
+        name="Feature Values",
+        description="All feature values for a specific feature, with provenance",
+        mime_type="application/json",
+    )
+    def get_feature_values(table_name: str, feature_name: str) -> str:
+        """Return all values for a feature across objects.
+
+        Each record includes the target object RID, the feature value(s), and
+        the Execution RID that produced it (for provenance tracking).
+        """
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            values = ml.list_feature_values(table_name, feature_name)
+            result = [dict(v) for v in values]
+            return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 

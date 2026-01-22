@@ -883,7 +883,7 @@ See what features already exist:
 # Read the deriva-ml://table/{table_name}/features resource to find features for a table
 
 # Get details about a specific feature
-lookup_feature("<table-name>", "<feature-name>")
+# Read deriva-ml://feature/{table_name}/{feature_name} resource
 
 # List all registered feature names
 list_feature_names()
@@ -962,7 +962,7 @@ upload_execution_outputs()
 
 ### Complex Labels (Multiple Fields)
 
-For features with multiple columns (check with `lookup_feature`):
+For features with multiple columns (read `deriva-ml://feature/{table}/{feature}` resource):
 
 ```
 add_feature_value_record(
@@ -982,7 +982,7 @@ Retrieve labels for analysis or training:
 
 ```
 # Get all values for a feature
-list_feature_values("Image", "Diagnosis")
+# Read deriva-ml://feature/Image/Diagnosis/values resource
 ```
 
 ## Complete Example: Image Classification Labels
@@ -1013,7 +1013,7 @@ with ml.create_execution(config) as exe:
 exe.upload_execution_outputs()
 
 # 4. Query for training
-ml.list_feature_values("Image", "Classification")
+ml.# Read deriva-ml://feature/Image/Classification/values resource
 ```
 
 **MCP Tools:**
@@ -1039,7 +1039,7 @@ add_feature_value("Image", "Classification", "1-GHI", "Cat")
 upload_execution_outputs()
 
 # 6. Query for training
-list_feature_values("Image", "Classification")
+# Read deriva-ml://feature/Image/Classification/values resource
 ```
 
 ## Tips
@@ -1047,7 +1047,7 @@ list_feature_values("Image", "Classification")
 - Always add feature values within an execution for provenance
 - **Always provide a `comment`** for features to describe what they represent
 - **Always provide `description`** for vocabulary terms to explain their meaning
-- Use `lookup_feature` to see the feature's column structure
+- Read `deriva-ml://feature/{table}/{feature}` resource to see the feature's column structure
 - Features can reference both vocabulary terms AND assets
 - Feature values track which execution created them
 - Use `delete_feature` to remove a feature definition (and all values)
@@ -4031,12 +4031,12 @@ lookup_term("Dataset_Type", "train")  # Works with synonyms
 
 ### Get Feature Structure
 ```
-lookup_feature("Image", "Diagnosis")
+# Read deriva-ml://feature/Image/Diagnosis resource
 ```
 
 ### Get All Feature Values
 ```
-list_feature_values("Image", "Diagnosis")
+# Read deriva-ml://feature/Image/Diagnosis/values resource
 ```
 Returns target RIDs, values, and which execution created them.
 
@@ -4513,7 +4513,7 @@ list_feature_names()
 # Read deriva-ml://table/Image/features resource to find features for Image table
 
 # Get feature details
-lookup_feature("Image", "Diagnosis")
+# Read deriva-ml://feature/Image/Diagnosis resource
 ```
 
 ## Problem: "Upload timeout"
@@ -4625,7 +4625,7 @@ dataset = ml.lookup_dataset("4HM")        # Returns Dataset
 asset = ml.lookup_asset("3JSE")           # Returns Asset
 term = ml.lookup_term("Image_Type", "X-ray")  # Returns VocabularyTerm
 workflow = ml.lookup_workflow("http://...")   # Returns Workflow RID
-feature = ml.lookup_feature("Image", "Diagnosis")  # Returns Feature
+feature = ml.# Read deriva-ml://feature/Image/Diagnosis resource  # Returns Feature
 ```
 
 **Pattern**: `lookup_<entity>(identifier) -> Entity`
