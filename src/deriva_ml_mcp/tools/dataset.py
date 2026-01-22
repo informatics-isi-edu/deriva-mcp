@@ -424,6 +424,44 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def set_dataset_description(dataset_rid: str, description: str) -> str:
+        """Set or update the description for a dataset.
+
+        Updates the dataset's description in the catalog. Good descriptions help
+        users understand the dataset's purpose, contents, and intended use.
+
+        Args:
+            dataset_rid: RID of the dataset to update.
+            description: New description text.
+
+        Returns:
+            JSON with status, dataset_rid, description.
+
+        Example:
+            set_dataset_description("1-ABC", "Training images for CIFAR-10 classification")
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            dataset = ml.lookup_dataset(dataset_rid)
+
+            # Update the description in the catalog
+            pb = ml.pathBuilder()
+            dataset_path = pb.schemas[ml.ml_schema].Dataset
+            dataset_path.update([{"RID": dataset_rid, "Description": description}])
+
+            # Update the local object
+            dataset.description = description
+
+            return json.dumps({
+                "status": "updated",
+                "dataset_rid": dataset_rid,
+                "description": description,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set dataset description: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def add_dataset_type(dataset_rid: str, dataset_type: str) -> str:
         """Add a type to a dataset.
 

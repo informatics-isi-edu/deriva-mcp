@@ -262,6 +262,36 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def set_execution_description(execution_rid: str, description: str) -> str:
+        """Set or update the description for an execution.
+
+        Updates the execution's description in the catalog. Good descriptions help
+        users understand what the execution accomplished and any notable results.
+
+        Args:
+            execution_rid: RID of the execution to update.
+            description: New description text.
+
+        Returns:
+            JSON with status, execution_rid, description.
+
+        Example:
+            set_execution_description("2-XYZ", "Training run with lr=0.001, achieved 95% accuracy")
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            record = ml.lookup_execution(execution_rid)
+            record.description = description
+            return json.dumps({
+                "status": "updated",
+                "execution_rid": execution_rid,
+                "description": description,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set execution description: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def get_execution_info() -> str:
         """Get details about the active execution including upload status.
 

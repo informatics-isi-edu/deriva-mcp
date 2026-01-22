@@ -97,6 +97,36 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def set_workflow_description(workflow_rid: str, description: str) -> str:
+        """Set or update the description for a workflow.
+
+        Updates the workflow's description in the catalog. Good descriptions help
+        users understand what the workflow does and how to use it.
+
+        Args:
+            workflow_rid: RID of the workflow to update.
+            description: New description text.
+
+        Returns:
+            JSON with status, workflow_rid, description.
+
+        Example:
+            set_workflow_description("3-WKF", "Trains CNN on image data with augmentation")
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            workflow = ml.lookup_workflow(workflow_rid)
+            workflow.description = description
+            return json.dumps({
+                "status": "updated",
+                "workflow_rid": workflow_rid,
+                "description": description,
+            })
+        except Exception as e:
+            logger.error(f"Failed to set workflow description: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def add_workflow_type(
         type_name: str,
         description: str,
