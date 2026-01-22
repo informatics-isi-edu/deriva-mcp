@@ -325,42 +325,36 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
     @mcp.tool()
     async def find_assets(
-        asset_table: str | None = None,
-        asset_type: str | None = None,
+        limit: int = 200,
     ) -> str:
-        """Find assets in the catalog with optional filtering.
+        """List all assets in the catalog.
 
-        Search for assets across all tables or filter by table name and/or
-        asset type.
+        Returns assets across all asset tables. The LLM can select relevant
+        assets based on user intent and conversation context.
+
+        Use lookup_asset() for full details on a specific asset.
 
         Args:
-            asset_table: Optional table name to search (e.g., "Image", "Model").
-                If omitted, searches all asset tables.
-            asset_type: Optional asset type to filter by (e.g., "Training_Data").
-                If omitted, returns assets of all types.
+            limit: Maximum number of results (default: 200).
 
         Returns:
             JSON array of assets with {asset_rid, asset_table, filename,
             asset_types, execution_rid}.
-
-        Example:
-            find_assets() -> all assets in catalog
-            find_assets("Model") -> all Model assets
-            find_assets(asset_type="Training_Data") -> assets of this type
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            assets = ml.find_assets(asset_table=asset_table, asset_type=asset_type)
+            assets = list(ml.find_assets())[:limit]
 
-            result = []
-            for asset in assets:
-                result.append({
+            result = [
+                {
                     "asset_rid": asset.asset_rid,
                     "asset_table": asset.asset_table,
                     "filename": asset.filename,
                     "asset_types": asset.asset_types,
                     "execution_rid": asset.execution_rid,
-                })
+                }
+                for asset in assets
+            ]
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to find assets: {e}")

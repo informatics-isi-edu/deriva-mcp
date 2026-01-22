@@ -520,73 +520,36 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def find_executions(
-        workflow_rid: str | None = None,
-        status: str | None = None,
-        description_pattern: str | None = None,
-        limit: int = 50,
+        limit: int = 100,
     ) -> str:
-        """List all executions in the catalog with optional filtering.
+        """List all executions in the catalog.
 
-        Returns all executions, not just experiments with Hydra config. Use this
-        for finding any workflow run. Use find_experiments() if you specifically
-        want ML experiments with Hydra configuration.
+        Returns all executions (workflow runs). The LLM can select relevant
+        executions based on user intent and conversation context.
+
+        Use find_experiments() if you specifically want ML experiments with
+        Hydra configuration. Use lookup_experiment() for full details on a
+        specific execution.
 
         Args:
-            workflow_rid: Optional workflow RID to filter by.
-            status: Optional status filter ("pending", "running", "completed", "failed").
-            description_pattern: Case-insensitive substring match on description.
-            limit: Max number to return (default: 50).
+            limit: Max number to return (default: 100).
 
         Returns:
-            JSON array of {execution_rid, workflow_rid, status, description}.
-
-        Example:
-            find_executions()  # All executions
-            find_executions(status="completed")  # Completed only
-            find_executions(workflow_rid="1-ABC")  # For specific workflow
-            find_executions(description_pattern="CIFAR")  # Search by description
+            JSON object with count and array of {execution_rid, workflow_rid, status, description}.
         """
         try:
-            from deriva_ml.core.definitions import Status
-
             ml = conn_manager.get_active_or_raise()
+            executions = list(ml.find_executions())[:limit]
 
-            # Map status string to enum if provided
-            status_enum = None
-            if status:
-                status_map = {
-                    "pending": Status.pending,
-                    "running": Status.running,
-                    "completed": Status.completed,
-                    "failed": Status.failed,
-                    "initializing": Status.initializing,
-                    "created": Status.created,
-                }
-                status_enum = status_map.get(status.lower())
-
-            executions = list(ml.find_executions(
-                workflow_rid=workflow_rid,
-                status=status_enum,
-            ))
-
-            result = []
-            for exe in executions:
-                # Apply description pattern filter
-                if description_pattern:
-                    pattern_lower = description_pattern.lower()
-                    desc = exe.description or ""
-                    if pattern_lower not in desc.lower():
-                        continue
-
-                result.append({
+            result = [
+                {
                     "execution_rid": exe.execution_rid,
                     "workflow_rid": exe.workflow_rid,
                     "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
                     "description": exe.description,
-                })
-
-                if len(result) >= limit:
-                    break
+                }
+                for exe in executions
+            ]
 
             return json.dumps({
                 "status": "success",
@@ -599,25 +562,22 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def find_experiments(
-        workflow_rid: str | None = None,
-        status: str | None = None,
-        description_pattern: str | None = None,
-        limit: int = 50,
+        limit: int = 100,
     ) -> str:
-        """List experiments (executions with Hydra configuration) in the catalog.
+        """List all experiments (executions with Hydra configuration) in the catalog.
 
         Only returns executions that have Hydra configuration metadata (i.e., a
         config.yaml file in Execution_Metadata assets). This distinguishes ML
         experiments from other types of executions.
 
+        The LLM can select relevant experiments based on user intent and
+        conversation context.
+
         Args:
-            workflow_rid: Optional workflow RID to filter by.
-            status: Optional status filter ("pending", "running", "completed", "failed").
-            description_pattern: Case-insensitive substring match on experiment name or description.
-            limit: Max number to return (default: 50).
+            limit: Max number to return (default: 100).
 
         Returns:
-            JSON array of experiment summaries, each with:
+            JSON object with count and array of experiment summaries, each with:
             - name: Experiment name from config_choices.model_config
             - execution_rid: The execution RID
             - description: Execution description
@@ -626,51 +586,11 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             - model_config: Dictionary of model hyperparameters
             - input_datasets: List of input dataset info
             - url: Chaise URL to view execution
-
-        Example:
-            find_experiments()  # All experiments
-            find_experiments(status="completed")  # Completed experiments only
-            find_experiments(description_pattern="CIFAR")  # Search by name or description
         """
         try:
-            from deriva_ml.core.definitions import Status
-
             ml = conn_manager.get_active_or_raise()
-
-            # Map status string to enum if provided
-            status_enum = None
-            if status:
-                status_map = {
-                    "pending": Status.pending,
-                    "running": Status.running,
-                    "completed": Status.completed,
-                    "failed": Status.failed,
-                    "initializing": Status.initializing,
-                    "created": Status.created,
-                }
-                status_enum = status_map.get(status.lower())
-
-            # Use the new find_experiments method
-            experiments = list(ml.find_experiments(
-                workflow_rid=workflow_rid,
-                status=status_enum,
-            ))
-
-            # Build summaries with filtering
-            result = []
-            for exp in experiments:
-                # Apply description pattern filter (searches name and description)
-                if description_pattern:
-                    pattern_lower = description_pattern.lower()
-                    name = exp.name or ""
-                    desc = exp.description or ""
-                    if pattern_lower not in name.lower() and pattern_lower not in desc.lower():
-                        continue
-
-                result.append(exp.summary())
-
-                if len(result) >= limit:
-                    break
+            experiments = list(ml.find_experiments())[:limit]
+            result = [exp.summary() for exp in experiments]
 
             return json.dumps({
                 "status": "success",

@@ -68,53 +68,28 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     @mcp.tool()
     async def find_datasets(
         include_deleted: bool = False,
-        description_pattern: str | None = None,
-        dataset_type: str | None = None,
-        limit: int = 100,
+        limit: int = 200,
     ) -> str:
-        """Find datasets in the catalog with optional filtering.
+        """List all datasets in the catalog.
 
-        Returns datasets with their Dataset_Type labels (e.g., "Training", "Testing")
-        and current semantic version. Use lookup_dataset() for full details including
+        Returns all datasets with their Dataset_Type labels (e.g., "Training", "Testing")
+        and current semantic version. The LLM can select relevant datasets based on
+        user intent and conversation context.
+
+        Use lookup_dataset() for full details on a specific dataset including
         nested dataset relationships.
 
         Args:
             include_deleted: Set True to include soft-deleted datasets.
-            description_pattern: Case-insensitive substring match on description.
-            dataset_type: Filter by dataset type (e.g., "Training", "Testing").
-            limit: Maximum number of results (default: 100).
+            limit: Maximum number of results (default: 200).
 
         Returns:
-            JSON array of {rid, description, dataset_types, current_version}.
-
-        Example:
-            find_datasets()  # All datasets
-            find_datasets(description_pattern="CIFAR")  # Search by description
-            find_datasets(dataset_type="Training")  # Filter by type
+            JSON array of {dataset_rid, description, dataset_types, current_version}.
         """
         try:
             ml = conn_manager.get_active_or_raise()
             datasets = ml.find_datasets(deleted=include_deleted)
-
-            result = []
-            for ds in datasets:
-                # Apply description pattern filter
-                if description_pattern:
-                    pattern_lower = description_pattern.lower()
-                    desc = ds.description or ""
-                    if pattern_lower not in desc.lower():
-                        continue
-
-                # Apply dataset type filter
-                if dataset_type:
-                    if dataset_type not in (ds.dataset_types or []):
-                        continue
-
-                result.append(_serialize_dataset(ds))
-
-                if len(result) >= limit:
-                    break
-
+            result = [_serialize_dataset(ds) for ds in list(datasets)[:limit]]
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to find datasets: {e}")

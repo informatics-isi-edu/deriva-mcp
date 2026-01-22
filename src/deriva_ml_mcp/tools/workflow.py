@@ -51,52 +51,35 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
 
     @mcp.tool()
     async def find_workflows(
-        workflow_type: str | None = None,
-        description_pattern: str | None = None,
-        limit: int = 50,
+        limit: int = 100,
     ) -> str:
-        """Find workflows with optional filtering.
+        """List all workflows in the catalog.
 
-        Search for existing workflows by type or description pattern. Use this
-        before creating a new workflow to check if a suitable one already exists.
+        Returns all workflow definitions. The LLM can select relevant workflows
+        based on user intent and conversation context.
+
+        Use lookup_workflow() for full details on a specific workflow.
 
         Args:
-            workflow_type: Filter by workflow type (e.g., "Training", "Inference").
-            description_pattern: Case-insensitive substring match on description.
-            limit: Maximum number of results (default: 50).
+            limit: Maximum number of results (default: 100).
 
         Returns:
             JSON array of {rid, name, workflow_type, description, url, checksum}.
-
-        Examples:
-            find_workflows(workflow_type="Training")
-            find_workflows(description_pattern="CIFAR")
-            find_workflows()
         """
         try:
             ml = conn_manager.get_active_or_raise()
-            workflows = ml.list_workflows()
-            results = []
-            for wf in workflows:
-                # Apply filters
-                if workflow_type and wf.workflow_type != workflow_type:
-                    continue
-                if description_pattern:
-                    pattern_lower = description_pattern.lower()
-                    desc = wf.description or ""
-                    name = wf.name or ""
-                    if pattern_lower not in desc.lower() and pattern_lower not in name.lower():
-                        continue
-                results.append({
+            workflows = list(ml.list_workflows())[:limit]
+            results = [
+                {
                     "rid": wf.rid,
                     "name": wf.name,
                     "workflow_type": wf.workflow_type,
                     "description": wf.description,
                     "url": wf.url,
                     "checksum": wf.checksum,
-                })
-                if len(results) >= limit:
-                    break
+                }
+                for wf in workflows
+            ]
             return json.dumps(results)
         except Exception as e:
             logger.error(f"Failed to find workflows: {e}")
