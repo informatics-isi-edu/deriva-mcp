@@ -1804,9 +1804,17 @@ After modifying catalog data:
         """Guide for configuring ML experiments, presets, and sweeps with hydra-zen."""
         return """# Configuring ML Experiments with Hydra-Zen and DerivaML
 
-This comprehensive guide explains how to set up reproducible ML experiments,
-experiment presets, and multirun sweeps using hydra-zen configuration management
-with DerivaML for data and provenance tracking.
+**Use this prompt for**: Setting up config files (datasets.py, experiments.py, etc.)
+for use with the `deriva-ml-run` CLI.
+
+**Related prompts:**
+- `run-experiment`: Pre-flight checklist and CLI commands (after configs are set up)
+- `run-ml-execution`: For custom Python scripts or interactive MCP tool usage
+
+---
+
+This guide explains how to set up reproducible ML experiments, experiment presets,
+and multirun sweeps using hydra-zen configuration management with DerivaML.
 
 ## Overview
 
@@ -3031,36 +3039,22 @@ Before running an ML workflow:
 
     @mcp.prompt(
         name="run-experiment",
-        description="CLI-based experiment checklist with git verification - use for deriva-ml-run CLI workflows",
+        description="Pre-flight checklist and CLI commands for deriva-ml-run - assumes configs are already set up",
     )
     def run_experiment_prompt() -> str:
-        """Guide for running an ML experiment with full provenance."""
-        return """# Running an ML Experiment with DerivaML
+        """Checklist for running an ML experiment with full provenance."""
+        return """# Running an ML Experiment (Pre-Flight Checklist)
 
-**Use this prompt for**: Running experiments via the `deriva-ml-run` CLI with full
-reproducibility (git commit tracking, version tags, configuration files). For custom
-Python scripts or interactive MCP tool usage, use the `run-ml-execution` prompt instead.
+**Use this prompt for**: Running experiments via the `deriva-ml-run` CLI when
+config files are already set up.
 
-Follow this comprehensive checklist to run a reproducible ML experiment with
-full provenance tracking.
-
-**IMPORTANT**: For reproducibility, every execution must be traceable to:
-1. A specific **git commit** (exact code version)
-2. A **semantic version tag** (human-readable version)
-3. A **clean working tree** (no uncommitted changes)
-
-Without this, you cannot reproduce results or know what code produced them.
+**Related prompts:**
+- `configure-experiment`: How to set up config files (datasets.py, experiments.py, etc.)
+- `run-ml-execution`: For custom Python scripts or interactive MCP tool usage
 
 ---
 
-## Prerequisites
-- Repository set up following the DerivaML model template
-- Connected to the target DerivaML catalog
-- Model code implemented and tested
-
----
-
-## Part 1: Pre-Execution Checklist (REQUIRED)
+## Pre-Flight Checklist (REQUIRED)
 
 ### Step 1.1: Check Git Status
 
@@ -3136,150 +3130,32 @@ git commit -m "Update uv.lock"
 
 ---
 
-## Part 2: Verify Configuration
+## Verify Configuration
 
-### Step 2.1: Verify Repository Structure
+Before running, ensure configs are set up. Use `uv run deriva-ml-run --info` to see available configs.
 
-Ensure your repository follows the recommended configuration structure:
-
-```
-src/
-├── configs/
-│   ├── __init__.py         # Auto-loads all config modules
-│   ├── base.py             # Main config (DerivaModelConfig)
-│   ├── deriva.py           # Catalog connection configs
-│   ├── datasets.py         # Dataset specifications
-│   ├── assets.py           # Input asset references
-│   ├── workflow.py         # Workflow definitions
-│   ├── <model_name>.py     # Model hyperparameters
-│   └── experiments.py      # Experiment presets
-└── models/
-    └── <model_name>.py     # Model implementation
-```
-
-**Note:** The CLI `deriva-ml-run` is provided by the deriva-ml package. No local entry point
-script is needed - just configure your models in `src/configs/`.
-
-**Check:**
-- [ ] All config modules are in `configs/` directory
-- [ ] `configs/__init__.py` calls `load_all_configs()`
-- [ ] `configs/base.py` creates and registers `DerivaModelConfig`
-- [ ] Model implementation exists in `models/`
-
-### Step 2.2: Configure Datasets
-
-Edit `configs/datasets.py` to specify the datasets for your experiment.
-
-**Find dataset RIDs in the catalog:**
-```
-# Read deriva-ml://catalog/datasets resource for all datasets
-# deriva-ml://dataset/<rid>  # dataset details
-# deriva-ml://dataset/<rid>/versions  # version history
-```
-
-**Update configuration:**
-```python
-from hydra_zen import store
-from deriva_ml.dataset import DatasetSpecConfig
-
-datasets_store = store(group="datasets")
-
-# Pin versions for reproducibility
-training_data = [
-    DatasetSpecConfig(rid="<DATASET_RID>", version="<VERSION>")
-]
-datasets_store(training_data, name="training")
-```
-
-**Check:**
-- [ ] Dataset RIDs are correct for target catalog
-- [ ] Versions are pinned for production runs
-- [ ] Multiple datasets listed if needed
-
-### Step 2.3: Configure Input Assets
-
-Edit `configs/assets.py` to specify pre-trained weights or other input files.
-
-**Find asset RIDs in the catalog:**
-```
-# Use the resource: deriva-ml://table/<asset_table>/assets
-# e.g., deriva-ml://table/Model/assets, deriva-ml://table/Checkpoint/assets
-query_table("<asset_table>", columns=["RID", "Filename", "Description"])
-```
-
-**Update configuration:**
-```python
-from hydra_zen import store
-
-asset_store = store(group="assets")
-
-# Pre-trained weights
-pretrained = ["<MODEL_RID>"]
-asset_store(pretrained, name="pretrained_weights")
-
-# No assets needed
-asset_store([], name="no_assets")
-```
-
-**Check:**
-- [ ] Asset RIDs reference correct files in catalog
-- [ ] All required input files are specified
-- [ ] Asset table names match catalog schema
-
-### Step 2.4: Configure Model Parameters
-
-Edit `configs/<model_name>.py` to define model hyperparameters.
-
-**Create configurations for different scenarios:**
-```python
-from hydra_zen import builds, store
-from models.my_model import train_model
-
-model_store = store(group="model_config")
-
-# Base configuration
-BaseConfig = builds(
-    train_model,
-    epochs=10,
-    learning_rate=1e-3,
-    batch_size=32,
-    hidden_size=128,
-    populate_full_signature=True,
-    zen_partial=True,
-)
-
-# Register variants
-model_store(BaseConfig, name="default_model")
-model_store(BaseConfig, name="quick", epochs=2)
-model_store(BaseConfig, name="full", epochs=50, hidden_size=256)
-```
-
-**Check:**
-- [ ] All hyperparameters have sensible defaults
-- [ ] Quick/test configuration exists for debugging
-- [ ] Production configuration is defined
-- [ ] `zen_partial=True` set for configs needing runtime context
+**If configs need to be created or modified**, see the `configure-experiment` prompt for:
+- Repository structure
+- Dataset configuration (`configs/datasets.py`)
+- Asset configuration (`configs/assets.py`)
+- Model parameters (`configs/<model>.py`)
+- Experiment presets (`configs/experiments.py`)
 
 ---
 
-## Part 3: Run the Experiment
+## Run the Experiment
 
 The `deriva-ml-run` CLI is provided by deriva-ml. It automatically loads configs from
 `src/configs/` and supports both `--host`/`--catalog` arguments and Hydra config defaults.
 
-### Step 3.1: Test First (Dry Run)
+### Test First (Dry Run)
 ```bash
-# Test configuration without creating records
-uv run deriva-ml-run dry_run=True
-
-# Test with specific experiment preset
+uv run deriva-ml-run --info                           # Show available configs
+uv run deriva-ml-run dry_run=True                     # Test without records
 uv run deriva-ml-run +experiment=quick_test dry_run=True
-
-# Show available configs
-uv run deriva-ml-run --info
 ```
 
-### Step 3.2: Production Run
+### Production Run
 ```bash
 # Run with defaults (uses host/catalog from Hydra config)
 uv run deriva-ml-run
@@ -3324,55 +3200,22 @@ uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended
 
 ---
 
-## Part 4: Verify Results
-
-### Step 4.1: Check Execution
+## Verify Results
 
 After the run completes:
 
 ```
-# Read deriva-ml://catalog/executions resource for recent executions
-
-# Check execution details
-get_execution_info()
+# Check recent executions - use the resource
+# deriva-ml://catalog/executions
 
 # View in Chaise - use the resource
 # deriva-ml://chaise-url/Execution
 ```
 
-**Verify:**
+**Checklist:**
 - [ ] Execution record created in catalog
 - [ ] Output assets uploaded
-- [ ] Metrics/metadata captured
 - [ ] Provenance links correct (datasets, code version)
-
-### Step 4.2: After Execution
-
-Remind the user:
-- The execution is linked to version `<version>`
-- Results can be reproduced by checking out this version
-- Consider tagging successful experiments
-
----
-
-## Complete Checklist Summary
-
-**Before running (Part 1):**
-- [ ] Git working tree is clean
-- [ ] Version is bumped (if significant experiment)
-- [ ] `uv.lock` is committed
-- [ ] User confirmation received
-
-**Configuration (Part 2):**
-- [ ] Repository structure matches template
-- [ ] Dataset RIDs and versions configured
-- [ ] Asset RIDs configured (if needed)
-- [ ] Model parameters configured
-
-**After running (Part 4):**
-- [ ] Execution record exists in catalog
-- [ ] Outputs uploaded successfully
-- [ ] Results reproducible with same config
 
 ---
 
@@ -3381,31 +3224,21 @@ Remind the user:
 | Check | Command | Expected |
 |-------|---------|----------|
 | Clean tree | `git status --porcelain` | Empty output |
-| Current version | `git describe --tags` | Clean tag (no `-g<hash>`) |
-| Lock file | `git status uv.lock` | Not modified |
+| Version | `git describe --tags` | Clean tag (no `-g<hash>`) |
+| Available configs | `uv run deriva-ml-run --info` | Lists all config groups |
 
 ---
 
 ## Troubleshooting
 
-### "Dataset not found"
-- Verify RID exists: `deriva-ml://dataset/<rid>` resource
-- Check you're connected to correct catalog
-- Ensure version exists: `deriva-ml://dataset/<rid>/versions` resource
+| Problem | Solution |
+|---------|----------|
+| Dataset not found | Check `deriva-ml://dataset/<rid>` resource |
+| Asset not found | Check `deriva-ml://asset/<rid>` resource |
+| Config not found | Run `--info`, check `configs/__init__.py` |
+| Execution failed | Try `dry_run=True`, run `uv sync` |
 
-### "Asset not found"
-- Verify RID exists: read the asset resource
-- Check asset table name matches catalog
-
-### "Execution failed"
-- Check logs for error details
-- Try `dry_run=True` to debug
-- Verify all dependencies installed: `uv sync`
-
-### "Config not found"
-- Ensure `configs/__init__.py` loads all modules
-- Check config name matches store registration
-- Verify no syntax errors in config files
+**For config file issues**, see the `configure-experiment` prompt.
 """
 
     @mcp.prompt(
