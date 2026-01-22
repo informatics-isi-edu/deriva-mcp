@@ -469,7 +469,7 @@ apply_annotations()
 - Always check current annotations before making changes
 - Use `*` context for defaults, specific contexts for overrides
 - Test changes in Chaise after applying
-- Use `get_chaise_url("<table>")` to get the URL to view changes
+- Use `deriva-ml://chaise-url/<table>` resource to get the URL to view changes
 """
 
     @mcp.prompt(
@@ -1183,8 +1183,8 @@ After creation, verify the table structure:
 # Get detailed schema - use the resource
 # deriva-ml://table/Subject/schema
 
-# Get Chaise URL to view in browser
-get_chaise_url("Subject")
+# Get Chaise URL to view in browser - use the resource
+# deriva-ml://chaise-url/Subject
 ```
 
 ## Common Patterns
@@ -1343,8 +1343,8 @@ Note the returned `dataset_rid` for adding members.
 Before adding records, their table must be registered as an element type:
 
 ```
-# Check which tables are registered
-list_dataset_element_types()
+# Check which tables are registered - use the resource
+# deriva-ml://catalog/dataset-element-types
 
 # Register a new table
 add_dataset_element_type("Image")
@@ -3336,8 +3336,8 @@ After the run completes:
 # Check execution details
 get_execution_info()
 
-# View in Chaise
-get_chaise_url("Execution")
+# View in Chaise - use the resource
+# deriva-ml://chaise-url/Execution
 ```
 
 **Verify:**
@@ -4089,14 +4089,14 @@ denormalize_dataset("<dataset-rid>", ["Image"], version="1.0.0")
 
 ## View in Web Interface
 
-Get URLs to browse data in Chaise:
+Get URLs to browse data in Chaise using resources:
 
 ```
-# URL for a table
-get_chaise_url("Image")
+# URL for a table - use the resource
+# deriva-ml://chaise-url/Image
 
-# URL for a specific record
-get_chaise_url("1-ABC")
+# URL for a specific record - use the resource
+# deriva-ml://chaise-url/1-ABC
 ```
 
 ## Complete Example: Explore a Dataset
@@ -4123,8 +4123,8 @@ query_table("Image", columns=["RID", "Filename", "Subject"], limit=10)
 # 7. Get denormalized data for ML
 denormalize_dataset("1-ABC", ["Image", "Subject", "Diagnosis"], limit=100)
 
-# 8. View in browser
-get_chaise_url("1-ABC")
+# 8. View in browser - use the resource
+# deriva-ml://chaise-url/1-ABC
 ```
 
 ## Tips
