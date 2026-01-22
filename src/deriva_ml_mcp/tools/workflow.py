@@ -50,42 +50,6 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def find_workflows(
-        limit: int = 100,
-    ) -> str:
-        """List all workflows in the catalog.
-
-        Returns all workflow definitions. The LLM can select relevant workflows
-        based on user intent and conversation context.
-
-        Use lookup_workflow() for full details on a specific workflow.
-
-        Args:
-            limit: Maximum number of results (default: 100).
-
-        Returns:
-            JSON array of {rid, name, workflow_type, description, url, checksum}.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            workflows = list(ml.list_workflows())[:limit]
-            results = [
-                {
-                    "rid": wf.rid,
-                    "name": wf.name,
-                    "workflow_type": wf.workflow_type,
-                    "description": wf.description,
-                    "url": wf.url,
-                    "checksum": wf.checksum,
-                }
-                for wf in workflows
-            ]
-            return json.dumps(results)
-        except Exception as e:
-            logger.error(f"Failed to find workflows: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def lookup_workflow(workflow_rid: str) -> str:
         """Look up a workflow by its RID to get full details.
 

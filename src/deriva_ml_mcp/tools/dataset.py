@@ -66,36 +66,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     """Register dataset management tools with the MCP server."""
 
     @mcp.tool()
-    async def find_datasets(
-        include_deleted: bool = False,
-        limit: int = 200,
-    ) -> str:
-        """List all datasets in the catalog.
-
-        Returns all datasets with their Dataset_Type labels (e.g., "Training", "Testing")
-        and current semantic version. The LLM can select relevant datasets based on
-        user intent and conversation context.
-
-        Use lookup_dataset() for full details on a specific dataset including
-        nested dataset relationships.
-
-        Args:
-            include_deleted: Set True to include soft-deleted datasets.
-            limit: Maximum number of results (default: 200).
-
-        Returns:
-            JSON array of {dataset_rid, description, dataset_types, current_version}.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            datasets = ml.find_datasets(deleted=include_deleted)
-            result = [_serialize_dataset(ds) for ds in list(datasets)[:limit]]
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to find datasets: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def create_dataset(
         description: str = "",
         dataset_types: list[str] | None = None,

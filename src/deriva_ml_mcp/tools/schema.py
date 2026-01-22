@@ -324,43 +324,6 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def find_assets(
-        limit: int = 200,
-    ) -> str:
-        """List all assets in the catalog.
-
-        Returns assets across all asset tables. The LLM can select relevant
-        assets based on user intent and conversation context.
-
-        Use lookup_asset() for full details on a specific asset.
-
-        Args:
-            limit: Maximum number of results (default: 200).
-
-        Returns:
-            JSON array of assets with {asset_rid, asset_table, filename,
-            asset_types, execution_rid}.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            assets = list(ml.find_assets())[:limit]
-
-            result = [
-                {
-                    "asset_rid": asset.asset_rid,
-                    "asset_table": asset.asset_table,
-                    "filename": asset.filename,
-                    "asset_types": asset.asset_types,
-                    "execution_rid": asset.execution_rid,
-                }
-                for asset in assets
-            ]
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to find assets: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def list_tables() -> str:
         """List all tables in the domain schema with their properties.
 
