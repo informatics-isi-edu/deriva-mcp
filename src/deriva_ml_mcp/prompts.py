@@ -329,10 +329,10 @@ This automatically configures:
 
 ## Step 1: Check Current Annotations
 
-See what's already configured:
+See what's already configured using the resource:
 
 ```
-get_table_annotations("<table-name>")
+deriva-ml://table/<table-name>/annotations
 ```
 
 This shows current settings for:
@@ -356,7 +356,7 @@ Annotations can be set per-context. Common contexts:
 | `entry/create` | New record form |
 | `entry/edit` | Edit existing record form |
 
-Use `get_annotation_contexts()` for full documentation.
+See full context documentation: `deriva-ml://docs/annotation-contexts`
 
 ## Step 3: Customize Display Name
 
@@ -418,8 +418,8 @@ Use Handlebars syntax: `{{{column_name}}}` for values.
 Control which related tables appear:
 
 ```
-# First, find available foreign keys
-list_foreign_keys("<table>")
+# First, find available foreign keys using the resource
+deriva-ml://table/<table>/foreign-keys
 
 # Add an FK to detailed view
 add_visible_foreign_key("<table>", "detailed", ["schema", "FK_constraint_name"])
@@ -438,8 +438,8 @@ apply_annotations()
 ## Complete Example
 
 ```
-# 1. Check current state
-get_table_annotations("Image")
+# 1. Check current state (use resource)
+deriva-ml://table/Image/annotations
 
 # 2. Set friendly name
 set_display_annotation("Image", {"name": "Images"})
@@ -457,7 +457,7 @@ set_table_display("Image", {
 })
 
 # 5. Add related table to detailed view
-list_foreign_keys("Image")  # Find FK names
+# Check deriva-ml://table/Image/foreign-keys for FK names
 add_visible_foreign_key("Image", "detailed", ["domain", "Image_Subject_fkey"])
 
 # 6. Commit changes

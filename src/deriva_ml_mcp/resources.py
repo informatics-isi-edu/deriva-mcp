@@ -1040,6 +1040,148 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     # =========================================================================
+    # Annotation Resources
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva-ml://table/{table_name}/annotations",
+        name="Table Annotations",
+        description="Display-related annotations for a table (display, visible-columns, visible-foreign-keys, table-display)",
+        mime_type="application/json",
+    )
+    def get_table_annotations(table_name: str) -> str:
+        """Return all display-related annotations for a table."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            return json.dumps(ml.get_table_annotations(table_name), indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://table/{table_name}/column/{column_name}/annotations",
+        name="Column Annotations",
+        description="Display-related annotations for a column (display, column-display)",
+        mime_type="application/json",
+    )
+    def get_column_annotations(table_name: str, column_name: str) -> str:
+        """Return all display-related annotations for a column."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            return json.dumps(ml.get_column_annotations(table_name, column_name), indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://table/{table_name}/foreign-keys",
+        name="Table Foreign Keys",
+        description="All foreign keys related to a table (outbound and inbound)",
+        mime_type="application/json",
+    )
+    def get_table_foreign_keys(table_name: str) -> str:
+        """Return all foreign keys related to a table."""
+        ml = conn_manager.get_active_connection()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            return json.dumps(ml.list_foreign_keys(table_name), indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://docs/annotation-contexts",
+        name="Annotation Contexts Reference",
+        description="Documentation of all valid annotation contexts and their usage",
+        mime_type="application/json",
+    )
+    def get_annotation_contexts_doc() -> str:
+        """Return documentation about annotation contexts."""
+        return json.dumps({
+            "visible_columns_contexts": {
+                "description": "Contexts control which columns appear in different UI views",
+                "contexts": {
+                    "*": {
+                        "description": "Default fallback for all contexts",
+                        "usage": "Used when a specific context is not defined"
+                    },
+                    "compact": {
+                        "description": "Main list/table view",
+                        "usage": "Record lists, search results, related entity tables"
+                    },
+                    "compact/brief": {
+                        "description": "Abbreviated compact view",
+                        "usage": "Tooltips, hover previews, inline entity display"
+                    },
+                    "compact/brief/inline": {
+                        "description": "Minimal inline display",
+                        "usage": "Foreign key cell values in tables"
+                    },
+                    "compact/select": {
+                        "description": "Selection/picker modal",
+                        "usage": "Foreign key picker dialogs, record selection"
+                    },
+                    "detailed": {
+                        "description": "Full single-record view",
+                        "usage": "Individual record page showing all details"
+                    },
+                    "entry": {
+                        "description": "Data entry forms (create and edit)",
+                        "usage": "Both new record creation and editing existing records"
+                    },
+                    "entry/create": {
+                        "description": "Create form only",
+                        "usage": "New record creation (overrides entry)"
+                    },
+                    "entry/edit": {
+                        "description": "Edit form only",
+                        "usage": "Editing existing records (overrides entry)"
+                    },
+                    "export": {
+                        "description": "Data export",
+                        "usage": "CSV/JSON export column selection"
+                    },
+                    "filter": {
+                        "description": "Faceted search sidebar",
+                        "usage": "Search facets (uses different format than other contexts)"
+                    },
+                },
+            },
+            "visible_foreign_keys_contexts": {
+                "description": "Contexts control which related tables appear in record views",
+                "contexts": {
+                    "*": "Default for all contexts",
+                    "compact": "Related tables shown in list views",
+                    "detailed": "Related tables shown in single record view",
+                    "entry": "Related tables in data entry (rarely used)",
+                },
+            },
+            "table_display_contexts": {
+                "description": "Contexts for table-level display settings",
+                "contexts": {
+                    "*": "Default row name pattern for all contexts",
+                    "compact": "Row name in list views",
+                    "detailed": "Row name in record view header",
+                    "row_name": "Special context for row_markdown_pattern",
+                },
+            },
+            "column_display_contexts": {
+                "description": "Contexts for column-level display formatting",
+                "contexts": {
+                    "*": "Default formatting for all contexts",
+                    "compact": "Formatting in list/table cells",
+                    "detailed": "Formatting in single record view",
+                    "entry": "Formatting in data entry forms",
+                },
+            },
+        }, indent=2)
+
+    # =========================================================================
     # Documentation Resources - Fetched from GitHub
     # =========================================================================
 
