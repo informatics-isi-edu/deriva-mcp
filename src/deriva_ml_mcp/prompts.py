@@ -44,7 +44,7 @@ with full provenance tracking in DerivaML.
 
 ## Prerequisites
 - Connected to a DerivaML catalog (use `connect_catalog` if not connected)
-- Input dataset(s) available (use `find_datasets` to find them)
+- Input dataset(s) available (read `deriva-ml://catalog/datasets` resource to find them)
 
 ## Python API: Using the Context Manager (Recommended)
 
@@ -105,8 +105,7 @@ Before creating an execution, optionally check for existing workflows:
 list_workflow_types()
 
 # Search for similar workflows by type or description
-find_workflows(workflow_type="Training")
-find_workflows(description_pattern="ResNet")
+# Read the deriva-ml://catalog/workflows resource to see all workflows
 
 # Check if workflow exists by URL/checksum (for code-tracked workflows)
 lookup_workflow("https://github.com/org/repo/blob/main/train.py")
@@ -178,8 +177,8 @@ upload_execution_outputs()
 - Use `get_execution_info()` to check current execution status
 - Use `update_execution_status(status, message)` for progress updates
 - Use `restore_execution(rid)` to resume a previous execution
-- Use `find_executions()` or the `deriva-ml://catalog/executions` resource to see past workflow runs
-- Use `find_workflows()` to discover existing workflows before creating new ones
+- Read `deriva-ml://catalog/executions` resource to see past workflow runs
+- Read `deriva-ml://catalog/workflows` resource to discover existing workflows before creating new ones
 - Use `list_workflow_types()` to see available workflow type categories
 - In Python, always prefer the context manager over manual start/stop
 """
@@ -197,15 +196,14 @@ for use in ML training pipelines.
 
 ## Prerequisites
 - Connected to a DerivaML catalog
-- Know your dataset RID (use `find_datasets()` to find it)
+- Know your dataset RID (read `deriva-ml://catalog/datasets` resource to find it)
 
 ## Step 1: Explore Your Dataset
 
 First, understand what data is available:
 
 ```
-# List all datasets
-find_datasets()
+# Read the deriva-ml://catalog/datasets resource to list all datasets
 
 # Get details about your dataset
 lookup_dataset("<dataset-rid>")
@@ -882,8 +880,7 @@ A Feature links:
 See what features already exist:
 
 ```
-# Find features for a table
-find_features("<table-name>")
+# Read the deriva-ml://table/{table_name}/features resource to find features for a table
 
 # Get details about a specific feature
 lookup_feature("<table-name>", "<feature-name>")
@@ -1537,7 +1534,7 @@ list_dataset_children("1-ABC")
 
 - Always create datasets within an execution for provenance
 - **Always provide descriptive `description` values** - explains what the dataset contains and its purpose
-- Use `find_datasets()` to find existing datasets
+- Read `deriva-ml://catalog/datasets` resource to find existing datasets
 - Use semantic versioning: patch=metadata, minor=elements, major=breaking
 - Nested datasets share elements - good for train/test splits
 - Pin versions for reproducible training
@@ -2526,7 +2523,7 @@ multirun_config(
 # Tips
 
 - Use the workflow-types resource to see available workflow types
-- Use `find_datasets()` to find dataset RIDs
+- Read `deriva-ml://catalog/datasets` resource to find dataset RIDs
 - Read `deriva-ml://dataset/{rid}` and `deriva-ml://asset/{rid}` resources for descriptions
 - Group related configs (e.g., all CIFAR-10 configs in one file)
 - Use `zen_partial=True` for model configs that need runtime context
@@ -3175,7 +3172,7 @@ Edit `configs/datasets.py` to specify the datasets for your experiment.
 
 **Find dataset RIDs in the catalog:**
 ```
-find_datasets()
+# Read deriva-ml://catalog/datasets resource for all datasets
 lookup_dataset("<rid>")
 get_dataset_version_history("<rid>")
 ```
@@ -3333,8 +3330,7 @@ uv run deriva-ml-run --multirun +experiment=cifar10_quick,cifar10_extended
 After the run completes:
 
 ```
-# List recent executions
-find_executions(limit=5)
+# Read deriva-ml://catalog/executions resource for recent executions
 
 # Check execution details
 get_execution_info()
@@ -4030,7 +4026,7 @@ lookup_term("Dataset_Type", "train")  # Works with synonyms
 
 ### Find Features for a Table
 ```
-find_features("Image")
+# Read deriva-ml://table/Image/features resource
 ```
 
 ### Get Feature Structure
@@ -4108,8 +4104,7 @@ get_chaise_url("1-ABC")
 # 1. Connect (if not already connected)
 connect_catalog("example.org", "1")
 
-# 2. List available datasets
-find_datasets()
+# 2. Read deriva-ml://catalog/datasets resource to list available datasets
 
 # 3. Get dataset details
 lookup_dataset("1-ABC")
@@ -4211,9 +4206,7 @@ list_assets("Model")       # All models
 ### Search with Filters
 
 ```
-find_assets()                              # All assets in catalog
-find_assets(asset_table="Image")           # Images only
-find_assets(asset_type="Training_Data")    # By type
+# Read deriva-ml://catalog/assets resource for all assets in catalog
 ```
 
 ### Look Up Specific Asset
@@ -4367,12 +4360,12 @@ for table, assets in uploaded.items():
 - Use `list_asset_executions` to trace provenance
 - Asset types help organize and filter assets
 - Always upload through executions for provenance
-- Use `find_assets` for bulk discovery operations
+- Read `deriva-ml://catalog/assets` resource for bulk discovery operations
 
 ## Related Tools
 
 - `list_assets()` - List assets in a table
-- `find_assets()` - Search assets with filters
+- `deriva-ml://catalog/assets` resource - All assets summary
 - `deriva-ml://asset/{rid}` resource - Get asset details
 - `list_asset_executions()` - Asset provenance
 - `asset_file_path()` - Register output files
@@ -4443,8 +4436,7 @@ exe.upload_execution_outputs()
 # Verify connection
 get_catalog_info()
 
-# List available datasets
-find_datasets()
+# Read deriva-ml://catalog/datasets resource to list available datasets
 
 # Check if dataset exists
 lookup_dataset("<rid>")
@@ -4518,8 +4510,7 @@ config = ExecutionConfiguration(
 # List all feature names
 list_feature_names()
 
-# Find features for a specific table
-find_features("Image")
+# Read deriva-ml://table/Image/features resource to find features for Image table
 
 # Get feature details
 lookup_feature("Image", "Diagnosis")
@@ -4597,7 +4588,7 @@ get_catalog_info()
 
 4. **List recent executions**:
 ```
-find_executions()  # or read deriva-ml://catalog/executions resource
+# Read deriva-ml://catalog/executions resource
 ```
 
 5. **Check working directory**:
@@ -4645,9 +4636,9 @@ Returns iterable of matching items. Empty result is valid (not an error).
 
 ```python
 datasets = ml.find_datasets()             # Returns Iterable[Dataset]
-assets = ml.find_assets(asset_type="Model")  # Returns Iterable[Asset]
+assets = ml.find_assets()                 # Returns Iterable[Asset]
 features = ml.find_features("Image")      # Returns Iterable[Feature]
-workflows = ml.find_workflows()           # Returns list[Workflow]
+workflows = ml.list_workflows()           # Returns list[Workflow]
 ```
 
 **Pattern**: `find_<entities>(filters) -> Iterable[Entity]`
@@ -4811,7 +4802,7 @@ abbreviated or clearer parameter names:
 | Python API | MCP Tool |
 |------------|----------|
 | `lookup_dataset(rid)` | `lookup_dataset(dataset_rid)` |
-| `find_datasets(deleted=True)` | `find_datasets(include_deleted=True)` |
+| `find_datasets(deleted=True)` | Read `deriva-ml://catalog/datasets` resource |
 | `list_dataset_members()` | `list_dataset_members(dataset_rid)` |
 
 ## Tips for API Discovery
@@ -5274,7 +5265,7 @@ with severity grades from the [source] dataset."
 
 Query existing entities to match patterns:
 ```
-find_datasets()  # See existing dataset description styles
+# Read deriva-ml://catalog/datasets resource to see existing dataset description styles
 # Read deriva-ml://vocabulary/Dataset_Type resource to understand categories
 lookup_experiment(rid)  # See how similar experiments are described
 ```
@@ -5482,8 +5473,7 @@ Before `create_dataset()`, check existing datasets:
 # List all datasets with types and descriptions
 deriva-ml://catalog/datasets
 
-# Search datasets
-find_datasets()
+# Read deriva-ml://catalog/datasets resource to search datasets
 
 # Get specific dataset details
 deriva-ml://dataset/<rid>
@@ -5499,7 +5489,7 @@ deriva-ml://dataset/<rid>
 User wants: Create training dataset from CIFAR-10 images
 
 Search existing datasets:
-- find_datasets() → Check types containing "Training"
+- Read `deriva-ml://catalog/datasets` resource → Check types containing "Training"
 - Check descriptions mentioning "CIFAR" or "training"
 
 Found: "cifar10_training" dataset (RID: 4HM) - "Training partition with 45k images"
