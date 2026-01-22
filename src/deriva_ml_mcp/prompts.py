@@ -1335,6 +1335,43 @@ create_dataset_type_term("Curated", "Manually reviewed and cleaned data")
 3. **Use "Labeled" vs "Unlabeled"** - Critical for knowing if ground truth is available
 4. **Consider workflow stages** - Types should reflect how data is used
 
+## Understanding Dataset Element Types
+
+**Dataset Element Types** define which domain tables can contribute records to datasets.
+Before adding records from a table (e.g., Image, Subject), the table must be registered.
+
+```
+# Check registered element types
+# deriva-ml://catalog/dataset-element-types
+
+# Register a new table as an element type
+add_dataset_element_type("Image")
+```
+
+This is a one-time setup per table. Once registered, records from that table can be added
+to any dataset using `add_dataset_members()`.
+
+## Understanding Nested Datasets
+
+**Nested Datasets** create parent-child relationships, useful for:
+- **Train/test splits**: Parent "Complete" dataset with "Training" and "Testing" children
+- **Hierarchical organization**: Group related datasets under a common parent
+- **Versioned subsets**: Children can have independent version histories
+
+```
+# Create hierarchy
+add_dataset_child("<parent-rid>", "<child-rid>")
+
+# Query relationships
+list_dataset_children("<parent-rid>")
+list_dataset_parents("<child-rid>")
+
+# View in dataset details
+# deriva-ml://dataset/<rid>  (includes children and parents)
+```
+
+Child datasets share provenance with their parent but maintain their own members and versions.
+
 ## Step 1: Check for Existing Workflow (Optional)
 
 If you've created datasets before, you may already have a workflow:
