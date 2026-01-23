@@ -570,3 +570,66 @@ class ConnectionManager:
                 "Use 'is_derivaml_catalog' to check catalog type."
             )
         return conn.ml_instance
+
+    def find_table(self, table_name: str):
+        """Find a table by name in the active catalog.
+
+        Accepts either:
+        - "table_name" - searches across schemas (errors if ambiguous for ERMrest)
+        - "schema.table_name" - uses the explicitly specified schema
+
+        Works for both DerivaML and plain ERMrest catalogs.
+
+        Args:
+            table_name: Table name, optionally qualified with schema (e.g., "Image" or "isa.dataset")
+
+        Returns:
+            The table object from the catalog model.
+
+        Raises:
+            DerivaMLException: If no active connection.
+            ValueError: If table not found or name is ambiguous.
+        """
+        from deriva_ml import DerivaMLException
+
+        conn = self.get_active()
+        if conn is None:
+            raise DerivaMLException("No active catalog connection. Use 'connect_catalog' tool first.")
+
+        model = conn.get_model()
+        system_schemas = {"_acl_admin", "public"}
+
+        # Check for schema.table notation
+        if "." in table_name:
+            schema_name, tbl_name = table_name.split(".", 1)
+            if schema_name not in model.schemas:
+                raise ValueError(f"Schema '{schema_name}' not found in catalog")
+            schema = model.schemas[schema_name]
+            if tbl_name not in schema.tables:
+                raise ValueError(f"Table '{tbl_name}' not found in schema '{schema_name}'")
+            return schema.tables[tbl_name]
+
+        # For DerivaML, use the model's name_to_table method (searches domain then ml schema)
+        if conn.is_derivaml:
+            return conn.ml_instance.model.name_to_table(table_name)
+
+        # For plain ERMrest, search through all non-system schemas
+        # Collect all matches to detect ambiguity
+        matches = []
+        for schema_name, schema in model.schemas.items():
+            if schema_name in system_schemas:
+                continue
+            if table_name in schema.tables:
+                matches.append((schema_name, schema.tables[table_name]))
+
+        if not matches:
+            raise ValueError(f"Table '{table_name}' not found in catalog")
+
+        if len(matches) > 1:
+            schema_names = [m[0] for m in matches]
+            raise ValueError(
+                f"Table '{table_name}' is ambiguous - found in schemas: {schema_names}. "
+                f"Use 'schema.table' notation (e.g., '{schema_names[0]}.{table_name}')."
+            )
+
+        return matches[0][1]

@@ -58,24 +58,6 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     These tools work with both DerivaML and plain ERMrest catalogs.
     """
 
-    def _find_table(conn_info, table_name: str):
-        """Find a table by name in the catalog model.
-
-        Works for both DerivaML and plain ERMrest catalogs.
-        """
-        model = conn_info.get_model()
-
-        # For DerivaML, use the model's name_to_table method
-        if conn_info.is_derivaml:
-            return conn_info.ml_instance.model.name_to_table(table_name)
-
-        # For plain ERMrest, search through all schemas
-        for schema in model.schemas.values():
-            if table_name in schema.tables:
-                return schema.tables[table_name]
-
-        raise ValueError(f"Table '{table_name}' not found in catalog")
-
     @mcp.tool()
     async def get_table(
         table_name: str,
@@ -90,15 +72,17 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         Works with both DerivaML and plain ERMrest catalogs.
 
         Args:
-            table_name: Name of the table to retrieve (e.g., "Image", "Subject").
+            table_name: Table name, either unqualified (e.g., "Image") or qualified
+                with schema (e.g., "isa.dataset"). Use qualified names when a table
+                exists in multiple schemas.
             limit: Maximum records to return (default: 1000).
 
         Returns:
             JSON with table name and records array.
 
-        Example:
+        Examples:
             get_table("Image") -> all images in catalog
-            get_table("Subject", limit=100) -> first 100 subjects
+            get_table("isa.dataset", limit=100) -> first 100 datasets from isa schema
         """
         try:
             conn_info = conn_manager.get_active_or_raise()
@@ -113,9 +97,9 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                     rows.append(row)
             else:
                 # Use pathbuilder for plain ERMrest
-                table = _find_table(conn_info, table_name)
+                table = conn_manager.find_table(table_name)
                 pb = conn_info.get_pathbuilder()
-                path = pb.schemas[table.schema.name].tables[table_name]
+                path = pb.schemas[table.schema.name].tables[table.name]
                 rows = list(path.entities().fetch(limit=limit))
 
             return json.dumps(
@@ -146,7 +130,9 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         Works with both DerivaML and plain ERMrest catalogs.
 
         Args:
-            table_name: Name of the table to query (e.g., "Image", "Subject", "Dataset").
+            table_name: Table name, either unqualified (e.g., "Image") or qualified
+                with schema (e.g., "isa.dataset"). Use qualified names when a table
+                exists in multiple schemas.
             columns: List of column names to return. Default: all columns.
             filters: Dictionary of {column: value} equality filters.
             limit: Maximum records to return (default: 100, max: 1000).
@@ -157,14 +143,14 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
         Examples:
             query_table("Image") -> first 100 images
-            query_table("Image", columns=["RID", "Filename"], limit=10)
+            query_table("isa.dataset", columns=["RID", "title"], limit=10)
             query_table("Subject", filters={"Species": "Human"})
         """
         try:
             conn_info = conn_manager.get_active_or_raise()
-            table = _find_table(conn_info, table_name)
+            table = conn_manager.find_table(table_name)
             pb = conn_info.get_pathbuilder()
-            path = pb.schemas[table.schema.name].tables[table_name]
+            path = pb.schemas[table.schema.name].tables[table.name]
 
             # Apply filters
             if filters:
@@ -209,7 +195,8 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         Works with both DerivaML and plain ERMrest catalogs.
 
         Args:
-            table_name: Name of the table to count.
+            table_name: Table name, either unqualified (e.g., "Image") or qualified
+                with schema (e.g., "isa.dataset").
             filters: Dictionary of {column: value} equality filters.
 
         Returns:
@@ -217,13 +204,13 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
         Examples:
             count_table("Image") -> total image count
-            count_table("Subject", filters={"Species": "Human"}) -> count of human subjects
+            count_table("isa.dataset", filters={"released": true}) -> count of released datasets
         """
         try:
             conn_info = conn_manager.get_active_or_raise()
-            table = _find_table(conn_info, table_name)
+            table = conn_manager.find_table(table_name)
             pb = conn_info.get_pathbuilder()
-            path = pb.schemas[table.schema.name].tables[table_name]
+            path = pb.schemas[table.schema.name].tables[table.name]
 
             # Apply filters
             if filters:
@@ -264,7 +251,8 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         **For plain ERMrest catalogs**: Can insert into any table.
 
         Args:
-            table_name: Name of the domain table to insert into.
+            table_name: Table name, either unqualified (e.g., "Subject") or qualified
+                with schema (e.g., "isa.subject").
             records: List of dictionaries with column values.
 
         Returns:
@@ -275,7 +263,7 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         """
         try:
             conn_info = conn_manager.get_active_or_raise()
-            table = _find_table(conn_info, table_name)
+            table = conn_manager.find_table(table_name)
 
             # For DerivaML catalogs, apply restrictions on managed tables
             if conn_info.is_derivaml:
@@ -333,7 +321,7 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                     )
 
             pb = conn_info.get_pathbuilder()
-            path = pb.schemas[table.schema.name].tables[table_name]
+            path = pb.schemas[table.schema.name].tables[table.name]
 
             # Insert records
             result = path.insert(records)
@@ -361,7 +349,8 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         Works with both DerivaML and plain ERMrest catalogs.
 
         Args:
-            table_name: Name of the table containing the record.
+            table_name: Table name, either unqualified (e.g., "Image") or qualified
+                with schema (e.g., "isa.dataset").
             rid: The RID of the record to fetch.
 
         Returns:
@@ -372,9 +361,9 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         """
         try:
             conn_info = conn_manager.get_active_or_raise()
-            table = _find_table(conn_info, table_name)
+            table = conn_manager.find_table(table_name)
             pb = conn_info.get_pathbuilder()
-            path = pb.schemas[table.schema.name].tables[table_name]
+            path = pb.schemas[table.schema.name].tables[table.name]
 
             # Filter by RID
             records = list(path.filter(path.RID == rid).entities().fetch())
@@ -409,7 +398,8 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         Works with both DerivaML and plain ERMrest catalogs.
 
         Args:
-            table_name: Name of the table containing the record.
+            table_name: Table name, either unqualified (e.g., "Subject") or qualified
+                with schema (e.g., "isa.subject").
             rid: The RID of the record to update.
             updates: Dictionary of {column: new_value} updates.
 
@@ -421,9 +411,9 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         """
         try:
             conn_info = conn_manager.get_active_or_raise()
-            table = _find_table(conn_info, table_name)
+            table = conn_manager.find_table(table_name)
             pb = conn_info.get_pathbuilder()
-            path = pb.schemas[table.schema.name].tables[table_name]
+            path = pb.schemas[table.schema.name].tables[table.name]
 
             # Get current record
             records = list(path.filter(path.RID == rid).entities().fetch())

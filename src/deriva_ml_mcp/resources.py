@@ -430,6 +430,20 @@ multirun_config(
     # Dynamic Resources - Catalog Information
     # =========================================================================
 
+    def _get_column_type_name(col) -> str:
+        """Get the type name for a column, handling different type representations."""
+        try:
+            # Try typename attribute first (most common)
+            if hasattr(col.type, "typename"):
+                return col.type.typename
+            # Fall back to name attribute
+            if hasattr(col.type, "name"):
+                return col.type.name
+            # Last resort - string representation, but clean it up
+            return str(col.type)
+        except Exception:
+            return "unknown"
+
     @mcp.resource(
         "deriva-ml://catalog/schema",
         name="Catalog Schema",
@@ -464,7 +478,10 @@ multirun_config(
                     for table in domain.tables.values():
                         table_info = {
                             "name": table.name,
-                            "columns": [{"name": col.name, "type": str(col.type)} for col in table.columns],
+                            "columns": [
+                                {"name": col.name, "type": _get_column_type_name(col)}
+                                for col in table.columns
+                            ],
                             "is_vocabulary": ml.model.is_vocabulary(table),
                         }
                         schema_info["tables"].append(table_info)
@@ -481,13 +498,124 @@ multirun_config(
                         "tables": [
                             {
                                 "name": table.name,
-                                "columns": [{"name": col.name, "type": str(col.type)} for col in table.columns],
+                                "columns": [
+                                    {"name": col.name, "type": _get_column_type_name(col)}
+                                    for col in table.columns
+                                ],
                             }
                             for table in schema.tables.values()
                         ]
                     }
 
             return json.dumps(schema_info, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/table-index",
+        name="Table Index",
+        description="Mapping of table names to schemas they appear in",
+        mime_type="application/json",
+    )
+    def get_table_index() -> str:
+        """Return a mapping of table names to the schemas containing them.
+
+        Useful for quickly finding which schema(s) contain a given table name.
+        Works with both DerivaML and plain ERMrest catalogs.
+        """
+        conn_info = conn_manager.get_active()
+        if conn_info is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            model = conn_info.get_model()
+            system_schemas = {"_acl_admin", "public"}
+
+            # Build table -> schemas mapping
+            table_index: dict[str, list[str]] = {}
+            for schema_name, schema in model.schemas.items():
+                if schema_name in system_schemas:
+                    continue
+                for table_name in schema.tables:
+                    if table_name not in table_index:
+                        table_index[table_name] = []
+                    table_index[table_name].append(schema_name)
+
+            return json.dumps({
+                "hostname": conn_info.hostname,
+                "catalog_id": str(conn_info.catalog_id),
+                "table_count": len(table_index),
+                "tables": table_index,
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/table/{table_name}/schemas",
+        name="Table Schemas",
+        description="Find schemas containing a table. Accepts 'table' or 'schema.table' format.",
+        mime_type="application/json",
+    )
+    def get_table_schemas(table_name: str) -> str:
+        """Return schema information for a table.
+
+        Accepts either:
+        - "table_name" - searches all schemas, returns all matches
+        - "schema.table_name" - returns info for that specific table
+
+        Includes: schema name, qualified name, column count, and table comment.
+
+        Works with both DerivaML and plain ERMrest catalogs.
+        """
+        conn_info = conn_manager.get_active()
+        if conn_info is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            model = conn_info.get_model()
+            system_schemas = {"_acl_admin", "public"}
+            matches = []
+
+            # Check for schema.table notation
+            if "." in table_name:
+                schema_name, tbl_name = table_name.split(".", 1)
+                if schema_name not in model.schemas:
+                    return json.dumps({
+                        "error": f"Schema '{schema_name}' not found in catalog"
+                    })
+                schema = model.schemas[schema_name]
+                if tbl_name not in schema.tables:
+                    return json.dumps({
+                        "error": f"Table '{tbl_name}' not found in schema '{schema_name}'"
+                    })
+                table = schema.tables[tbl_name]
+                matches.append({
+                    "schema": schema_name,
+                    "qualified_name": table_name,
+                    "column_count": len(list(table.columns)),
+                    "comment": table.comment or "",
+                })
+                search_name = tbl_name
+            else:
+                # Search all non-system schemas
+                search_name = table_name
+                for schema_name, schema in model.schemas.items():
+                    if schema_name in system_schemas:
+                        continue
+                    if table_name in schema.tables:
+                        table = schema.tables[table_name]
+                        matches.append({
+                            "schema": schema_name,
+                            "qualified_name": f"{schema_name}.{table_name}",
+                            "column_count": len(list(table.columns)),
+                            "comment": table.comment or "",
+                        })
+
+            return json.dumps({
+                "table_name": search_name,
+                "found_in": matches,
+                "count": len(matches),
+            }, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1048,22 +1176,7 @@ multirun_config(
             return json.dumps({"error": "No active catalog connection"})
 
         try:
-            model = conn_info.get_model()
-
-            # Find the table
-            table = None
-            if conn_info.is_derivaml:
-                ml = conn_info.ml_instance
-                table = ml.model.name_to_table(table_name)
-            else:
-                # Search all schemas for the table
-                for schema in model.schemas.values():
-                    if table_name in schema.tables:
-                        table = schema.tables[table_name]
-                        break
-
-            if table is None:
-                return json.dumps({"error": f"Table '{table_name}' not found"})
+            table = conn_manager.find_table(table_name)
 
             columns = []
             for col in table.columns:

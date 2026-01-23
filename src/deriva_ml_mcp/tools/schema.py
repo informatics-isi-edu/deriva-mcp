@@ -367,26 +367,92 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         """Get a complete description of the catalog schema structure.
 
         Returns the full data model including all tables, columns, foreign keys,
-        and relationships in both the domain and ML schemas. Use this to understand
-        how data is organized before querying or creating new structures.
+        and relationships. Works with both DerivaML and plain ERMrest catalogs.
+
+        For DerivaML catalogs, includes domain and ML schemas with feature information.
+        For plain ERMrest catalogs, includes all non-system schemas.
 
         Args:
             include_system_columns: Include RID, RCT, RMT, RCB, RMB columns (default: False).
 
         Returns:
             JSON with complete schema structure:
+            - hostname: Server hostname
+            - catalog_id: Catalog ID
+            - catalog_type: "derivaml" or "ermrest"
+            - schemas: Dict of schema definitions, each containing:
+              - tables: Dict of table definitions with columns, foreign_keys
+            For DerivaML catalogs, also includes:
             - domain_schema: Name of the domain schema
             - ml_schema: Name of the ML schema (deriva-ml)
-            - schemas: Dict of schema definitions, each containing:
-              - tables: Dict of table definitions with columns, foreign_keys, features
 
         Example:
             get_schema_description() -> full catalog structure for understanding data model
         """
         try:
-            ml = conn_manager.require_derivaml()
-            schema_info = ml.model.get_schema_description(include_system_columns=include_system_columns)
-            return json.dumps(schema_info)
+            conn = conn_manager.get_active_or_raise()
+            system_columns = {"RID", "RCT", "RMT", "RCB", "RMB"}
+
+            if conn.is_derivaml:
+                # Use DerivaML's schema description for full feature support
+                ml = conn.ml_instance
+                schema_info = ml.model.get_schema_description(
+                    include_system_columns=include_system_columns
+                )
+                schema_info["hostname"] = ml.host_name
+                schema_info["catalog_id"] = str(ml.catalog_id)
+                schema_info["catalog_type"] = "derivaml"
+                return json.dumps(schema_info)
+            else:
+                # Plain ERMrest catalog - build schema info from catalog model
+                model = conn.get_model()
+                result = {
+                    "hostname": conn.hostname,
+                    "catalog_id": str(conn.catalog_id),
+                    "catalog_type": "ermrest",
+                    "schemas": {},
+                }
+
+                # Include all non-system schemas
+                system_schemas = {"_acl_admin", "public"}
+                for schema_name, schema in model.schemas.items():
+                    if schema_name in system_schemas:
+                        continue
+
+                    schema_info = {"tables": {}}
+                    for table_name, table in schema.tables.items():
+                        # Get columns
+                        columns = []
+                        for col in table.columns:
+                            if not include_system_columns and col.name in system_columns:
+                                continue
+                            columns.append({
+                                "name": col.name,
+                                "type": str(col.type.typename),
+                                "nullok": col.nullok,
+                                "comment": col.comment or "",
+                            })
+
+                        # Get foreign keys
+                        foreign_keys = []
+                        for fk in table.foreign_keys:
+                            fk_cols = [c.name for c in fk.foreign_key_columns]
+                            ref_cols = [c.name for c in fk.referenced_columns]
+                            foreign_keys.append({
+                                "columns": fk_cols,
+                                "referenced_table": f"{fk.pk_table.schema.name}.{fk.pk_table.name}",
+                                "referenced_columns": ref_cols,
+                            })
+
+                        schema_info["tables"][table_name] = {
+                            "comment": table.comment or "",
+                            "columns": columns,
+                            "foreign_keys": foreign_keys,
+                        }
+
+                    result["schemas"][schema_name] = schema_info
+
+                return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to get schema description: {e}")
             return json.dumps({"status": "error", "message": str(e)})

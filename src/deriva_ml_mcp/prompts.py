@@ -3839,6 +3839,9 @@ Before querying, explore what data is available:
 # List all tables in the domain schema - use the resource
 # deriva-ml://catalog/tables
 
+# Find which schema(s) contain a table name
+# deriva-ml://catalog/table-index
+
 # Get details about a specific table - use the resource
 # deriva-ml://table/Image/schema
 
@@ -3853,6 +3856,12 @@ get_schema_description()
 query_table("Image")
 ```
 Returns first 100 records with all columns.
+
+### Query with Qualified Table Name
+If a table exists in multiple schemas, use the qualified name:
+```
+query_table("isa.dataset")
+```
 
 ### Select Specific Columns
 ```
@@ -4062,7 +4071,15 @@ denormalize_dataset("1-ABC", ["Image", "Subject", "Diagnosis"], limit=100)
 
 ### "Table not found"
 ```
-# Use the resource: deriva-ml://catalog/tables
+# List all tables: deriva-ml://catalog/tables
+# Find which schema(s) contain a table: deriva-ml://catalog/table/{name}/schemas
+# Or use the table index: deriva-ml://catalog/table-index
+```
+
+### "Table name is ambiguous"
+If a table exists in multiple schemas, use the qualified name:
+```
+query_table("isa.dataset")  # Instead of query_table("dataset")
 ```
 
 ### "Column not found"
@@ -4668,11 +4685,19 @@ member_rids: list[RID]  # Multiple member identifiers
 ### Table/Column Parameters
 
 ```python
-table_name: str       # Name of a table (e.g., "Image")
+table_name: str       # Table name - unqualified (e.g., "Image") or qualified with schema (e.g., "isa.dataset")
 column_name: str      # Name of a column (e.g., "Filename")
 feature_name: str     # Name of a feature (e.g., "Diagnosis")
 vocab_name: str       # Name of vocabulary (e.g., "Asset_Type")
 ```
+
+**Table name resolution:**
+- Unqualified names (e.g., "Image") are searched across schemas
+- For DerivaML catalogs: domain schema is searched first, then ML schema
+- For plain ERMrest catalogs: an error is raised if the name is ambiguous (exists in multiple schemas)
+- Qualified names (e.g., "isa.dataset") explicitly specify the schema
+
+Use the `deriva-ml://catalog/table-index` resource to see which schemas contain each table name.
 
 ### Boolean Parameters
 
@@ -5573,6 +5598,8 @@ User: "That's exactly what I need, use that"
 | Entity Type | Resource for Discovery | Key Semantic Fields |
 |-------------|------------------------|---------------------|
 | Tables | `deriva-ml://catalog/tables` | name, description, columns |
+| Table Index | `deriva-ml://catalog/table-index` | table name → schema mapping |
+| Table Schemas | `deriva-ml://catalog/table/{name}/schemas` | find schemas containing a table |
 | Table Details | `deriva-ml://table/{table}/schema`, `get_table_columns()` | column names, types, descriptions |
 | Vocabularies | `deriva-ml://catalog/vocabularies` | all vocabs with terms |
 | Vocab Terms | `deriva-ml://vocabulary/{name}` | term name, synonyms, description |
@@ -5586,6 +5613,9 @@ User: "That's exactly what I need, use that"
 | Assets | `deriva-ml://catalog/assets` | tables, types |
 | Table Assets | `deriva-ml://table/{table}/assets` | all assets in a table |
 | Asset Details | `deriva-ml://asset/{rid}` | filename, types, provenance |
+
+**Note**: Table names can be unqualified (e.g., "Image") or qualified with schema (e.g., "isa.dataset").
+Use `deriva-ml://catalog/table-index` to find which schema(s) contain a table name.
 
 ## Summary
 
