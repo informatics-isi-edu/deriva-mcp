@@ -11,6 +11,9 @@ Use these to explore data, find specific records, and add new entries.
 **Inserting Data**:
 - insert_records(): Add new records to a table
 
+**Exporting Data**:
+- export_entity(): Export an entity by RID as CSV, JSON, or BDBag
+
 For asset tables, use the execution workflow (asset_file_path + upload_execution_outputs)
 to properly track provenance.
 """
@@ -442,4 +445,98 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             )
         except Exception as e:
             logger.error(f"Failed to update record: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def export_entity(
+        rid: str,
+        output_dir: str | None = None,
+        export_format: str = "bag",
+        template_name: str | None = None,
+        export_spec: dict[str, Any] | None = None,
+        include_schema: bool = True,
+    ) -> str:
+        """Export an entity by RID, similar to the Chaise export button.
+
+        Exports an entity from the connected catalog using either:
+        1. The export annotation defined on the table (default)
+        2. A specific template from the annotation (via template_name)
+        3. A custom export specification (via export_spec)
+
+        Works with both DerivaML and plain ERMrest catalogs.
+
+        Args:
+            rid: The RID of the entity to export.
+            output_dir: Directory for output files. Defaults to current directory.
+            export_format: Export format - "bag", "csv", or "json". Default is "bag".
+                - "bag": Creates a BDBag archive with metadata and fetch references
+                - "csv": Creates CSV file(s) with the data
+                - "json": Creates JSON file(s) with the data
+            template_name: Optional name of specific export template to use from
+                the table's export annotation.
+            export_spec: Optional custom export specification. If provided, overrides
+                the table's export annotation. Can be in either:
+                - Export annotation format (with "templates" array)
+                - DerivaDownload config format (with "catalog"/"query_processors")
+                Use {RID} placeholder in query_path for RID substitution.
+            include_schema: If True (default), include the catalog schema in bag
+                exports. This is useful for understanding the data model.
+
+        Returns:
+            JSON with export results:
+            - status: "success" or "error"
+            - path: Path to the exported file or bag
+            - format: The export format used
+            - rid: The exported RID
+            - table: The table name
+            - schema: The schema name
+
+        Examples:
+            # Export using table's default export annotation
+            export_entity("3-KFBY")
+
+            # Export as CSV
+            export_entity("3-KFBY", export_format="csv")
+
+            # Export using specific template
+            export_entity("3-KFBY", template_name="BDBag")
+
+            # Export with custom spec
+            export_entity("3-KFBY", export_spec={
+                "catalog": {
+                    "query_processors": [{
+                        "processor": "csv",
+                        "processor_params": {
+                            "query_path": "/entity/isa:dataset/RID={RID}",
+                            "output_path": "dataset.csv"
+                        }
+                    }]
+                }
+            })
+        """
+        try:
+            from deriva.core.export import export_entity as _export_entity
+
+            conn_info = conn_manager.get_active_or_raise()
+            hostname = conn_info.hostname
+            catalog_id = conn_info.catalog_id
+
+            # Get credentials from connection
+            credentials = conn_info.credentials
+
+            result = _export_entity(
+                hostname=hostname,
+                catalog_id=catalog_id,
+                rid=rid,
+                output_dir=output_dir,
+                export_format=export_format,
+                template_name=template_name,
+                export_spec=export_spec,
+                credentials=credentials,
+                include_schema=include_schema,
+            )
+
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Failed to export entity: {e}")
             return json.dumps({"status": "error", "message": str(e)})
