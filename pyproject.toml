@@ -1,7 +1,7 @@
 [project]
-name = "deriva-ml-mcp"
+name = "deriva-mcp"
 dynamic = ["version"]
-description = "MCP server for DerivaML - Model Context Protocol interface for Deriva ML workflows"
+description = "MCP server for Deriva - Model Context Protocol interface for Deriva catalogs and ML workflows"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.12"
@@ -42,7 +42,7 @@ scripts = [
 ]
 
 [project.scripts]
-deriva-ml-mcp = "deriva_ml_mcp.server:main"
+deriva-mcp = "deriva_ml_mcp.server:main"
 bump-version = "deriva_ml_mcp.bump_version:main"
 
 [build-system]

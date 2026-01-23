@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
     from deriva_ml_mcp.connection import ConnectionManager
 
-logger = logging.getLogger("deriva-ml-mcp")
+logger = logging.getLogger("deriva-mcp")
 
 # Tables managed by dedicated tools - insert_records should not be used for these
 _MANAGED_TABLES = {

@@ -24,10 +24,10 @@ from deriva.core import DerivaServer, ErmrestCatalog, get_credential
 if TYPE_CHECKING:
     from deriva_ml import DerivaML
 
-logger = logging.getLogger("deriva-ml-mcp")
+logger = logging.getLogger("deriva-mcp")
 
 # Workflow type for MCP server operations
-MCP_WORKFLOW_TYPE = "DerivaML MCP"
+MCP_WORKFLOW_TYPE = "Deriva MCP"
 
 # ML schema name for DerivaML catalogs
 ML_SCHEMA_NAME = "deriva-ml"
@@ -47,11 +47,11 @@ def get_mcp_workflow_info() -> dict[str, str | bool]:
         Dictionary with workflow_name, workflow_type, version, git_commit, in_docker.
     """
     return {
-        "workflow_name": os.environ.get("DERIVAML_MCP_WORKFLOW_NAME", "DerivaML MCP Server"),
-        "workflow_type": os.environ.get("DERIVAML_MCP_WORKFLOW_TYPE", MCP_WORKFLOW_TYPE),
-        "version": os.environ.get("DERIVAML_MCP_VERSION", ""),
-        "git_commit": os.environ.get("DERIVAML_MCP_GIT_COMMIT", ""),
-        "in_docker": os.environ.get("DERIVAML_MCP_IN_DOCKER", "false").lower() == "true",
+        "workflow_name": os.environ.get("DERIVA_MCP_WORKFLOW_NAME", "Deriva MCP Server"),
+        "workflow_type": os.environ.get("DERIVA_MCP_WORKFLOW_TYPE", MCP_WORKFLOW_TYPE),
+        "version": os.environ.get("DERIVA_MCP_VERSION", ""),
+        "git_commit": os.environ.get("DERIVA_MCP_GIT_COMMIT", ""),
+        "in_docker": os.environ.get("DERIVA_MCP_IN_DOCKER", "false").lower() == "true",
     }
 
 

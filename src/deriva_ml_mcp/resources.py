@@ -35,10 +35,10 @@ def register_resources(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         mime_type="application/json",
     )
     def get_server_version() -> str:
-        """Return the DerivaML MCP server version."""
+        """Return the Deriva MCP server version."""
         return json.dumps(
             {
-                "name": "deriva-ml-mcp",
+                "name": "deriva-mcp",
                 "version": __version__,
             },
             indent=2,

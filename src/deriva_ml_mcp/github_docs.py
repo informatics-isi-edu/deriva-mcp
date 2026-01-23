@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-logger = logging.getLogger("deriva-ml-mcp")
+logger = logging.getLogger("deriva-mcp")
 
 # GitHub raw content base URLs for public repositories
 GITHUB_REPOS = {

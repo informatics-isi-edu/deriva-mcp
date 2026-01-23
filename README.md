@@ -1,10 +1,10 @@
-# DerivaML MCP Server
+# Deriva MCP Server
 
-[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that exposes [DerivaML](https://github.com/informatics-isi-edu/deriva-ml) operations as tools for LLM applications.
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that exposes [Deriva](https://github.com/informatics-isi-edu/deriva-py) catalog operations and [DerivaML](https://github.com/informatics-isi-edu/deriva-ml) ML workflow tools for LLM applications.
 
 ## Overview
 
-This MCP server provides an interface to DerivaML, enabling AI assistants like Claude to:
+This MCP server provides an interface to Deriva catalogs and DerivaML, enabling AI assistants like Claude to:
 
 - Connect to and manage Deriva catalogs
 - Create and manage datasets with versioning
@@ -59,37 +59,37 @@ Docker provides the simplest setup with no Python environment management. The im
 
 ```bash
 # Pull the latest image from GitHub Container Registry
-docker pull ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest
+docker pull ghcr.io/informatics-isi-edu/deriva-mcp:latest
 
 # Run the server (for testing)
-docker run --rm -it ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest --help
+docker run --rm -it ghcr.io/informatics-isi-edu/deriva-mcp:latest --help
 ```
 
 To build locally instead:
 
 ```bash
-git clone https://github.com/informatics-isi-edu/deriva-ml-mcp.git
-cd deriva-ml-mcp
+git clone https://github.com/informatics-isi-edu/deriva-mcp.git
+cd deriva-mcp
 ./scripts/docker-build.sh
 ```
 
 ### Using uv
 
 ```bash
-uv pip install deriva-ml-mcp
+uv pip install deriva-mcp
 ```
 
 ### Using pip
 
 ```bash
-pip install deriva-ml-mcp
+pip install deriva-mcp
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/informatics-isi-edu/deriva-ml-mcp.git
-cd deriva-ml-mcp
+git clone https://github.com/informatics-isi-edu/deriva-mcp.git
+cd deriva-mcp
 uv sync
 ```
 
@@ -116,7 +116,7 @@ Uses Docker for both MCP servers - most consistent setup:
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     },
@@ -162,7 +162,7 @@ Uses pip-installed DerivaML MCP with GitHub's hosted server:
   "mcpServers": {
     "deriva-ml": {
       "type": "stdio",
-      "command": "deriva-ml-mcp",
+      "command": "deriva-mcp",
       "env": {}
     },
     "github": {
@@ -189,9 +189,9 @@ For development or customization:
       "command": "uv",
       "args": [
         "--directory",
-        "/path/to/deriva-ml-mcp",
+        "/path/to/deriva-mcp",
         "run",
-        "deriva-ml-mcp"
+        "deriva-mcp"
       ],
       "env": {}
     },
@@ -223,7 +223,7 @@ If you don't need GitHub integration:
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     }
@@ -238,7 +238,7 @@ Or with direct install:
   "mcpServers": {
     "deriva-ml": {
       "type": "stdio",
-      "command": "deriva-ml-mcp",
+      "command": "deriva-mcp",
       "env": {}
     }
   }
@@ -259,7 +259,7 @@ Add to `~/.mcp.json` (global) or your project's `.mcp.json` file:
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     },
@@ -286,7 +286,7 @@ Add to `~/.mcp.json` (global) or your project's `.mcp.json` file:
   "mcpServers": {
     "deriva-ml": {
       "type": "stdio",
-      "command": "deriva-ml-mcp",
+      "command": "deriva-mcp",
       "env": {}
     },
     "github": {
@@ -323,7 +323,7 @@ Add to your MCP configuration (typically `.vscode/mcp.json`):
         "command": "/bin/sh",
         "args": [
           "-c",
-          "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+          "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
         ],
         "env": {}
       },
@@ -830,7 +830,7 @@ If your Deriva server is running directly on the host machine (not in Docker), u
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     }
@@ -850,7 +850,7 @@ If your Deriva server is running in Docker (e.g., using deriva-localhost), the M
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --network deriva-localhost_internal_network --add-host localhost:172.28.3.15 -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml deriva-ml-mcp:latest"
+        "docker run -i --rm --network deriva-localhost_internal_network --add-host localhost:172.28.3.15 -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml deriva-mcp:latest"
       ],
       "env": {}
     }
@@ -912,8 +912,8 @@ python -c "from deriva_ml import DerivaML; DerivaML.globus_login('your-server.or
 ### MCP Server Connection Issues
 
 **Server not responding**
-1. Check the server is installed: `which deriva-ml-mcp`
-2. Test manually: `deriva-ml-mcp` (should start without errors)
+1. Check the server is installed: `which deriva-mcp`
+2. Test manually: `deriva-mcp` (should start without errors)
 3. Check Claude Desktop logs for errors
 
 **Multiple server conflicts**
