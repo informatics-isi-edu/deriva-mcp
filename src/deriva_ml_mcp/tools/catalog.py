@@ -580,6 +580,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         copy_annotations: bool = True,
         copy_policy: bool = True,
         exclude_schemas: list[str] | None = None,
+        reinitialize_dataset_versions: bool = True,
     ) -> str:
         """Clone a catalog with optional cross-server support and selective asset copying.
 
@@ -599,6 +600,15 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         - "refs": Copy asset URLs only, files stay on source server (default)
         - "full": Download and re-upload all assets (fully independent clone)
 
+        **Dataset version handling**:
+        Cloned catalogs do not inherit the source catalog's history. Previous
+        versions from the source are not accessible in the clone. By default,
+        dataset versions are incremented so that bag downloads work immediately:
+        - Old version history is pruned (previous versions are not accessible anyway)
+        - Patch version is incremented with a valid snapshot in the clone's history
+        - Version descriptions include a URL to the source catalog snapshot for
+          provenance (e.g., "Cloned from https://source.org/chaise/recordset/#21@...")
+
         Args:
             source_hostname: Source server hostname (e.g., "www.eye-ai.org").
             source_catalog_id: ID of the catalog to clone.
@@ -616,14 +626,17 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             copy_annotations: If True (default), copy all annotations.
             copy_policy: If True (default), copy ACL (access control) policies.
             exclude_schemas: List of schema names to exclude from cloning.
+            reinitialize_dataset_versions: If True (default), increment dataset
+                versions so bag downloads work. Set to False to skip this step.
 
         Returns:
             JSON with status, source info, destination info, and operation details.
+            Includes datasets_reinitialized count and source_snapshot ID.
 
         Examples:
             Same-server clone:
                 clone_catalog("localhost", "21")
-                -> {"status": "cloned", "dest_catalog_id": "45"}
+                -> {"status": "cloned", "dest_catalog_id": "45", "datasets_reinitialized": 3}
 
             Cross-server clone with alias:
                 clone_catalog("dev.example.org", "21",
@@ -669,16 +682,19 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 copy_annotations=copy_annotations,
                 copy_policy=copy_policy,
                 exclude_schemas=exclude_schemas,
+                reinitialize_dataset_versions=reinitialize_dataset_versions,
             )
 
             response = {
                 "status": "cloned",
                 "source_hostname": result.source_hostname,
                 "source_catalog_id": result.source_catalog_id,
+                "source_snapshot": result.source_snapshot,
                 "dest_hostname": result.hostname,
                 "dest_catalog_id": result.catalog_id,
                 "schema_only": result.schema_only,
                 "asset_mode": result.asset_mode.value,
+                "datasets_reinitialized": result.datasets_reinitialized,
             }
 
             if result.alias:
