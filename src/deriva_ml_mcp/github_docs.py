@@ -36,6 +36,7 @@ CACHE_TTL = 3600
 @dataclass
 class CacheEntry:
     """Cache entry with content and expiration time."""
+
     content: str
     expires_at: float
 
@@ -90,10 +91,7 @@ class GitHubDocFetcher:
             content = response.text
 
             # Cache the result
-            self._cache[cache_key] = CacheEntry(
-                content=content,
-                expires_at=time.time() + self._cache_ttl
-            )
+            self._cache[cache_key] = CacheEntry(content=content, expires_at=time.time() + self._cache_ttl)
 
             return content
 

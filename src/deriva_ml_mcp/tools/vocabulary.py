@@ -39,7 +39,7 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             add_term("Dataset_Type", "Validation", "Held-out data for validation", ["val", "valid"])
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             term = ml.add_term(
                 table=vocabulary_name,
                 term_name=term_name,
@@ -47,23 +47,27 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 synonyms=synonyms or [],
                 exists_ok=False,
             )
-            return json.dumps({
-                "status": "created",
-                "name": term.name,
-                "description": term.description,
-                "synonyms": list(term.synonyms) if term.synonyms else [],
-                "rid": term.rid,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "name": term.name,
+                    "description": term.description,
+                    "synonyms": list(term.synonyms) if term.synonyms else [],
+                    "rid": term.rid,
+                }
+            )
         except Exception as e:
             if "already exists" in str(e):
                 try:
                     existing = ml.lookup_term(vocabulary_name, term_name)
-                    return json.dumps({
-                        "status": "exists",
-                        "name": existing.name,
-                        "description": existing.description,
-                        "rid": existing.rid,
-                    })
+                    return json.dumps(
+                        {
+                            "status": "exists",
+                            "name": existing.name,
+                            "description": existing.description,
+                            "rid": existing.rid,
+                        }
+                    )
                 except Exception:
                     pass
             logger.error(f"Failed to add term: {e}")
@@ -89,18 +93,20 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             create_vocabulary("Quality_Level", "Image quality ratings")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.create_vocabulary(
                 vocab_name=vocabulary_name,
                 comment=comment,
                 schema=schema,
             )
-            return json.dumps({
-                "status": "created",
-                "name": table.name,
-                "schema": table.schema.name,
-                "comment": comment,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "name": table.name,
+                    "schema": table.schema.name,
+                    "comment": comment,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create vocabulary: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -123,18 +129,20 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             add_synonym("Dataset_Type", "Training", "train") -> adds "train" as synonym
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             term = ml.lookup_term(vocabulary_name, term_name)
             # Add synonym using property setter (appends to existing)
             current = list(term.synonyms)
             if synonym not in current:
                 term.synonyms = tuple(current + [synonym])
-            return json.dumps({
-                "status": "added",
-                "name": term.name,
-                "synonyms": list(term.synonyms),
-                "rid": term.rid,
-            })
+            return json.dumps(
+                {
+                    "status": "added",
+                    "name": term.name,
+                    "synonyms": list(term.synonyms),
+                    "rid": term.rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add synonym: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -155,18 +163,20 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             remove_synonym("Dataset_Type", "Training", "train") -> removes "train" as synonym
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             term = ml.lookup_term(vocabulary_name, term_name)
             # Remove synonym using property setter
             current = list(term.synonyms)
             if synonym in current:
                 term.synonyms = tuple(s for s in current if s != synonym)
-            return json.dumps({
-                "status": "removed",
-                "name": term.name,
-                "synonyms": list(term.synonyms),
-                "rid": term.rid,
-            })
+            return json.dumps(
+                {
+                    "status": "removed",
+                    "name": term.name,
+                    "synonyms": list(term.synonyms),
+                    "rid": term.rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to remove synonym: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -187,15 +197,17 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             update_term_description("Dataset_Type", "Training", "Data used to train models")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             term = ml.lookup_term(vocabulary_name, term_name)
             term.description = description
-            return json.dumps({
-                "status": "updated",
-                "name": term.name,
-                "description": term.description,
-                "rid": term.rid,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "name": term.name,
+                    "description": term.description,
+                    "rid": term.rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to update term description: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -219,13 +231,15 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             delete_term("Dataset_Type", "Obsolete") -> {"status": "deleted", ...}
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             ml.delete_term(vocabulary_name, term_name)
-            return json.dumps({
-                "status": "deleted",
-                "vocabulary": vocabulary_name,
-                "name": term_name,
-            })
+            return json.dumps(
+                {
+                    "status": "deleted",
+                    "vocabulary": vocabulary_name,
+                    "name": term_name,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to delete term: {e}")
             return json.dumps({"status": "error", "message": str(e)})

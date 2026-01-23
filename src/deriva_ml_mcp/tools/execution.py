@@ -129,7 +129,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             from deriva_ml.dataset.aux_classes import DatasetSpec
             from deriva_ml.execution.execution_configuration import ExecutionConfiguration
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
 
             workflow = ml.create_workflow(
                 name=workflow_name,
@@ -153,14 +153,16 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             key = _get_execution_key()
             _active_executions[key] = execution
 
-            return json.dumps({
-                "status": "created",
-                "execution_rid": execution.execution_rid,
-                "workflow_rid": execution.workflow_rid,
-                "description": description,
-                "dataset_count": len(datasets),
-                "asset_count": len(asset_rids or []),
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "execution_rid": execution.execution_rid,
+                    "workflow_rid": execution.workflow_rid,
+                    "description": description,
+                    "dataset_count": len(datasets),
+                    "asset_count": len(asset_rids or []),
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create execution: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -175,18 +177,22 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution. Use create_execution first.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution. Use create_execution first.",
+                    }
+                )
 
             execution = _active_executions[key]
             execution.execution_start()
 
-            return json.dumps({
-                "status": "started",
-                "execution_rid": execution.execution_rid,
-            })
+            return json.dumps(
+                {
+                    "status": "started",
+                    "execution_rid": execution.execution_rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to start execution: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -201,18 +207,22 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution.",
+                    }
+                )
 
             execution = _active_executions[key]
             execution.execution_stop()
 
-            return json.dumps({
-                "status": "completed",
-                "execution_rid": execution.execution_rid,
-            })
+            return json.dumps(
+                {
+                    "status": "completed",
+                    "execution_rid": execution.execution_rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to stop execution: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -233,10 +243,12 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution.",
+                    }
+                )
 
             status_map = {
                 "pending": Status.pending,
@@ -251,12 +263,14 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             execution = _active_executions[key]
             execution.update_status(status_enum, message)
 
-            return json.dumps({
-                "status": "updated",
-                "execution_rid": execution.execution_rid,
-                "new_status": status,
-                "message": message,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "execution_rid": execution.execution_rid,
+                    "new_status": status,
+                    "message": message,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to update status: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -279,14 +293,16 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             set_execution_description("2-XYZ", "Training run with lr=0.001, achieved 95% accuracy")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             record = ml.lookup_execution(execution_rid)
             record.description = description
-            return json.dumps({
-                "status": "updated",
-                "execution_rid": execution_rid,
-                "description": description,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "execution_rid": execution_rid,
+                    "description": description,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set execution description: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -301,24 +317,28 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "no_active_execution",
-                    "message": "No active execution. Use create_execution first.",
-                })
+                return json.dumps(
+                    {
+                        "status": "no_active_execution",
+                        "message": "No active execution. Use create_execution first.",
+                    }
+                )
 
             execution = _active_executions[key]
             has_pending_uploads = execution.uploaded_assets is None
 
-            return json.dumps({
-                "execution_rid": execution.execution_rid,
-                "workflow_rid": execution.workflow_rid,
-                "status": execution.status.value if hasattr(execution.status, 'value') else str(execution.status),
-                "dataset_rids": execution.dataset_rids,
-                "dataset_count": len(execution.datasets),
-                "working_dir": str(execution.working_dir),
-                "upload_pending": has_pending_uploads,
-                "upload_reminder": "Call upload_execution_outputs() when done." if has_pending_uploads else None,
-            })
+            return json.dumps(
+                {
+                    "execution_rid": execution.execution_rid,
+                    "workflow_rid": execution.workflow_rid,
+                    "status": execution.status.value if hasattr(execution.status, "value") else str(execution.status),
+                    "dataset_rids": execution.dataset_rids,
+                    "dataset_count": len(execution.datasets),
+                    "working_dir": str(execution.working_dir),
+                    "upload_pending": has_pending_uploads,
+                    "upload_reminder": "Call upload_execution_outputs() when done." if has_pending_uploads else None,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to get execution info: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -334,18 +354,20 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             JSON with execution_rid, workflow_rid, dataset_count.
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             execution = ml.restore_execution(execution_rid)
 
             key = _get_execution_key()
             _active_executions[key] = execution
 
-            return json.dumps({
-                "status": "restored",
-                "execution_rid": execution.execution_rid,
-                "workflow_rid": execution.workflow_rid,
-                "dataset_count": len(execution.datasets),
-            })
+            return json.dumps(
+                {
+                    "status": "restored",
+                    "execution_rid": execution.execution_rid,
+                    "workflow_rid": execution.workflow_rid,
+                    "dataset_count": len(execution.datasets),
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to restore execution: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -390,10 +412,12 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution. Use create_execution first.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution. Use create_execution first.",
+                    }
+                )
 
             execution = _active_executions[key]
             asset_path = execution.asset_file_path(
@@ -404,15 +428,17 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 rename_file=rename_file,
             )
 
-            return json.dumps({
-                "status": "registered",
-                "execution_rid": execution.execution_rid,
-                "asset_name": asset_name,
-                "file_path": str(asset_path),
-                "file_name": asset_path.file_name,
-                "asset_types": asset_path.asset_types,
-                "note": "Call upload_execution_outputs() to upload.",
-            })
+            return json.dumps(
+                {
+                    "status": "registered",
+                    "execution_rid": execution.execution_rid,
+                    "asset_name": asset_name,
+                    "file_path": str(asset_path),
+                    "file_name": asset_path.file_name,
+                    "asset_types": asset_path.asset_types,
+                    "note": "Call upload_execution_outputs() to upload.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to register asset file: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -464,10 +490,12 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution.",
+                    }
+                )
 
             execution = _active_executions[key]
             results = execution.upload_execution_outputs(clean_folder=clean_folder)
@@ -476,11 +504,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             for asset_type, paths in results.items():
                 summary[asset_type] = len(paths)
 
-            return json.dumps({
-                "status": "uploaded",
-                "execution_rid": execution.execution_rid,
-                "assets_uploaded": summary,
-            })
+            return json.dumps(
+                {
+                    "status": "uploaded",
+                    "execution_rid": execution.execution_rid,
+                    "assets_uploaded": summary,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to upload outputs: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -517,10 +547,12 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution. Use create_execution first.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution. Use create_execution first.",
+                    }
+                )
 
             execution = _active_executions[key]
 
@@ -535,15 +567,17 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 dest_dir=destination,
             )
 
-            return json.dumps({
-                "status": "downloaded",
-                "execution_rid": execution.execution_rid,
-                "asset_rid": asset_rid,
-                "file_path": str(asset_path.asset_path),
-                "filename": asset_path.file_name,
-                "asset_table": asset_path.asset_table,
-                "asset_types": asset_path.asset_types,
-            })
+            return json.dumps(
+                {
+                    "status": "downloaded",
+                    "execution_rid": execution.execution_rid,
+                    "asset_rid": asset_rid,
+                    "file_path": str(asset_path.asset_path),
+                    "filename": asset_path.file_name,
+                    "asset_table": asset_path.asset_table,
+                    "asset_types": asset_path.asset_types,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to download asset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -569,10 +603,12 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution.",
+                    }
+                )
 
             execution = _active_executions[key]
             dataset = execution.create_dataset(
@@ -580,13 +616,15 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 dataset_types=dataset_types or [],
             )
 
-            return json.dumps({
-                "status": "created",
-                "dataset_rid": dataset.dataset_rid,
-                "execution_rid": execution.execution_rid,
-                "description": description,
-                "dataset_types": dataset_types or [],
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "dataset_rid": dataset.dataset_rid,
+                    "execution_rid": execution.execution_rid,
+                    "description": description,
+                    "dataset_types": dataset_types or [],
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create execution dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -624,24 +662,28 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution.",
+                    }
+                )
 
             execution = _active_executions[key]
             spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
             bag = execution.download_dataset_bag(spec)
 
-            return json.dumps({
-                "status": "downloaded",
-                "dataset_rid": bag.dataset_rid,
-                "version": str(bag.current_version) if bag.current_version else None,
-                "description": bag.description,
-                "dataset_types": bag.dataset_types,
-                "execution_rid": bag.execution_rid,
-                "bag_path": str(bag.model.bag_path),
-            })
+            return json.dumps(
+                {
+                    "status": "downloaded",
+                    "dataset_rid": bag.dataset_rid,
+                    "version": str(bag.current_version) if bag.current_version else None,
+                    "description": bag.description,
+                    "dataset_types": bag.dataset_types,
+                    "execution_rid": bag.execution_rid,
+                    "bag_path": str(bag.model.bag_path),
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to download dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -656,16 +698,20 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             key = _get_execution_key()
             if key not in _active_executions:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution.",
+                    }
+                )
 
             execution = _active_executions[key]
-            return json.dumps({
-                "working_dir": str(execution.working_dir),
-                "execution_rid": execution.execution_rid,
-            })
+            return json.dumps(
+                {
+                    "working_dir": str(execution.working_dir),
+                    "execution_rid": execution.execution_rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to get working dir: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -702,16 +748,18 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             add_nested_execution("1-PARENT", "1-CHILD2", sequence=1)
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             parent_exec = ml.lookup_execution(parent_execution_rid)
             parent_exec.add_nested_execution(child_execution_rid, sequence=sequence)
 
-            return json.dumps({
-                "status": "added",
-                "parent_rid": parent_execution_rid,
-                "child_rid": child_execution_rid,
-                "sequence": sequence,
-            })
+            return json.dumps(
+                {
+                    "status": "added",
+                    "parent_rid": parent_execution_rid,
+                    "child_rid": child_execution_rid,
+                    "sequence": sequence,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add nested execution: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -735,25 +783,29 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             list_nested_executions("1-PARENT", recurse=True)  # All descendants
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             execution = ml.lookup_execution(execution_rid)
             children = execution.list_nested_executions(recurse=recurse)
 
             result = []
             for child in children:
-                result.append({
-                    "execution_rid": child.execution_rid,
-                    "workflow_rid": child.workflow_rid,
-                    "status": child.status.value if hasattr(child.status, 'value') else str(child.status),
-                    "description": child.description,
-                })
+                result.append(
+                    {
+                        "execution_rid": child.execution_rid,
+                        "workflow_rid": child.workflow_rid,
+                        "status": child.status.value if hasattr(child.status, "value") else str(child.status),
+                        "description": child.description,
+                    }
+                )
 
-            return json.dumps({
-                "parent_rid": execution_rid,
-                "recurse": recurse,
-                "count": len(result),
-                "children": result,
-            })
+            return json.dumps(
+                {
+                    "parent_rid": execution_rid,
+                    "recurse": recurse,
+                    "count": len(result),
+                    "children": result,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to list nested executions: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -777,28 +829,33 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             list_parent_executions("1-CHILD", recurse=True)  # All ancestors
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             execution = ml.lookup_execution(execution_rid)
             parents = execution.list_parent_executions(recurse=recurse)
 
             result = []
             for parent in parents:
-                result.append({
-                    "execution_rid": parent.execution_rid,
-                    "workflow_rid": parent.workflow_rid,
-                    "status": parent.status.value if hasattr(parent.status, 'value') else str(parent.status),
-                    "description": parent.description,
-                })
+                result.append(
+                    {
+                        "execution_rid": parent.execution_rid,
+                        "workflow_rid": parent.workflow_rid,
+                        "status": parent.status.value if hasattr(parent.status, "value") else str(parent.status),
+                        "description": parent.description,
+                    }
+                )
 
-            return json.dumps({
-                "child_rid": execution_rid,
-                "recurse": recurse,
-                "count": len(result),
-                "parents": result,
-            })
+            return json.dumps(
+                {
+                    "child_rid": execution_rid,
+                    "recurse": recurse,
+                    "count": len(result),
+                    "parents": result,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to list parent executions: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
 
 # =============================================================================
 # Storage Management Tools
@@ -831,13 +888,15 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
             clear_cache(older_than_days=7)  # Only clear old entries
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             result = ml.clear_cache(older_than_days=older_than_days)
-            return json.dumps({
-                "status": "success",
-                "older_than_days": older_than_days,
-                **result,
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "older_than_days": older_than_days,
+                    **result,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to clear cache: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -869,17 +928,19 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
             clean_execution_dirs(exclude_rids=["1-ABC", "1-DEF"])  # Preserve specific
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             result = ml.clean_execution_dirs(
                 older_than_days=older_than_days,
                 exclude_rids=exclude_rids,
             )
-            return json.dumps({
-                "status": "success",
-                "older_than_days": older_than_days,
-                "exclude_rids": exclude_rids,
-                **result,
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "older_than_days": older_than_days,
+                    "exclude_rids": exclude_rids,
+                    **result,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to clean execution dirs: {e}")
             return json.dumps({"status": "error", "message": str(e)})

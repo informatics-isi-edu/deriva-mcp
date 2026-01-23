@@ -77,17 +77,32 @@ class TestConnectionManager:
         from deriva_ml import DerivaMLException
 
         manager = ConnectionManager()
-        with pytest.raises(DerivaMLException, match="No active execution context"):
+        with pytest.raises(DerivaMLException, match="No active catalog connection"):
             manager.get_active_execution_or_raise()
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
-    def test_connect_success(self, mock_derivaml):
-        """Test successful connection."""
+    @patch("deriva_ml_mcp.connection.check_is_derivaml_catalog")
+    @patch("deriva_ml.DerivaML")
+    @patch("deriva_ml_mcp.connection.DerivaServer")
+    def test_connect_success(self, mock_server, mock_derivaml, mock_check):
+        """Test successful connection to a DerivaML catalog."""
         mock_instance = MagicMock()
         mock_instance.domain_schema = "test_schema"
         mock_instance.host_name = "example.org"
         mock_instance.catalog_id = "123"
         mock_derivaml.return_value = mock_instance
+
+        # Mock the server connection
+        mock_catalog = MagicMock()
+        mock_server_instance = MagicMock()
+        mock_server_instance.connect_ermrest.return_value = mock_catalog
+        mock_server.return_value = mock_server_instance
+
+        # Mock the DerivaML check to return True
+        mock_check.return_value = {
+            "is_derivaml": True,
+            "ml_schema": "deriva-ml",
+            "domain_schema": "test_schema",
+        }
 
         manager = ConnectionManager()
         # Mock _create_mcp_execution to avoid actual execution creation
@@ -95,18 +110,35 @@ class TestConnectionManager:
 
         result = manager.connect("example.org", "123")
 
-        assert result == mock_instance
+        # Result is now ConnectionInfo, not DerivaML instance
+        assert result.ml_instance == mock_instance
+        assert result.is_derivaml is True
         assert manager._active_connection == "example.org:123"
         assert len(manager._connections) == 1
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
-    def test_connect_creates_workflow_and_execution(self, mock_derivaml):
+    @patch("deriva_ml_mcp.connection.check_is_derivaml_catalog")
+    @patch("deriva_ml.DerivaML")
+    @patch("deriva_ml_mcp.connection.DerivaServer")
+    def test_connect_creates_workflow_and_execution(self, mock_server, mock_derivaml, mock_check):
         """Test that connect creates MCP workflow and execution."""
         mock_instance = MagicMock()
         mock_instance.domain_schema = "test_schema"
         mock_instance.host_name = "example.org"
         mock_instance.catalog_id = "123"
         mock_derivaml.return_value = mock_instance
+
+        # Mock the server connection
+        mock_catalog = MagicMock()
+        mock_server_instance = MagicMock()
+        mock_server_instance.connect_ermrest.return_value = mock_catalog
+        mock_server.return_value = mock_server_instance
+
+        # Mock the DerivaML check to return True
+        mock_check.return_value = {
+            "is_derivaml": True,
+            "ml_schema": "deriva-ml",
+            "domain_schema": "test_schema",
+        }
 
         mock_workflow = MagicMock()
         mock_execution = MagicMock()
@@ -122,11 +154,26 @@ class TestConnectionManager:
         assert conn_info.workflow_rid == "WF-123"
         assert conn_info.execution == mock_execution
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
-    def test_connect_reuses_existing(self, mock_derivaml):
+    @patch("deriva_ml_mcp.connection.check_is_derivaml_catalog")
+    @patch("deriva_ml.DerivaML")
+    @patch("deriva_ml_mcp.connection.DerivaServer")
+    def test_connect_reuses_existing(self, mock_server, mock_derivaml, mock_check):
         """Test that connecting to same catalog reuses connection."""
         mock_instance = MagicMock()
         mock_derivaml.return_value = mock_instance
+
+        # Mock the server connection
+        mock_catalog = MagicMock()
+        mock_server_instance = MagicMock()
+        mock_server_instance.connect_ermrest.return_value = mock_catalog
+        mock_server.return_value = mock_server_instance
+
+        # Mock the DerivaML check to return True
+        mock_check.return_value = {
+            "is_derivaml": True,
+            "ml_schema": "deriva-ml",
+            "domain_schema": "test_schema",
+        }
 
         manager = ConnectionManager()
         manager._create_mcp_execution = MagicMock(return_value=(None, None))
@@ -134,15 +181,31 @@ class TestConnectionManager:
         result1 = manager.connect("example.org", "123")
         result2 = manager.connect("example.org", "123")
 
+        # Both results should be the same ConnectionInfo
         assert result1 == result2
-        # DerivaML should only be called once
+        # DerivaML should only be called once (reuses existing connection)
         assert mock_derivaml.call_count == 1
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
-    def test_disconnect(self, mock_derivaml):
+    @patch("deriva_ml_mcp.connection.check_is_derivaml_catalog")
+    @patch("deriva_ml.DerivaML")
+    @patch("deriva_ml_mcp.connection.DerivaServer")
+    def test_disconnect(self, mock_server, mock_derivaml, mock_check):
         """Test disconnecting from a catalog."""
         mock_instance = MagicMock()
         mock_derivaml.return_value = mock_instance
+
+        # Mock the server connection
+        mock_catalog = MagicMock()
+        mock_server_instance = MagicMock()
+        mock_server_instance.connect_ermrest.return_value = mock_catalog
+        mock_server.return_value = mock_server_instance
+
+        # Mock the DerivaML check to return True
+        mock_check.return_value = {
+            "is_derivaml": True,
+            "ml_schema": "deriva-ml",
+            "domain_schema": "test_schema",
+        }
 
         manager = ConnectionManager()
         manager._create_mcp_execution = MagicMock(return_value=(None, None))
@@ -152,11 +215,26 @@ class TestConnectionManager:
         assert manager._active_connection is None
         assert len(manager._connections) == 0
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
-    def test_disconnect_closes_execution(self, mock_derivaml):
+    @patch("deriva_ml_mcp.connection.check_is_derivaml_catalog")
+    @patch("deriva_ml.DerivaML")
+    @patch("deriva_ml_mcp.connection.DerivaServer")
+    def test_disconnect_closes_execution(self, mock_server, mock_derivaml, mock_check):
         """Test that disconnect closes the execution context."""
         mock_instance = MagicMock()
         mock_derivaml.return_value = mock_instance
+
+        # Mock the server connection
+        mock_catalog = MagicMock()
+        mock_server_instance = MagicMock()
+        mock_server_instance.connect_ermrest.return_value = mock_catalog
+        mock_server.return_value = mock_server_instance
+
+        # Mock the DerivaML check to return True
+        mock_check.return_value = {
+            "is_derivaml": True,
+            "ml_schema": "deriva-ml",
+            "domain_schema": "test_schema",
+        }
 
         mock_execution = MagicMock()
         mock_execution.execution_rid = "EXE-123"
@@ -175,11 +253,26 @@ class TestConnectionManager:
         manager = ConnectionManager()
         assert manager.disconnect() is False
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
-    def test_set_active(self, mock_derivaml):
+    @patch("deriva_ml_mcp.connection.check_is_derivaml_catalog")
+    @patch("deriva_ml.DerivaML")
+    @patch("deriva_ml_mcp.connection.DerivaServer")
+    def test_set_active(self, mock_server, mock_derivaml, mock_check):
         """Test setting active connection."""
         mock_instance = MagicMock()
         mock_derivaml.return_value = mock_instance
+
+        # Mock the server connection
+        mock_catalog = MagicMock()
+        mock_server_instance = MagicMock()
+        mock_server_instance.connect_ermrest.return_value = mock_catalog
+        mock_server.return_value = mock_server_instance
+
+        # Mock the DerivaML check to return True
+        mock_check.return_value = {
+            "is_derivaml": True,
+            "ml_schema": "deriva-ml",
+            "domain_schema": "test_schema",
+        }
 
         manager = ConnectionManager()
         manager._create_mcp_execution = MagicMock(return_value=(None, None))
@@ -198,12 +291,27 @@ class TestConnectionManager:
         result = manager.set_active("example.org", "123")
         assert result is False
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
-    def test_list_connections_includes_execution_info(self, mock_derivaml):
+    @patch("deriva_ml_mcp.connection.check_is_derivaml_catalog")
+    @patch("deriva_ml.DerivaML")
+    @patch("deriva_ml_mcp.connection.DerivaServer")
+    def test_list_connections_includes_execution_info(self, mock_server, mock_derivaml, mock_check):
         """Test listing connections includes workflow and execution info."""
         mock_instance = MagicMock()
         mock_instance.domain_schema = None
         mock_derivaml.return_value = mock_instance
+
+        # Mock the server connection
+        mock_catalog = MagicMock()
+        mock_server_instance = MagicMock()
+        mock_server_instance.connect_ermrest.return_value = mock_catalog
+        mock_server.return_value = mock_server_instance
+
+        # Mock the DerivaML check to return True
+        mock_check.return_value = {
+            "is_derivaml": True,
+            "ml_schema": "deriva-ml",
+            "domain_schema": None,
+        }
 
         mock_execution = MagicMock()
         mock_execution.execution_rid = "EXE-123"
@@ -217,12 +325,27 @@ class TestConnectionManager:
         assert connections[0]["workflow_rid"] == "WF-123"
         assert connections[0]["execution_rid"] == "EXE-123"
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
-    def test_list_connections_multiple(self, mock_derivaml):
+    @patch("deriva_ml_mcp.connection.check_is_derivaml_catalog")
+    @patch("deriva_ml.DerivaML")
+    @patch("deriva_ml_mcp.connection.DerivaServer")
+    def test_list_connections_multiple(self, mock_server, mock_derivaml, mock_check):
         """Test listing multiple connections."""
         mock_instance = MagicMock()
         mock_instance.domain_schema = None
         mock_derivaml.return_value = mock_instance
+
+        # Mock the server connection
+        mock_catalog = MagicMock()
+        mock_server_instance = MagicMock()
+        mock_server_instance.connect_ermrest.return_value = mock_catalog
+        mock_server.return_value = mock_server_instance
+
+        # Mock the DerivaML check to return True
+        mock_check.return_value = {
+            "is_derivaml": True,
+            "ml_schema": "deriva-ml",
+            "domain_schema": None,
+        }
 
         manager = ConnectionManager()
         manager._create_mcp_execution = MagicMock(return_value=(None, None))

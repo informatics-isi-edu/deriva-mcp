@@ -37,22 +37,24 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             lookup_workflow_by_url("https://github.com/org/repo/blob/main/train.py")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             workflow = ml.lookup_workflow_by_url(url)
 
             if workflow:
-                return json.dumps({
-                    "found": True,
-                    "workflow": {
-                        "rid": workflow.rid,
-                        "name": workflow.name,
-                        "workflow_type": workflow.workflow_type,
-                        "description": workflow.description,
-                        "url": workflow.url,
-                        "checksum": workflow.checksum,
-                        "version": workflow.version,
-                    },
-                })
+                return json.dumps(
+                    {
+                        "found": True,
+                        "workflow": {
+                            "rid": workflow.rid,
+                            "name": workflow.name,
+                            "workflow_type": workflow.workflow_type,
+                            "description": workflow.description,
+                            "url": workflow.url,
+                            "checksum": workflow.checksum,
+                            "version": workflow.version,
+                        },
+                    }
+                )
             return json.dumps({"found": False, "workflow": None})
         except Exception as e:
             logger.error(f"Failed to lookup workflow by URL: {e}")
@@ -78,20 +80,22 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             create_workflow("ResNet Training", "Training", "Trains ResNet50 on image data")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             workflow = ml.create_workflow(
                 name=name,
                 workflow_type=workflow_type,
                 description=description,
             )
             rid = ml.add_workflow(workflow)
-            return json.dumps({
-                "status": "created",
-                "workflow_rid": rid,
-                "name": workflow.name,
-                "workflow_type": workflow.workflow_type,
-                "description": workflow.description,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "workflow_rid": rid,
+                    "name": workflow.name,
+                    "workflow_type": workflow.workflow_type,
+                    "description": workflow.description,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create workflow: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -114,14 +118,16 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
             set_workflow_description("3-WKF", "Trains CNN on image data with augmentation")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             workflow = ml.lookup_workflow(workflow_rid)
             workflow.description = description
-            return json.dumps({
-                "status": "updated",
-                "workflow_rid": workflow_rid,
-                "description": description,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "workflow_rid": workflow_rid,
+                    "description": description,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set workflow description: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -146,19 +152,21 @@ def register_workflow_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> No
         try:
             from deriva_ml import MLVocab
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             term = ml.add_term(
                 table=MLVocab.workflow_type,
                 term_name=type_name,
                 description=description,
                 exists_ok=True,
             )
-            return json.dumps({
-                "status": "created",
-                "name": term.name,
-                "description": term.description,
-                "rid": term.rid,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "name": term.name,
+                    "description": term.description,
+                    "rid": term.rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add workflow type: {e}")
             return json.dumps({"status": "error", "message": str(e)})

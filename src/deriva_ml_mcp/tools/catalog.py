@@ -25,50 +25,72 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         catalog_id: str,
         domain_schema: str | None = None,
     ) -> str:
-        """Connect to an existing DerivaML catalog. Must be called before using other tools.
+        """Connect to an existing Deriva catalog (DerivaML or plain ERMrest).
 
-        On connection, an MCP workflow and execution are automatically created to
-        track all operations performed through the MCP server. The workflow type
-        "DerivaML MCP" is created if it doesn't exist.
+        Automatically detects whether the catalog is DerivaML-compliant. For
+        DerivaML catalogs, creates an MCP workflow and execution to track all
+        operations. For plain ERMrest catalogs, provides basic catalog access.
+
+        **DerivaML Catalogs**: Full access to datasets, features, executions,
+        workflows, and ML provenance tracking.
+
+        **Plain ERMrest Catalogs**: Access to schema, data query/insert,
+        and display annotations. No dataset/feature/execution support.
+
+        Use `is_derivaml_catalog` to check catalog type before connecting.
 
         Args:
             hostname: Server hostname (e.g., "dev.eye-ai.org", "www.atlas-d2k.org").
             catalog_id: Catalog ID number (e.g., "1", "52").
-            domain_schema: Schema name for domain tables. Auto-detected if omitted.
+            domain_schema: Schema name for domain tables. Auto-detected for DerivaML.
 
         Returns:
-            JSON with status, hostname, catalog_id, domain_schema, project_name,
-            workflow_rid, execution_rid.
+            JSON with status, hostname, catalog_id, catalog_type, and additional
+            fields depending on catalog type:
+            - DerivaML: domain_schema, project_name, workflow_rid, execution_rid
+            - ERMrest: available schemas list
 
         Example:
             connect_catalog("dev.eye-ai.org", "52") -> connects to eye-ai catalog
+            connect_catalog("www.example.org", "1") -> connects to ERMrest catalog
         """
         try:
-            ml = conn_manager.connect(hostname, catalog_id, domain_schema)
-            conn_info = conn_manager.get_active_connection_info()
+            conn_info = conn_manager.connect(hostname, catalog_id, domain_schema)
 
             result = {
                 "status": "connected",
                 "hostname": hostname,
                 "catalog_id": catalog_id,
-                "domain_schema": ml.domain_schema,
-                "project_name": ml.project_name,
+                "catalog_type": conn_info.catalog_type.value,
+                "is_derivaml": conn_info.is_derivaml,
             }
 
-            # Add workflow/execution info if available
-            if conn_info:
+            if conn_info.is_derivaml:
+                # DerivaML catalog - include ML-specific info
+                ml = conn_info.ml_instance
+                result["domain_schema"] = ml.domain_schema
+                result["project_name"] = ml.project_name
                 result["workflow_rid"] = conn_info.workflow_rid
-                result["execution_rid"] = (
-                    conn_info.execution.execution_rid if conn_info.execution else None
+                result["execution_rid"] = conn_info.execution.execution_rid if conn_info.execution else None
+            else:
+                # Plain ERMrest catalog - include basic schema info
+                model = conn_info.get_model()
+                result["schemas"] = list(model.schemas.keys())
+                result["domain_schema"] = conn_info.domain_schema
+                result["note"] = (
+                    "This is a plain ERMrest catalog. Dataset, feature, and execution "
+                    "tools are not available. Use schema, data, and annotation tools."
                 )
 
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Connection failed: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
 
     @mcp.tool()
     async def disconnect_catalog() -> str:
@@ -86,14 +108,18 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             catalog_id: Catalog ID to activate.
         """
         if conn_manager.set_active(hostname, catalog_id):
-            return json.dumps({
-                "status": "success",
-                "active_catalog": f"{hostname}:{catalog_id}",
-            })
-        return json.dumps({
-            "status": "error",
-            "message": f"No connection found for {hostname}:{catalog_id}",
-        })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "active_catalog": f"{hostname}:{catalog_id}",
+                }
+            )
+        return json.dumps(
+            {
+                "status": "error",
+                "message": f"No connection found for {hostname}:{catalog_id}",
+            }
+        )
 
     @mcp.tool()
     async def create_catalog(
@@ -148,10 +174,12 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to create catalog: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
 
     @mcp.tool()
     async def delete_catalog(
@@ -179,17 +207,21 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             server = DerivaServer("https", hostname)
             server.delete(f"/ermrest/catalog/{catalog_id}")
 
-            return json.dumps({
-                "status": "deleted",
-                "hostname": hostname,
-                "catalog_id": catalog_id,
-            })
+            return json.dumps(
+                {
+                    "status": "deleted",
+                    "hostname": hostname,
+                    "catalog_id": catalog_id,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to delete catalog: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
 
     @mcp.tool()
     async def apply_catalog_annotations(
@@ -239,23 +271,27 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             4. apply_catalog_annotations("My ML Project", "ML Catalog")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml("apply_catalog_annotations")
             ml.apply_catalog_annotations(
                 navbar_brand_text=navbar_brand_text,
                 head_title=head_title,
             )
-            return json.dumps({
-                "status": "success",
-                "navbar_brand_text": navbar_brand_text,
-                "head_title": head_title,
-                "message": "Catalog annotations applied. Navigation bar and display settings configured.",
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "navbar_brand_text": navbar_brand_text,
+                    "head_title": head_title,
+                    "message": "Catalog annotations applied. Navigation bar and display settings configured.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to apply catalog annotations: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
 
     @mcp.tool()
     async def create_catalog_alias(
@@ -294,20 +330,24 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 name=name,
                 description=description,
             )
-            return json.dumps({
-                "status": "created",
-                "hostname": hostname,
-                "alias": alias_name,
-                "target": catalog_id,
-                "name": name,
-                "description": description,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "hostname": hostname,
+                    "alias": alias_name,
+                    "target": catalog_id,
+                    "name": name,
+                    "description": description,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create catalog alias: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
 
     @mcp.tool()
     async def update_catalog_alias(
@@ -336,7 +376,6 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             -> {"status": "updated", "alias": "my-project", "target": "50"}
         """
         try:
-
             server = DerivaServer("https", hostname, credentials=get_credential(hostname))
             alias = server.connect_ermrest_alias(alias_name)
 
@@ -353,17 +392,21 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
             # Get updated metadata
             metadata = alias.retrieve()
-            return json.dumps({
-                "status": "updated",
-                "hostname": hostname,
-                **metadata,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "hostname": hostname,
+                    **metadata,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to update catalog alias: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
 
     @mcp.tool()
     async def delete_catalog_alias(
@@ -387,17 +430,21 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             server = DerivaServer("https", hostname, credentials=get_credential(hostname))
             alias = server.connect_ermrest_alias(alias_name)
             alias.delete_ermrest_alias(really=True)
-            return json.dumps({
-                "status": "deleted",
-                "hostname": hostname,
-                "alias": alias_name,
-            })
+            return json.dumps(
+                {
+                    "status": "deleted",
+                    "hostname": hostname,
+                    "alias": alias_name,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to delete catalog alias: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
 
     @mcp.tool()
     async def clone_catalog(
@@ -456,21 +503,25 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 dst_properties=dst_properties if dst_properties else None,
             )
 
-            return json.dumps({
-                "status": "cloned",
-                "hostname": hostname,
-                "source_catalog_id": source_catalog_id,
-                "dest_catalog_id": str(dest_catalog.catalog_id),
-                "copy_data": copy_data,
-                "copy_annotations": copy_annotations,
-                "copy_policy": copy_policy,
-            })
+            return json.dumps(
+                {
+                    "status": "cloned",
+                    "hostname": hostname,
+                    "source_catalog_id": source_catalog_id,
+                    "dest_catalog_id": str(dest_catalog.catalog_id),
+                    "copy_data": copy_data,
+                    "copy_annotations": copy_annotations,
+                    "copy_policy": copy_policy,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to clone catalog: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
 
     @mcp.tool()
     async def validate_rids(
@@ -520,7 +571,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             from deriva_ml.core.validation import validate_rids as do_validate
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml("validate_rids")
             result = do_validate(
                 ml,
                 dataset_rids=dataset_rids,
@@ -531,19 +582,23 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 warn_missing_descriptions=warn_missing_descriptions,
             )
 
-            return json.dumps({
-                "is_valid": result.is_valid,
-                "errors": result.errors,
-                "warnings": result.warnings,
-                "validated_rids": result.validated_rids,
-                "summary": str(result),  # Include formatted summary
-            })
+            return json.dumps(
+                {
+                    "is_valid": result.is_valid,
+                    "errors": result.errors,
+                    "warnings": result.warnings,
+                    "validated_rids": result.validated_rids,
+                    "summary": str(result),  # Include formatted summary
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to validate RIDs: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
 
     @mcp.tool()
     async def cite(rid: str, current: bool = False) -> str:
@@ -572,17 +627,99 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             -> {"url": "https://host/id/catalog/1-ABC", "is_snapshot": false}
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml("cite")
             url = ml.cite(rid, current=current)
 
-            return json.dumps({
-                "url": url,
-                "rid": rid,
-                "is_snapshot": not current,
-            })
+            return json.dumps(
+                {
+                    "url": url,
+                    "rid": rid,
+                    "is_snapshot": not current,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to generate citation URL: {e}")
-            return json.dumps({
-                "status": "error",
-                "message": str(e),
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
+
+    @mcp.tool()
+    async def is_derivaml_catalog(
+        hostname: str,
+        catalog_id: str,
+    ) -> str:
+        """Check if a catalog is a DerivaML catalog.
+
+        Tests whether a catalog has the DerivaML schema and required tables.
+        Use this before connecting to understand what features are available.
+
+        A DerivaML catalog has:
+        - 'deriva-ml' schema with Dataset, Execution, Workflow, etc. tables
+        - Support for datasets, features, executions, and workflow tracking
+        - Full ML provenance capabilities
+
+        A plain ERMrest catalog:
+        - Supports basic table operations, queries, and annotations
+        - Does NOT support datasets, features, or execution tracking
+        - Can still use schema, data, and annotation tools
+
+        Args:
+            hostname: Server hostname (e.g., "dev.eye-ai.org").
+            catalog_id: Catalog ID number (e.g., "1", "52").
+
+        Returns:
+            JSON with:
+            - is_derivaml: True if catalog has the DerivaML schema
+            - ml_schema: Name of the ML schema if found
+            - domain_schema: Auto-detected domain schema name (if DerivaML)
+            - reason: Explanation if not DerivaML
+            - missing_tables: List of missing required tables (if partial)
+            - available_tools: Summary of available functionality
+
+        Examples:
+            is_derivaml_catalog("dev.eye-ai.org", "52")
+            -> {"is_derivaml": true, "ml_schema": "deriva-ml", "domain_schema": "eye-ai"}
+
+            is_derivaml_catalog("www.example.org", "1")
+            -> {"is_derivaml": false, "reason": "Schema 'deriva-ml' not found"}
+        """
+        from deriva_ml_mcp.connection import check_is_derivaml_catalog
+
+        try:
+            server = DerivaServer("https", hostname, credentials=get_credential(hostname))
+            catalog = server.connect_ermrest(catalog_id)
+
+            result = check_is_derivaml_catalog(catalog)
+
+            # Add available tools summary
+            if result["is_derivaml"]:
+                result["available_tools"] = {
+                    "datasets": "create_dataset, add_dataset_members, download_dataset, etc.",
+                    "features": "create_feature, add_feature_value, etc.",
+                    "executions": "create_execution, upload_execution_outputs, etc.",
+                    "workflows": "create_workflow, find_workflows, etc.",
+                    "vocabularies": "add_term, create_vocabulary, etc.",
+                    "schema": "create_table, create_asset_table, etc.",
+                    "data": "query_table, insert_records, etc.",
+                    "annotations": "set_visible_columns, set_table_display, etc.",
+                }
+            else:
+                result["available_tools"] = {
+                    "schema": "create_table (limited), get_schema_description",
+                    "data": "query_table, insert_records, get_record, update_record",
+                    "annotations": "set_visible_columns, set_table_display, etc.",
+                    "note": "Dataset, feature, and execution tools require a DerivaML catalog",
+                }
+
+            return json.dumps(result)
+        except Exception as e:
+            logger.error(f"Failed to check catalog type: {e}")
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )

@@ -5,7 +5,7 @@ managing ML workflows, datasets, vocabularies, and features in
 a Deriva catalog.
 """
 
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 try:
     __version__ = version("deriva-ml-mcp")

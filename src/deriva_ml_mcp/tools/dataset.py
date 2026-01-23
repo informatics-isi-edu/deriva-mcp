@@ -93,7 +93,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             from deriva_ml_mcp.tools.execution import _active_executions
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
 
             # Get execution: user-created execution takes priority over MCP connection execution
             execution = None
@@ -106,10 +106,12 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 execution = conn_manager.get_active_execution()
 
             if execution is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution context. Connect to a catalog or use create_execution first.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution context. Connect to a catalog or use create_execution first.",
+                    }
+                )
 
             # Create dataset through execution for provenance
             dataset = execution.create_dataset(
@@ -117,14 +119,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 dataset_types=dataset_types or [],
             )
 
-            return json.dumps({
-                "status": "created",
-                "dataset_rid": dataset.dataset_rid,
-                "description": dataset.description,
-                "dataset_types": dataset.dataset_types,
-                "version": str(dataset.current_version) if dataset.current_version else version or "0.1.0",
-                "execution_rid": execution.execution_rid,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "dataset_rid": dataset.dataset_rid,
+                    "description": dataset.description,
+                    "dataset_types": dataset.dataset_types,
+                    "version": str(dataset.current_version) if dataset.current_version else version or "0.1.0",
+                    "execution_rid": execution.execution_rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -162,7 +166,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             -> {"spec": "DatasetSpecConfig(rid=\\"28CT\\", version=\\"0.20.0\\")", ...}
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
 
             # Use provided version or fall back to current version
@@ -222,7 +226,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             list_dataset_members("1-ABC", recurse=True) -> includes members from child datasets
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
             members = dataset.list_dataset_members(version=version, recurse=recurse, limit=limit)
             result = {}
@@ -262,14 +266,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             add_dataset_members("1-ABC", ["2-DEF", "2-GHI"]) -> adds 2 Image records
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.add_dataset_members(members=member_rids)
-            return json.dumps({
-                "status": "success",
-                "added_count": len(member_rids),
-                "dataset_rid": dataset_rid,
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "added_count": len(member_rids),
+                    "dataset_rid": dataset_rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add dataset members: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -298,14 +304,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             delete_dataset_members("1-ABC", ["2-DEF", "2-GHI"]) -> removes 2 records from dataset
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.delete_dataset_members(members=member_rids)
-            return json.dumps({
-                "status": "success",
-                "removed_count": len(member_rids),
-                "dataset_rid": dataset_rid,
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "removed_count": len(member_rids),
+                    "dataset_rid": dataset_rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to delete dataset members: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -367,7 +375,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             from deriva_ml.dataset.aux_classes import VersionPart
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
 
             # Capture previous version before incrementing
@@ -384,14 +392,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 component=version_part,
                 description=description,
             )
-            return json.dumps({
-                "status": "success",
-                "new_version": str(new_version) if new_version else None,
-                "previous_version": str(previous_version) if previous_version else None,
-                "dataset_rid": dataset_rid,
-                "description": description,
-                "component": component,
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "new_version": str(new_version) if new_version else None,
+                    "previous_version": str(previous_version) if previous_version else None,
+                    "dataset_rid": dataset_rid,
+                    "description": description,
+                    "component": component,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to increment version: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -411,14 +421,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             JSON with status, dataset_rid, recursive.
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
             ml.delete_dataset(dataset, recurse=recurse)
-            return json.dumps({
-                "status": "deleted",
-                "dataset_rid": dataset_rid,
-                "recursive": recurse,
-            })
+            return json.dumps(
+                {
+                    "status": "deleted",
+                    "dataset_rid": dataset_rid,
+                    "recursive": recurse,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to delete dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -441,7 +453,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             set_dataset_description("1-ABC", "Training images for CIFAR-10 classification")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
 
             # Update the description in the catalog
@@ -452,11 +464,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Update the local object
             dataset.description = description
 
-            return json.dumps({
-                "status": "updated",
-                "dataset_rid": dataset_rid,
-                "description": description,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "dataset_rid": dataset_rid,
+                    "description": description,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set dataset description: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -479,14 +493,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             add_dataset_type("1-ABC", "Training") -> adds "Training" type to dataset
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.add_dataset_type(dataset_type)
-            return json.dumps({
-                "status": "added",
-                "dataset_rid": dataset_rid,
-                "dataset_types": dataset.dataset_types,
-            })
+            return json.dumps(
+                {
+                    "status": "added",
+                    "dataset_rid": dataset_rid,
+                    "dataset_types": dataset.dataset_types,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add dataset type: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -509,14 +525,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             remove_dataset_type("1-ABC", "Training") -> removes "Training" type from dataset
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.remove_dataset_type(dataset_type)
-            return json.dumps({
-                "status": "removed",
-                "dataset_rid": dataset_rid,
-                "dataset_types": dataset.dataset_types,
-            })
+            return json.dumps(
+                {
+                    "status": "removed",
+                    "dataset_rid": dataset_rid,
+                    "dataset_types": dataset.dataset_types,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to remove dataset type: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -539,13 +557,15 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             add_dataset_element_type("Subject") -> enables Subject records as dataset elements
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.add_dataset_element_type(table_name)
-            return json.dumps({
-                "status": "success",
-                "table_name": table_name,
-                "association_table": table.name,
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "table_name": table_name,
+                    "association_table": table.name,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add element type: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -572,16 +592,18 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             add_dataset_child("1-ABC", "1-DEF") -> nests 1-DEF inside 1-ABC
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             parent = ml.lookup_dataset(parent_rid)
             # Add child dataset as a member - Dataset is a dataset element type
             # so adding a dataset RID creates a parent-child relationship
             parent.add_dataset_members(members=[child_rid])
-            return json.dumps({
-                "status": "added",
-                "parent_rid": parent_rid,
-                "child_rid": child_rid,
-            })
+            return json.dumps(
+                {
+                    "status": "added",
+                    "parent_rid": parent_rid,
+                    "child_rid": child_rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add dataset child: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -608,7 +630,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             list_dataset_children("1-ABC", recurse=True) -> all descendants
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
             children = dataset.list_dataset_children(recurse=recurse, version=version)
             return json.dumps([_serialize_dataset(c) for c in children])
@@ -638,7 +660,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             list_dataset_parents("1-ABC", recurse=True) -> all ancestors
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
             parents = dataset.list_dataset_parents(recurse=recurse, version=version)
             return json.dumps([_serialize_dataset(p) for p in parents])
@@ -661,18 +683,20 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             workflow_rid}.
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
             executions = dataset.list_executions()
 
             results = []
             for exe in executions:
-                results.append({
-                    "execution_rid": exe.execution_rid,
-                    "description": exe.configuration.description if exe.configuration else None,
-                    "status": exe.status.value if exe.status else None,
-                    "workflow_rid": exe.workflow_rid,
-                })
+                results.append(
+                    {
+                        "execution_rid": exe.execution_rid,
+                        "description": exe.configuration.description if exe.configuration else None,
+                        "status": exe.status.value if exe.status else None,
+                        "workflow_rid": exe.workflow_rid,
+                    }
+                )
             return json.dumps(results)
         except Exception as e:
             logger.error(f"Failed to list dataset executions: {e}")
@@ -711,19 +735,21 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
             bag = ml.download_dataset_bag(spec)
 
-            return json.dumps({
-                "status": "downloaded",
-                "dataset_rid": bag.dataset_rid,
-                "version": str(bag.current_version) if bag.current_version else None,
-                "description": bag.description,
-                "dataset_types": bag.dataset_types,
-                "execution_rid": bag.execution_rid,
-                "bag_path": str(bag.model.bag_path),
-            })
+            return json.dumps(
+                {
+                    "status": "downloaded",
+                    "dataset_rid": bag.dataset_rid,
+                    "version": str(bag.current_version) if bag.current_version else None,
+                    "description": bag.description,
+                    "dataset_types": bag.dataset_types,
+                    "execution_rid": bag.execution_rid,
+                    "bag_path": str(bag.model.bag_path),
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to download dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -786,7 +812,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             -> {"columns": ["Subject.Age", "Subject.Gender", "Image.RID", ...], "rows": [...]}
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             dataset = ml.lookup_dataset(dataset_rid)
 
             # Get denormalized data as dict
@@ -799,18 +825,19 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Get column names from first row
             columns = list(rows[0].keys()) if rows else []
 
-            return json.dumps({
-                "dataset_rid": dataset_rid,
-                "include_tables": include_tables,
-                "columns": columns,
-                "rows": rows,
-                "count": len(rows),
-                "limit": limit,
-            })
+            return json.dumps(
+                {
+                    "dataset_rid": dataset_rid,
+                    "include_tables": include_tables,
+                    "columns": columns,
+                    "rows": rows,
+                    "count": len(rows),
+                    "limit": limit,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to denormalize dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
-
 
     # ========================================================================
     # Dataset Type convenience tools
@@ -842,7 +869,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             create_dataset_type_term("Validation", "Held-out data for hyperparameter tuning", ["val", "valid"])
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             term = ml.add_term(
                 table="Dataset_Type",
                 term_name=type_name,
@@ -850,24 +877,28 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 synonyms=synonyms or [],
                 exists_ok=False,
             )
-            return json.dumps({
-                "status": "created",
-                "name": term.name,
-                "description": term.description,
-                "synonyms": term.synonyms or [],
-                "rid": term.rid,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "name": term.name,
+                    "description": term.description,
+                    "synonyms": term.synonyms or [],
+                    "rid": term.rid,
+                }
+            )
         except Exception as e:
             if "already exists" in str(e).lower():
                 try:
                     existing = ml.lookup_term("Dataset_Type", type_name)
-                    return json.dumps({
-                        "status": "exists",
-                        "name": existing.name,
-                        "description": existing.description,
-                        "synonyms": existing.synonyms or [],
-                        "rid": existing.rid,
-                    })
+                    return json.dumps(
+                        {
+                            "status": "exists",
+                            "name": existing.name,
+                            "description": existing.description,
+                            "synonyms": existing.synonyms or [],
+                            "rid": existing.rid,
+                        }
+                    )
                 except Exception:
                     pass
             logger.error(f"Failed to create dataset type term: {e}")
@@ -891,12 +922,14 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             delete_dataset_type_term("Obsolete") -> {"status": "deleted", "name": "Obsolete"}
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             ml.delete_term("Dataset_Type", type_name)
-            return json.dumps({
-                "status": "deleted",
-                "name": type_name,
-            })
+            return json.dumps(
+                {
+                    "status": "deleted",
+                    "name": type_name,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to delete dataset type term: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -1031,7 +1064,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         from pathlib import Path
 
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
 
             # Download the dataset as a bag
             dataset = ml.find_dataset(dataset_rid)
@@ -1052,15 +1085,17 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Count the files created
             file_count = sum(1 for _ in result_path.rglob("*") if _.is_file() or _.is_symlink())
 
-            return json.dumps({
-                "status": "success",
-                "dataset_rid": dataset_rid,
-                "version": str(dataset.current_version) if dataset.current_version else None,
-                "output_dir": str(result_path),
-                "asset_table": asset_table,
-                "group_by": group_by or [],
-                "file_count": file_count,
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "dataset_rid": dataset_rid,
+                    "version": str(dataset.current_version) if dataset.current_version else None,
+                    "output_dir": str(result_path),
+                    "asset_table": asset_table,
+                    "group_by": group_by or [],
+                    "file_count": file_count,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to restructure assets: {e}")
             return json.dumps({"status": "error", "message": str(e)})

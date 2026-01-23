@@ -80,7 +80,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml import BuiltinTypes, ColumnDefinition, ForeignKeyDefinition, TableDefinition
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml("create_table")
 
             type_map = {
                 "text": BuiltinTypes.text,
@@ -102,23 +102,27 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             if columns:
                 for col in columns:
                     col_type = type_map.get(col.get("type", "text"), BuiltinTypes.text)
-                    col_defs.append(ColumnDefinition(
-                        name=col["name"],
-                        type=col_type,
-                        nullok=col.get("nullok", True),
-                        comment=col.get("comment", ""),
-                    ))
+                    col_defs.append(
+                        ColumnDefinition(
+                            name=col["name"],
+                            type=col_type,
+                            nullok=col.get("nullok", True),
+                            comment=col.get("comment", ""),
+                        )
+                    )
 
             fkey_defs = []
             if foreign_keys:
                 for fk in foreign_keys:
-                    fkey_defs.append(ForeignKeyDefinition(
-                        colnames=[fk["column"]],
-                        pk_sname=ml.domain_schema,
-                        pk_tname=fk["referenced_table"],
-                        pk_colnames=[fk.get("referenced_column", "RID")],
-                        on_delete=fk.get("on_delete", "NO ACTION"),
-                    ))
+                    fkey_defs.append(
+                        ForeignKeyDefinition(
+                            colnames=[fk["column"]],
+                            pk_sname=ml.domain_schema,
+                            pk_tname=fk["referenced_table"],
+                            pk_colnames=[fk.get("referenced_column", "RID")],
+                            on_delete=fk.get("on_delete", "NO ACTION"),
+                        )
+                    )
 
             table_def = TableDefinition(
                 name=table_name,
@@ -127,12 +131,14 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 comment=comment,
             )
             table = ml.create_table(table_def)
-            return json.dumps({
-                "status": "created",
-                "table_name": table.name,
-                "schema": table.schema.name,
-                "columns": [c.name for c in table.columns],
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "table_name": table.name,
+                    "schema": table.schema.name,
+                    "columns": [c.name for c in table.columns],
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create table: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -164,7 +170,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml import BuiltinTypes, ColumnDefinition
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml("create_asset_table")
 
             col_defs = []
             if columns:
@@ -180,12 +186,14 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 }
                 for col in columns:
                     col_type = type_map.get(col.get("type", "text"), BuiltinTypes.text)
-                    col_defs.append(ColumnDefinition(
-                        name=col["name"],
-                        type=col_type,
-                        nullok=col.get("nullok", True),
-                        comment=col.get("comment", ""),
-                    ))
+                    col_defs.append(
+                        ColumnDefinition(
+                            name=col["name"],
+                            type=col_type,
+                            nullok=col.get("nullok", True),
+                            comment=col.get("comment", ""),
+                        )
+                    )
 
             ref_tables = []
             if referenced_tables:
@@ -198,12 +206,14 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 referenced_tables=ref_tables if ref_tables else None,
                 comment=comment,
             )
-            return json.dumps({
-                "status": "created",
-                "table_name": table.name,
-                "schema": table.schema.name,
-                "columns": [c.name for c in table.columns],
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "table_name": table.name,
+                    "schema": table.schema.name,
+                    "columns": [c.name for c in table.columns],
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create asset table: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -231,17 +241,19 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             list_asset_executions("3JSE", "Output") -> finds only the execution that created it
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             executions = ml.list_asset_executions(asset_rid, asset_role=asset_role)
 
             result = []
             for exe in executions:
-                result.append({
-                    "execution_rid": exe.execution_rid,
-                    "workflow_rid": exe.workflow_rid,
-                    "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
-                    "description": exe.description,
-                })
+                result.append(
+                    {
+                        "execution_rid": exe.execution_rid,
+                        "workflow_rid": exe.workflow_rid,
+                        "status": exe.status.value if hasattr(exe.status, "value") else str(exe.status),
+                        "description": exe.description,
+                    }
+                )
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to list asset executions: {e}")
@@ -264,19 +276,21 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml import MLVocab
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             term = ml.add_term(
                 table=MLVocab.asset_type,
                 term_name=type_name,
                 description=description,
                 exists_ok=True,
             )
-            return json.dumps({
-                "status": "created",
-                "name": term.name,
-                "description": term.description,
-                "rid": term.rid,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "name": term.name,
+                    "description": term.description,
+                    "rid": term.rid,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add asset type: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -299,16 +313,18 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             add_asset_type_to_asset("3JSE", "Training_Data")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             asset = ml.lookup_asset(asset_rid)
             asset.add_asset_type(type_name)
 
-            return json.dumps({
-                "status": "added",
-                "asset_rid": asset_rid,
-                "type_name": type_name,
-                "asset_types": asset.asset_types,
-            })
+            return json.dumps(
+                {
+                    "status": "added",
+                    "asset_rid": asset_rid,
+                    "type_name": type_name,
+                    "asset_types": asset.asset_types,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add asset type to asset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -330,16 +346,18 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             remove_asset_type_from_asset("3JSE", "Training_Data")
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             asset = ml.lookup_asset(asset_rid)
             asset.remove_asset_type(type_name)
 
-            return json.dumps({
-                "status": "removed",
-                "asset_rid": asset_rid,
-                "type_name": type_name,
-                "asset_types": asset.asset_types,
-            })
+            return json.dumps(
+                {
+                    "status": "removed",
+                    "asset_rid": asset_rid,
+                    "type_name": type_name,
+                    "asset_types": asset.asset_types,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to remove asset type from asset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -366,10 +384,8 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             get_schema_description() -> full catalog structure for understanding data model
         """
         try:
-            ml = conn_manager.get_active_or_raise()
-            schema_info = ml.model.get_schema_description(
-                include_system_columns=include_system_columns
-            )
+            ml = conn_manager.require_derivaml()
+            schema_info = ml.model.get_schema_description(include_system_columns=include_system_columns)
             return json.dumps(schema_info)
         except Exception as e:
             logger.error(f"Failed to get schema description: {e}")
@@ -396,16 +412,18 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml.model.handles import TableHandle
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
             handle = TableHandle(table)
             handle.description = description
 
-            return json.dumps({
-                "status": "updated",
-                "table_name": table_name,
-                "description": description,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "table_name": table_name,
+                    "description": description,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set table description: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -427,16 +445,18 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml.model.handles import TableHandle
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
             handle = TableHandle(table)
             handle.set_display_name(display_name)
 
-            return json.dumps({
-                "status": "updated",
-                "table_name": table_name,
-                "display_name": display_name,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "table_name": table_name,
+                    "display_name": display_name,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set table display name: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -461,16 +481,18 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml.model.handles import TableHandle
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
             handle = TableHandle(table)
             handle.set_row_name_pattern(pattern)
 
-            return json.dumps({
-                "status": "updated",
-                "table_name": table_name,
-                "pattern": pattern,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "table_name": table_name,
+                    "pattern": pattern,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set row name pattern: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -501,17 +523,19 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml.model.handles import TableHandle
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
             handle = TableHandle(table)
             handle.set_visible_columns(columns, context=context)
 
-            return json.dumps({
-                "status": "updated",
-                "table_name": table_name,
-                "columns": columns,
-                "context": context,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "table_name": table_name,
+                    "columns": columns,
+                    "context": context,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set visible columns: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -547,7 +571,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             from deriva_ml.core.enums import BuiltinTypes
             from deriva_ml.model.handles import TableHandle
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
             handle = TableHandle(table)
 
@@ -576,12 +600,14 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 comment=comment,
             )
 
-            return json.dumps({
-                "status": "created",
-                "table_name": table_name,
-                "column_name": col.name,
-                "column_type": column_type,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "table_name": table_name,
+                    "column_name": col.name,
+                    "column_type": column_type,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add column: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -612,18 +638,20 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml.model.handles import TableHandle
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
             handle = TableHandle(table)
             col = handle.column(column_name)
             col.description = description
 
-            return json.dumps({
-                "status": "updated",
-                "table_name": table_name,
-                "column_name": column_name,
-                "description": description,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "table_name": table_name,
+                    "column_name": column_name,
+                    "description": description,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set column description: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -650,18 +678,20 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml.model.handles import TableHandle
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
             handle = TableHandle(table)
             col = handle.column(column_name)
             col.set_display_name(display_name)
 
-            return json.dumps({
-                "status": "updated",
-                "table_name": table_name,
-                "column_name": column_name,
-                "display_name": display_name,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "table_name": table_name,
+                    "column_name": column_name,
+                    "display_name": display_name,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set column display name: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -691,18 +721,20 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml.model.handles import TableHandle
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
             handle = TableHandle(table)
             col = handle.column(column_name)
             col.set_nullok(nullok)
 
-            return json.dumps({
-                "status": "updated",
-                "table_name": table_name,
-                "column_name": column_name,
-                "nullok": nullok,
-            })
+            return json.dumps(
+                {
+                    "status": "updated",
+                    "table_name": table_name,
+                    "column_name": column_name,
+                    "nullok": nullok,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set column nullok: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -729,7 +761,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         try:
             from deriva_ml.model.handles import TableHandle
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
             handle = TableHandle(table)
 
@@ -740,14 +772,16 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
             result = []
             for col in columns:
-                result.append({
-                    "name": col.name,
-                    "type": col._column.type.typename,
-                    "nullok": col.nullok,
-                    "description": col.description,
-                    "display_name": col.get_display_name(),
-                    "is_system": col.is_system_column,
-                })
+                result.append(
+                    {
+                        "name": col.name,
+                        "type": col._column.type.typename,
+                        "nullok": col.nullok,
+                        "description": col.description,
+                        "display_name": col.get_display_name(),
+                        "is_system": col.is_system_column,
+                    }
+                )
 
             return json.dumps(result)
         except Exception as e:

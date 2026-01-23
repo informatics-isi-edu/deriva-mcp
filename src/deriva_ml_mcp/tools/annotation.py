@@ -98,16 +98,18 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             set_display_annotation("Image", annotation=null)
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             target = ml.set_display_annotation(table_name, annotation, column_name)
 
-            return json.dumps({
-                "status": "staged",
-                "target": target,
-                "annotation": "display",
-                "value": annotation,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": target,
+                    "annotation": "display",
+                    "value": annotation,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set display annotation: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -234,16 +236,18 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             })
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             target = ml.set_visible_columns(table_name, annotation)
 
-            return json.dumps({
-                "status": "staged",
-                "target": target,
-                "annotation": "visible-columns",
-                "value": annotation,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": target,
+                    "annotation": "visible-columns",
+                    "value": annotation,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set visible-columns annotation: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -326,16 +330,18 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             })
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             target = ml.set_visible_foreign_keys(table_name, annotation)
 
-            return json.dumps({
-                "status": "staged",
-                "target": target,
-                "annotation": "visible-foreign-keys",
-                "value": annotation,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": target,
+                    "annotation": "visible-foreign-keys",
+                    "value": annotation,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set visible-foreign-keys annotation: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -427,16 +433,18 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             })
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             target = ml.set_table_display(table_name, annotation)
 
-            return json.dumps({
-                "status": "staged",
-                "target": target,
-                "annotation": "table-display",
-                "value": annotation,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": target,
+                    "annotation": "table-display",
+                    "value": annotation,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set table-display annotation: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -526,16 +534,18 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             })
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             target = ml.set_column_display(table_name, column_name, annotation)
 
-            return json.dumps({
-                "status": "staged",
-                "target": target,
-                "annotation": "column-display",
-                "value": annotation,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": target,
+                    "annotation": "column-display",
+                    "value": annotation,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to set column-display annotation: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -558,13 +568,15 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             4. apply_annotations()                      # Commit all changes
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             ml.apply_annotations()
 
-            return json.dumps({
-                "status": "applied",
-                "message": "All staged annotation changes have been applied to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "applied",
+                    "message": "All staged annotation changes have been applied to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to apply annotations: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -624,18 +636,20 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             })
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             new_list = ml.add_visible_column(table_name, context, column, position)
 
-            return json.dumps({
-                "status": "staged",
-                "target": table_name,
-                "context": context,
-                "column_added": column,
-                "position": position if position is not None else len(new_list) - 1,
-                "new_list": new_list,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": table_name,
+                    "context": context,
+                    "column_added": column,
+                    "position": position if position is not None else len(new_list) - 1,
+                    "new_list": new_list,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add visible column: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -674,17 +688,19 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             remove_visible_column("Image", "compact", 0)
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             new_list = ml.remove_visible_column(table_name, context, column)
 
-            return json.dumps({
-                "status": "staged",
-                "target": table_name,
-                "context": context,
-                "column_removed": column,
-                "new_list": new_list,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": table_name,
+                    "context": context,
+                    "column_removed": column,
+                    "new_list": new_list,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to remove visible column: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -722,16 +738,18 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             # or unmentioned columns will be removed from the list
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             new_list = ml.reorder_visible_columns(table_name, context, new_order)
 
-            return json.dumps({
-                "status": "staged",
-                "target": table_name,
-                "context": context,
-                "new_order": new_list,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": table_name,
+                    "context": context,
+                    "new_order": new_list,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to reorder visible columns: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -785,18 +803,20 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             })
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             new_list = ml.add_visible_foreign_key(table_name, context, foreign_key, position)
 
-            return json.dumps({
-                "status": "staged",
-                "target": table_name,
-                "context": context,
-                "foreign_key_added": foreign_key,
-                "position": position if position is not None else len(new_list) - 1,
-                "new_list": new_list,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": table_name,
+                    "context": context,
+                    "foreign_key_added": foreign_key,
+                    "position": position if position is not None else len(new_list) - 1,
+                    "new_list": new_list,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add visible foreign key: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -831,17 +851,19 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             remove_visible_foreign_key("Subject", "detailed", 0)
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             new_list = ml.remove_visible_foreign_key(table_name, context, foreign_key)
 
-            return json.dumps({
-                "status": "staged",
-                "target": table_name,
-                "context": context,
-                "foreign_key_removed": foreign_key,
-                "new_list": new_list,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": table_name,
+                    "context": context,
+                    "foreign_key_removed": foreign_key,
+                    "new_list": new_list,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to remove visible foreign key: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -879,16 +901,18 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             ])
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             new_list = ml.reorder_visible_foreign_keys(table_name, context, new_order)
 
-            return json.dumps({
-                "status": "staged",
-                "target": table_name,
-                "context": context,
-                "new_order": new_list,
-                "message": "Use apply_annotations() to commit changes to the catalog.",
-            })
+            return json.dumps(
+                {
+                    "status": "staged",
+                    "target": table_name,
+                    "context": context,
+                    "new_order": new_list,
+                    "message": "Use apply_annotations() to commit changes to the catalog.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to reorder visible foreign keys: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -932,7 +956,7 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             }
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             return json.dumps(ml.get_handlebars_template_variables(table_name))
         except Exception as e:
             logger.error(f"Failed to get template variables: {e}")
@@ -967,7 +991,7 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             }
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             table = ml.model.name_to_table(table_name)
 
             # Limit to reasonable number
@@ -978,17 +1002,21 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             results = list(path.entities().fetch(limit=limit))
 
             # Build template suggestion based on columns
-            columns = [col.name for col in table.columns if not col.name.startswith('RC') and not col.name.startswith('RM')]
-            suggestion_cols = columns[:3] if columns else ['RID']
+            columns = [
+                col.name for col in table.columns if not col.name.startswith("RC") and not col.name.startswith("RM")
+            ]
+            suggestion_cols = columns[:3] if columns else ["RID"]
             suggestion = " - ".join(["{{{" + c + "}}}" for c in suggestion_cols])
 
-            return json.dumps({
-                "table": table_name,
-                "row_count": len(results),
-                "sample_rows": results,
-                "template_test_suggestion": f"Try: {suggestion}",
-                "columns": [col.name for col in table.columns],
-            })
+            return json.dumps(
+                {
+                    "table": table_name,
+                    "row_count": len(results),
+                    "sample_rows": results,
+                    "template_test_suggestion": f"Try: {suggestion}",
+                    "columns": [col.name for col in table.columns],
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to get sample data: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -1073,10 +1101,10 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                     return str(value)
                 return str(data.get(var_name, ""))
 
-            result = re.sub(r'\{\{\{([^}]+)\}\}\}', replace_triple, result)
+            result = re.sub(r"\{\{\{([^}]+)\}\}\}", replace_triple, result)
 
             # Handle double braces (same for preview, would be escaped in real render)
-            result = re.sub(r'\{\{([^#/][^}]*)\}\}', replace_triple, result)
+            result = re.sub(r"\{\{([^#/][^}]*)\}\}", replace_triple, result)
 
             # Handle {{#if variable}}...{{/if}} blocks
             def handle_if_block(match: re.Match) -> str:
@@ -1099,8 +1127,8 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 chosen = true_content if is_truthy else false_content
 
                 # Recursively process the chosen content
-                chosen = re.sub(r'\{\{\{([^}]+)\}\}\}', replace_triple, chosen)
-                chosen = re.sub(r'\{\{([^#/][^}]*)\}\}', replace_triple, chosen)
+                chosen = re.sub(r"\{\{\{([^}]+)\}\}\}", replace_triple, chosen)
+                chosen = re.sub(r"\{\{([^#/][^}]*)\}\}", replace_triple, chosen)
 
                 return chosen
 
@@ -1108,10 +1136,7 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             max_iterations = 10
             for _ in range(max_iterations):
                 new_result = re.sub(
-                    r'\{\{#if\s+([^}]+)\}\}((?:(?!\{\{#if).)*?)\{\{/if\}\}',
-                    handle_if_block,
-                    result,
-                    flags=re.DOTALL
+                    r"\{\{#if\s+([^}]+)\}\}((?:(?!\{\{#if).)*?)\{\{/if\}\}", handle_if_block, result, flags=re.DOTALL
                 )
                 if new_result == result:
                     break
@@ -1126,16 +1151,13 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 is_falsy = not value or value == "" or value == [] or value == {}
 
                 if is_falsy:
-                    content = re.sub(r'\{\{\{([^}]+)\}\}\}', replace_triple, content)
-                    content = re.sub(r'\{\{([^#/][^}]*)\}\}', replace_triple, content)
+                    content = re.sub(r"\{\{\{([^}]+)\}\}\}", replace_triple, content)
+                    content = re.sub(r"\{\{([^#/][^}]*)\}\}", replace_triple, content)
                     return content
                 return ""
 
             result = re.sub(
-                r'\{\{#unless\s+([^}]+)\}\}(.*?)\{\{/unless\}\}',
-                handle_unless_block,
-                result,
-                flags=re.DOTALL
+                r"\{\{#unless\s+([^}]+)\}\}(.*?)\{\{/unless\}\}", handle_unless_block, result, flags=re.DOTALL
             )
 
             # Handle {{#each array}}...{{/each}} blocks
@@ -1164,52 +1186,37 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
 
                     # Handle @index, @first, @last
                     item_result = item_result.replace("{{@index}}", str(i))
+                    item_result = re.sub(r"\{\{#if @first\}\}(.*?)\{\{/if\}\}", r"\1" if i == 0 else "", item_result)
                     item_result = re.sub(
-                        r'\{\{#if @first\}\}(.*?)\{\{/if\}\}',
-                        r'\1' if i == 0 else '',
-                        item_result
+                        r"\{\{#if @last\}\}(.*?)\{\{/if\}\}", r"\1" if i == len(array_value) - 1 else "", item_result
                     )
                     item_result = re.sub(
-                        r'\{\{#if @last\}\}(.*?)\{\{/if\}\}',
-                        r'\1' if i == len(array_value) - 1 else '',
-                        item_result
+                        r"\{\{#unless @first\}\}(.*?)\{\{/unless\}\}", "" if i == 0 else r"\1", item_result
                     )
                     item_result = re.sub(
-                        r'\{\{#unless @first\}\}(.*?)\{\{/unless\}\}',
-                        '' if i == 0 else r'\1',
-                        item_result
-                    )
-                    item_result = re.sub(
-                        r'\{\{#unless @last\}\}(.*?)\{\{/unless\}\}',
-                        '' if i == len(array_value) - 1 else r'\1',
-                        item_result
+                        r"\{\{#unless @last\}\}(.*?)\{\{/unless\}\}",
+                        "" if i == len(array_value) - 1 else r"\1",
+                        item_result,
                     )
 
                     results_list.append(item_result)
 
                 return "".join(results_list)
 
-            result = re.sub(
-                r'\{\{#each\s+([^}]+)\}\}(.*?)\{\{/each\}\}',
-                handle_each_block,
-                result,
-                flags=re.DOTALL
-            )
+            result = re.sub(r"\{\{#each\s+([^}]+)\}\}(.*?)\{\{/each\}\}", handle_each_block, result, flags=re.DOTALL)
 
-            return json.dumps({
-                "status": "success",
-                "template": template,
-                "data": data,
-                "rendered": result,
-                "note": "This is a simplified preview. Actual Deriva rendering may differ slightly."
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "template": template,
+                    "data": data,
+                    "rendered": result,
+                    "note": "This is a simplified preview. Actual Deriva rendering may differ slightly.",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to preview template: {e}")
-            return json.dumps({
-                "status": "error",
-                "template": template,
-                "message": str(e)
-            })
+            return json.dumps({"status": "error", "template": template, "message": str(e)})
 
     @mcp.tool()
     async def validate_template_syntax(template: str) -> str:
@@ -1237,55 +1244,57 @@ def register_annotation_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         warnings = []
 
         # Check for unmatched braces
-        triple_open = len(re.findall(r'\{\{\{', template))
-        triple_close = len(re.findall(r'\}\}\}', template))
+        triple_open = len(re.findall(r"\{\{\{", template))
+        triple_close = len(re.findall(r"\}\}\}", template))
         if triple_open != triple_close:
             errors.append(f"Unmatched triple braces: {triple_open} opening vs {triple_close} closing")
 
         # Remove triple braces to check double braces
-        temp = re.sub(r'\{\{\{.*?\}\}\}', '', template)
-        double_open = len(re.findall(r'\{\{(?!\{)', temp))
-        double_close = len(re.findall(r'(?<!\})\}\}', temp))
+        temp = re.sub(r"\{\{\{.*?\}\}\}", "", template)
+        double_open = len(re.findall(r"\{\{(?!\{)", temp))
+        double_close = len(re.findall(r"(?<!\})\}\}", temp))
         if double_open != double_close:
             errors.append(f"Unmatched double braces: {double_open} opening vs {double_close} closing")
 
         # Check for block helpers
-        block_helpers = ['if', 'unless', 'each', 'with']
+        block_helpers = ["if", "unless", "each", "with"]
         for helper in block_helpers:
-            opens = len(re.findall(rf'\{{\{{#{helper}\s', template))
-            closes = len(re.findall(rf'\{{\{{/{helper}\}}\}}', template))
+            opens = len(re.findall(rf"\{{\{{#{helper}\s", template))
+            closes = len(re.findall(rf"\{{\{{/{helper}\}}\}}", template))
             if opens != closes:
                 errors.append(f"Unclosed #{helper} block: {opens} opening vs {closes} closing")
 
         # Check for common mistakes
-        if '{{#if}}' in template:
+        if "{{#if}}" in template:
             errors.append("#if block requires a condition variable")
-        if '{{#each}}' in template:
+        if "{{#each}}" in template:
             errors.append("#each block requires an array variable")
 
         # Warnings for potential issues
-        if '{{' in template and '{{{' not in template:
+        if "{{" in template and "{{{" not in template:
             warnings.append("Using {{...}} will HTML-escape output. Consider {{{...}}} for raw output.")
 
-        if re.search(r'\{\{\s*\}\}', template):
+        if re.search(r"\{\{\s*\}\}", template):
             warnings.append("Empty template expression found: {{}}")
 
         # Check for valid variable names
-        var_pattern = re.findall(r'\{\{(?:#\w+\s+)?([^}#/]+)(?:\}\}|\}\}\})', template)
+        var_pattern = re.findall(r"\{\{(?:#\w+\s+)?([^}#/]+)(?:\}\}|\}\}\})", template)
         for var in var_pattern:
             var = var.strip()
-            if var and not re.match(r'^[\w.$@_]+$', var.split()[0]):
+            if var and not re.match(r"^[\w.$@_]+$", var.split()[0]):
                 warnings.append(f"Unusual variable name: {var}")
 
-        return json.dumps({
-            "valid": len(errors) == 0,
-            "template": template,
-            "errors": errors,
-            "warnings": warnings,
-            "block_counts": {
-                "if_blocks": len(re.findall(r'\{\{#if\s', template)),
-                "unless_blocks": len(re.findall(r'\{\{#unless\s', template)),
-                "each_blocks": len(re.findall(r'\{\{#each\s', template)),
-                "variables": len(re.findall(r'\{\{\{?[^#/}]+\}\}\}?', template)),
+        return json.dumps(
+            {
+                "valid": len(errors) == 0,
+                "template": template,
+                "errors": errors,
+                "warnings": warnings,
+                "block_counts": {
+                    "if_blocks": len(re.findall(r"\{\{#if\s", template)),
+                    "unless_blocks": len(re.findall(r"\{\{#unless\s", template)),
+                    "each_blocks": len(re.findall(r"\{\{#each\s", template)),
+                    "variables": len(re.findall(r"\{\{\{?[^#/}]+\}\}\}?", template)),
+                },
             }
-        })
+        )

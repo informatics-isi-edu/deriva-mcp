@@ -80,7 +80,7 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             create_feature("Image", "Segmentation", "Derived segmentation mask", assets=["Segmentation_Mask"])
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             ml.create_feature(
                 target_table=table_name,
                 feature_name=feature_name,
@@ -88,11 +88,13 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 assets=assets or [],
                 comment=comment,
             )
-            return json.dumps({
-                "status": "created",
-                "feature_name": feature_name,
-                "target_table": table_name,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "feature_name": feature_name,
+                    "target_table": table_name,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create feature: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -112,18 +114,22 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             JSON with status, feature_name, table_name.
         """
         try:
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
             success = ml.delete_feature(table_name, feature_name)
             if success:
-                return json.dumps({
-                    "status": "deleted",
-                    "feature_name": feature_name,
-                    "table_name": table_name,
-                })
-            return json.dumps({
-                "status": "not_found",
-                "message": f"Feature '{feature_name}' not found in table '{table_name}'",
-            })
+                return json.dumps(
+                    {
+                        "status": "deleted",
+                        "feature_name": feature_name,
+                        "table_name": table_name,
+                    }
+                )
+            return json.dumps(
+                {
+                    "status": "not_found",
+                    "message": f"Feature '{feature_name}' not found in table '{table_name}'",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to delete feature: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -165,7 +171,7 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             from deriva_ml_mcp.tools.execution import _active_executions
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
 
             # Get execution RID from active execution or parameter
             # Priority: explicit parameter > user-created execution > MCP connection execution
@@ -182,10 +188,12 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     exe_rid = mcp_execution.execution_rid
 
             if not exe_rid:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution. Connect to a catalog or use create_execution first.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution. Connect to a catalog or use create_execution first.",
+                    }
+                )
 
             # Look up the feature to get its structure
             feature = ml.lookup_feature(table_name, feature_name)
@@ -201,10 +209,12 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 value_column = next(iter(feature.value_columns)).name
 
             if not value_column:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Feature '{feature_name}' has no value columns. Use add_feature_value_record for complex features.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Feature '{feature_name}' has no value columns. Use add_feature_value_record for complex features.",
+                    }
+                )
 
             # Build the record dict
             record_dict = {
@@ -219,14 +229,16 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
             result = list(path.insert([record_dict]))
 
-            return json.dumps({
-                "status": "added",
-                "target_rid": target_rid,
-                "feature_name": feature_name,
-                value_column: value,
-                "execution_rid": exe_rid,
-                "rid": result[0].get("RID") if result else None,
-            })
+            return json.dumps(
+                {
+                    "status": "added",
+                    "target_rid": target_rid,
+                    "feature_name": feature_name,
+                    value_column: value,
+                    "execution_rid": exe_rid,
+                    "rid": result[0].get("RID") if result else None,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add feature value: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -278,7 +290,7 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             from deriva_ml_mcp.tools.execution import _active_executions
 
-            ml = conn_manager.get_active_or_raise()
+            ml = conn_manager.require_derivaml()
 
             # Get execution RID from active execution or parameter
             # Priority: explicit parameter > user-created execution > MCP connection execution
@@ -295,10 +307,12 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     exe_rid = mcp_execution.execution_rid
 
             if not exe_rid:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution. Connect to a catalog or use create_execution first.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution. Connect to a catalog or use create_execution first.",
+                    }
+                )
 
             # Look up the feature
             feature = ml.lookup_feature(table_name, feature_name)
@@ -318,14 +332,16 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
             result = list(path.insert([record_dict]))
 
-            return json.dumps({
-                "status": "added",
-                "target_rid": target_rid,
-                "feature_name": feature_name,
-                "values": values,
-                "execution_rid": exe_rid,
-                "rid": result[0].get("RID") if result else None,
-            })
+            return json.dumps(
+                {
+                    "status": "added",
+                    "target_rid": target_rid,
+                    "feature_name": feature_name,
+                    "values": values,
+                    "execution_rid": exe_rid,
+                    "rid": result[0].get("RID") if result else None,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add feature value record: {e}")
             return json.dumps({"status": "error", "message": str(e)})

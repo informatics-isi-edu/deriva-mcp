@@ -86,56 +86,49 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             bump_version("patch", "/path/to/project")  # Bump specific project
         """
         if bump_type not in ("patch", "minor", "major"):
-            return json.dumps({
-                "status": "error",
-                "error": f"Invalid bump_type: {bump_type}. Must be 'patch', 'minor', or 'major'."
-            })
+            return json.dumps(
+                {"status": "error", "error": f"Invalid bump_type: {bump_type}. Must be 'patch', 'minor', or 'major'."}
+            )
 
         # Check for uv
         if shutil.which("uv") is None:
-            return json.dumps({
-                "status": "error",
-                "error": "Required tool 'uv' not found on PATH."
-            })
+            return json.dumps({"status": "error", "error": "Required tool 'uv' not found on PATH."})
 
         # Determine project directory
         if project_path:
             project_dir = Path(project_path).resolve()
             if not project_dir.exists():
-                return json.dumps({
-                    "status": "error",
-                    "error": f"Project directory not found: {project_path}"
-                })
+                return json.dumps({"status": "error", "error": f"Project directory not found: {project_path}"})
         else:
             project_dir = Path.cwd()
 
         # Check for venv
         venv_path = project_dir / ".venv"
         if not venv_path.exists():
-            return json.dumps({
-                "status": "error",
-                "error": f"No .venv directory found in {project_dir}. Run 'uv sync' first."
-            })
+            return json.dumps(
+                {"status": "error", "error": f"No .venv directory found in {project_dir}. Run 'uv sync' first."}
+            )
 
         # Check if in git repo
         try:
             subprocess.run(
                 ["git", "rev-parse", "--is-inside-work-tree"],
                 cwd=project_dir,
-                check=True, capture_output=True, text=True
+                check=True,
+                capture_output=True,
+                text=True,
             )
         except subprocess.CalledProcessError:
-            return json.dumps({
-                "status": "error",
-                "error": f"Not a git repository: {project_dir}"
-            })
+            return json.dumps({"status": "error", "error": f"Not a git repository: {project_dir}"})
 
         # Get current version before bump
         try:
             result = subprocess.run(
                 ["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*.[0-9]*.[0-9]*"],
                 cwd=project_dir,
-                check=True, capture_output=True, text=True
+                check=True,
+                capture_output=True,
+                text=True,
             )
             previous_version = result.stdout.strip()
         except subprocess.CalledProcessError:
@@ -152,42 +145,38 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             )
 
             if result.returncode != 0:
-                return json.dumps({
-                    "status": "error",
-                    "error": f"bump-version failed: {result.stderr or result.stdout}",
-                    "returncode": result.returncode
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "error": f"bump-version failed: {result.stderr or result.stdout}",
+                        "returncode": result.returncode,
+                    }
+                )
 
         except subprocess.TimeoutExpired:
-            return json.dumps({
-                "status": "error",
-                "error": "Command timed out after 120 seconds"
-            })
+            return json.dumps({"status": "error", "error": "Command timed out after 120 seconds"})
         except Exception as e:
-            return json.dumps({
-                "status": "error",
-                "error": f"Failed to run command: {e}"
-            })
+            return json.dumps({"status": "error", "error": f"Failed to run command: {e}"})
 
         # Get new version after bump
         try:
             result = subprocess.run(
-                ["git", "describe", "--tags", "--abbrev=0"],
-                cwd=project_dir,
-                check=True, capture_output=True, text=True
+                ["git", "describe", "--tags", "--abbrev=0"], cwd=project_dir, check=True, capture_output=True, text=True
             )
             new_version = result.stdout.strip()
         except subprocess.CalledProcessError:
             new_version = "unknown"
 
-        return json.dumps({
-            "status": "success",
-            "bump_type": bump_type,
-            "previous_version": previous_version,
-            "new_version": new_version,
-            "project_path": str(project_dir),
-            "message": f"Version bumped from {previous_version or 'none'} to {new_version}"
-        })
+        return json.dumps(
+            {
+                "status": "success",
+                "bump_type": bump_type,
+                "previous_version": previous_version,
+                "new_version": new_version,
+                "project_path": str(project_dir),
+                "message": f"Version bumped from {previous_version or 'none'} to {new_version}",
+            }
+        )
 
     @mcp.tool()
     def get_current_version() -> str:
@@ -208,34 +197,25 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         """
         # Check if in git repo
         try:
-            subprocess.run(
-                ["git", "rev-parse", "--is-inside-work-tree"],
-                check=True, capture_output=True, text=True
-            )
+            subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError:
-            return json.dumps({
-                "status": "error",
-                "error": "Not inside a git repository."
-            })
+            return json.dumps({"status": "error", "error": "Not inside a git repository."})
 
         # Get full describe output
         try:
             result = subprocess.run(
-                ["git", "describe", "--tags", "--long", "--dirty"],
-                check=True, capture_output=True, text=True
+                ["git", "describe", "--tags", "--long", "--dirty"], check=True, capture_output=True, text=True
             )
             full_version = result.stdout.strip()
         except subprocess.CalledProcessError:
-            return json.dumps({
-                "status": "error",
-                "error": "No version tags found. Run bump_version() to create initial tag."
-            })
+            return json.dumps(
+                {"status": "error", "error": "No version tags found. Run bump_version() to create initial tag."}
+            )
 
         # Get clean tag
         try:
             result = subprocess.run(
-                ["git", "describe", "--tags", "--abbrev=0"],
-                check=True, capture_output=True, text=True
+                ["git", "describe", "--tags", "--abbrev=0"], check=True, capture_output=True, text=True
             )
             tag = result.stdout.strip()
         except subprocess.CalledProcessError:
@@ -256,14 +236,16 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         else:
             distance = 0
 
-        return json.dumps({
-            "status": "success",
-            "version": full_version,
-            "tag": tag,
-            "distance": distance,
-            "dirty": dirty,
-            "at_tag": distance == 0 and not dirty
-        })
+        return json.dumps(
+            {
+                "status": "success",
+                "version": full_version,
+                "tag": tag,
+                "distance": distance,
+                "dirty": dirty,
+                "at_tag": distance == 0 and not dirty,
+            }
+        )
 
     # =========================================================================
     # Jupyter Kernel Tools
@@ -305,29 +287,22 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         """
         # Check for uv
         if shutil.which("uv") is None:
-            return json.dumps({
-                "status": "error",
-                "error": "Required tool 'uv' not found on PATH."
-            })
+            return json.dumps({"status": "error", "error": "Required tool 'uv' not found on PATH."})
 
         # Determine project directory
         if project_path:
             project_dir = Path(project_path).resolve()
             if not project_dir.exists():
-                return json.dumps({
-                    "status": "error",
-                    "error": f"Project directory not found: {project_path}"
-                })
+                return json.dumps({"status": "error", "error": f"Project directory not found: {project_path}"})
         else:
             project_dir = Path.cwd()
 
         # Check for venv
         venv_path = project_dir / ".venv"
         if not venv_path.exists():
-            return json.dumps({
-                "status": "error",
-                "error": f"No .venv directory found in {project_dir}. Run 'uv sync' first."
-            })
+            return json.dumps(
+                {"status": "error", "error": f"No .venv directory found in {project_dir}. Run 'uv sync' first."}
+            )
 
         # Run the deriva-ml-install-kernel command
         try:
@@ -340,29 +315,27 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             )
 
             if result.returncode != 0:
-                return json.dumps({
-                    "status": "error",
-                    "error": f"Failed to install kernel: {result.stderr or result.stdout}",
-                    "returncode": result.returncode
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "error": f"Failed to install kernel: {result.stderr or result.stdout}",
+                        "returncode": result.returncode,
+                    }
+                )
 
-            return json.dumps({
-                "status": "success",
-                "project_path": str(project_dir),
-                "output": result.stdout.strip(),
-                "message": "Jupyter kernel installed successfully"
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "project_path": str(project_dir),
+                    "output": result.stdout.strip(),
+                    "message": "Jupyter kernel installed successfully",
+                }
+            )
 
         except subprocess.TimeoutExpired:
-            return json.dumps({
-                "status": "error",
-                "error": "Command timed out after 60 seconds"
-            })
+            return json.dumps({"status": "error", "error": "Command timed out after 60 seconds"})
         except Exception as e:
-            return json.dumps({
-                "status": "error",
-                "error": f"Failed to run command: {e}"
-            })
+            return json.dumps({"status": "error", "error": f"Failed to run command: {e}"})
 
     @mcp.tool()
     def list_jupyter_kernels() -> str:
@@ -377,10 +350,7 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         try:
             from jupyter_client.kernelspec import KernelSpecManager
         except ImportError:
-            return json.dumps({
-                "status": "error",
-                "error": "jupyter_client not installed. Run: uv add jupyter_client"
-            })
+            return json.dumps({"status": "error", "error": "jupyter_client not installed. Run: uv add jupyter_client"})
 
         try:
             ksm = KernelSpecManager()
@@ -389,23 +359,18 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             kernels = []
             for name, spec_info in specs.items():
                 spec = spec_info.get("spec", {})
-                kernels.append({
-                    "name": name,
-                    "display_name": spec.get("display_name", name),
-                    "language": spec.get("language", "unknown"),
-                    "resource_dir": spec_info.get("resource_dir", ""),
-                })
+                kernels.append(
+                    {
+                        "name": name,
+                        "display_name": spec.get("display_name", name),
+                        "language": spec.get("language", "unknown"),
+                        "resource_dir": spec_info.get("resource_dir", ""),
+                    }
+                )
 
-            return json.dumps({
-                "status": "success",
-                "kernels": kernels,
-                "count": len(kernels)
-            })
+            return json.dumps({"status": "success", "kernels": kernels, "count": len(kernels)})
         except Exception as e:
-            return json.dumps({
-                "status": "error",
-                "error": f"Failed to list kernels: {e}"
-            })
+            return json.dumps({"status": "error", "error": f"Failed to list kernels: {e}"})
 
     # =========================================================================
     # Notebook Execution Tools
@@ -431,46 +396,38 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         try:
             import papermill as pm
         except ImportError:
-            return json.dumps({
-                "status": "error",
-                "error": "papermill not installed. Run: uv add papermill"
-            })
+            return json.dumps({"status": "error", "error": "papermill not installed. Run: uv add papermill"})
 
         notebook_file = Path(notebook_path)
         if not notebook_file.exists():
-            return json.dumps({
-                "status": "error",
-                "error": f"Notebook file not found: {notebook_path}"
-            })
+            return json.dumps({"status": "error", "error": f"Notebook file not found: {notebook_path}"})
 
         if notebook_file.suffix != ".ipynb":
-            return json.dumps({
-                "status": "error",
-                "error": f"File must be a .ipynb notebook: {notebook_path}"
-            })
+            return json.dumps({"status": "error", "error": f"File must be a .ipynb notebook: {notebook_path}"})
 
         try:
             params = pm.inspect_notebook(notebook_file)
             parameters = []
             for name, info in params.items():
-                parameters.append({
-                    "name": name,
-                    "type": info.get("inferred_type_name", "unknown"),
-                    "default": info.get("default"),
-                    "help": info.get("help", ""),
-                })
+                parameters.append(
+                    {
+                        "name": name,
+                        "type": info.get("inferred_type_name", "unknown"),
+                        "default": info.get("default"),
+                        "help": info.get("help", ""),
+                    }
+                )
 
-            return json.dumps({
-                "status": "success",
-                "notebook": str(notebook_file),
-                "parameters": parameters,
-                "count": len(parameters)
-            })
+            return json.dumps(
+                {
+                    "status": "success",
+                    "notebook": str(notebook_file),
+                    "parameters": parameters,
+                    "count": len(parameters),
+                }
+            )
         except Exception as e:
-            return json.dumps({
-                "status": "error",
-                "error": f"Failed to inspect notebook: {e}"
-            })
+            return json.dumps({"status": "error", "error": f"Failed to inspect notebook: {e}"})
 
     @mcp.tool()
     def run_notebook(
@@ -523,44 +480,35 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             import papermill as pm
             from nbconvert import MarkdownExporter
         except ImportError as e:
-            return json.dumps({
-                "status": "error",
-                "error": f"Required package not installed: {e}. Run: uv add papermill nbformat nbconvert"
-            })
+            return json.dumps(
+                {
+                    "status": "error",
+                    "error": f"Required package not installed: {e}. Run: uv add papermill nbformat nbconvert",
+                }
+            )
 
         try:
             from deriva_ml import DerivaML, ExecAssetType, MLAsset
             from deriva_ml.execution import Execution, ExecutionConfiguration, Workflow
         except ImportError:
-            return json.dumps({
-                "status": "error",
-                "error": "deriva_ml not installed properly"
-            })
+            return json.dumps({"status": "error", "error": "deriva_ml not installed properly"})
 
         import tempfile
 
         notebook_file = Path(notebook_path).resolve()
         if not notebook_file.exists():
-            return json.dumps({
-                "status": "error",
-                "error": f"Notebook file not found: {notebook_path}"
-            })
+            return json.dumps({"status": "error", "error": f"Notebook file not found: {notebook_path}"})
 
         if notebook_file.suffix != ".ipynb":
-            return json.dumps({
-                "status": "error",
-                "error": f"File must be a .ipynb notebook: {notebook_path}"
-            })
+            return json.dumps({"status": "error", "error": f"File must be a .ipynb notebook: {notebook_path}"})
 
         # Check nbstripout status
         try:
             Workflow._check_nbstrip_status()
         except Exception as e:
-            return json.dumps({
-                "status": "warning",
-                "warning": f"nbstripout check: {e}",
-                "message": "Continuing anyway..."
-            })
+            return json.dumps(
+                {"status": "warning", "warning": f"nbstripout check: {e}", "message": "Continuing anyway..."}
+            )
 
         # Build parameters dict
         params = parameters or {}
@@ -599,10 +547,12 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
                 # Read execution metadata
                 if not execution_rid_path.exists():
-                    return json.dumps({
-                        "status": "error",
-                        "error": "Notebook did not save execution metadata. Ensure notebook creates a DerivaML execution."
-                    })
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "error": "Notebook did not save execution metadata. Ensure notebook creates a DerivaML execution.",
+                        }
+                    )
 
                 with execution_rid_path.open("r") as f:
                     execution_config = json.load(f)
@@ -612,11 +562,7 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                 exec_catalog_id = execution_config["catalog_id"]
 
                 # Create DerivaML instance
-                ml_instance = DerivaML(
-                    hostname=exec_hostname,
-                    catalog_id=exec_catalog_id,
-                    working_dir=tmpdirname
-                )
+                ml_instance = DerivaML(hostname=exec_hostname, catalog_id=exec_catalog_id, working_dir=tmpdirname)
                 workflow_rid = ml_instance.retrieve_rid(execution_rid)["Workflow"]
 
                 # Restore execution context
@@ -653,22 +599,21 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                 # Get citation
                 citation = ml_instance.cite(execution_rid)
 
-                return json.dumps({
-                    "status": "success",
-                    "execution_rid": execution_rid,
-                    "workflow_rid": workflow_rid,
-                    "hostname": exec_hostname,
-                    "catalog_id": exec_catalog_id,
-                    "notebook_output": str(notebook_output),
-                    "citation": citation,
-                    "message": f"Notebook executed successfully. Execution RID: {execution_rid}"
-                })
+                return json.dumps(
+                    {
+                        "status": "success",
+                        "execution_rid": execution_rid,
+                        "workflow_rid": workflow_rid,
+                        "hostname": exec_hostname,
+                        "catalog_id": exec_catalog_id,
+                        "notebook_output": str(notebook_output),
+                        "citation": citation,
+                        "message": f"Notebook executed successfully. Execution RID: {execution_rid}",
+                    }
+                )
 
         except Exception as e:
-            return json.dumps({
-                "status": "error",
-                "error": f"Notebook execution failed: {e}"
-            })
+            return json.dumps({"status": "error", "error": f"Notebook execution failed: {e}"})
 
 
 def _find_kernel_for_venv() -> str | None:
