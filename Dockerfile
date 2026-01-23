@@ -35,6 +35,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Use package-specific SETUPTOOLS_SCM_PRETEND_VERSION since .git is not available in Docker build
 # The env var name uses normalized package name (deriva_ml_mcp)
 ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DERIVA_ML_MCP=${VERSION}
+# Install package - pyproject.toml specifies git branches for dependencies
 RUN uv pip install --no-cache .
 
 # Runtime stage

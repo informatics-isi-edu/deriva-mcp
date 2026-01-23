@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - typed-interface
     tags-ignore:
       - 'v*.*.*'  # Release tags handled by release.yml
   pull_request:
