@@ -18,7 +18,7 @@ VERSION=$(uv run python -c "from setuptools_scm import get_version; print(get_ve
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 # Default image name and tag
-IMAGE_NAME="${1:-deriva-ml-mcp:latest}"
+IMAGE_NAME="${1:-deriva-mcp:latest}"
 
 echo "Building Docker image: $IMAGE_NAME"
 echo "  Version: $VERSION"
@@ -35,4 +35,4 @@ echo ""
 echo "Build complete: $IMAGE_NAME"
 echo ""
 echo "To verify version:"
-echo "  docker run --rm --entrypoint /bin/bash $IMAGE_NAME -c 'env | grep DERIVAML'"
+echo "  docker run --rm --entrypoint /bin/bash $IMAGE_NAME -c 'env | grep DERIVA_MCP'"

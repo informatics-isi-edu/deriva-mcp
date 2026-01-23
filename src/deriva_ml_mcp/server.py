@@ -31,9 +31,9 @@ from deriva_ml_mcp.tools import (
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("/tmp/deriva-ml-mcp.log")],
+    handlers=[logging.FileHandler("/tmp/deriva-mcp.log")],
 )
-logger = logging.getLogger("deriva-ml-mcp")
+logger = logging.getLogger("deriva-mcp")
 
 # Initialize FastMCP server
 mcp = FastMCP(

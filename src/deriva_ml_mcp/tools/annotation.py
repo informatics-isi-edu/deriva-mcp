@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
     from deriva_ml_mcp.connection import ConnectionManager
 
-logger = logging.getLogger("deriva-ml-mcp")
+logger = logging.getLogger("deriva-mcp")
 
 # Annotation tag URIs
 DISPLAY_TAG = "tag:isrd.isi.edu,2015:display"

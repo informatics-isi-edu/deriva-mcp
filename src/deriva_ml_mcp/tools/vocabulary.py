@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
     from deriva_ml_mcp.connection import ConnectionManager
 
-logger = logging.getLogger("deriva-ml-mcp")
+logger = logging.getLogger("deriva-mcp")
 
 
 def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:

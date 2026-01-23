@@ -1,6 +1,6 @@
-"""Connection management for DerivaML MCP server.
+"""Connection management for Deriva MCP server.
 
-This module handles DerivaML catalog connections, maintaining
+This module handles Deriva catalog connections, maintaining
 active connections and providing access to DerivaML instances.
 
 When connecting to a catalog, an MCP workflow and execution are automatically
@@ -19,10 +19,10 @@ from deriva_ml import DerivaML, DerivaMLException
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger("deriva-ml-mcp")
+logger = logging.getLogger("deriva-mcp")
 
 # Workflow type for MCP server operations
-MCP_WORKFLOW_TYPE = "DerivaML MCP"
+MCP_WORKFLOW_TYPE = "Deriva MCP"
 
 
 def get_mcp_workflow_info() -> dict[str, str | bool]:
@@ -32,11 +32,11 @@ def get_mcp_workflow_info() -> dict[str, str | bool]:
         Dictionary with workflow_name, workflow_type, version, git_commit, in_docker.
     """
     return {
-        "workflow_name": os.environ.get("DERIVAML_MCP_WORKFLOW_NAME", "DerivaML MCP Server"),
-        "workflow_type": os.environ.get("DERIVAML_MCP_WORKFLOW_TYPE", MCP_WORKFLOW_TYPE),
-        "version": os.environ.get("DERIVAML_MCP_VERSION", ""),
-        "git_commit": os.environ.get("DERIVAML_MCP_GIT_COMMIT", ""),
-        "in_docker": os.environ.get("DERIVAML_MCP_IN_DOCKER", "false").lower() == "true",
+        "workflow_name": os.environ.get("DERIVA_MCP_WORKFLOW_NAME", "Deriva MCP Server"),
+        "workflow_type": os.environ.get("DERIVA_MCP_WORKFLOW_TYPE", MCP_WORKFLOW_TYPE),
+        "version": os.environ.get("DERIVA_MCP_VERSION", ""),
+        "git_commit": os.environ.get("DERIVA_MCP_GIT_COMMIT", ""),
+        "in_docker": os.environ.get("DERIVA_MCP_IN_DOCKER", "false").lower() == "true",
     }
 
 

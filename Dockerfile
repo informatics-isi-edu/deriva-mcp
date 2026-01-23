@@ -1,4 +1,4 @@
-# DerivaML MCP Server
+# Deriva MCP Server
 # Multi-stage build for smaller final image
 
 # Build arguments for version injection
@@ -33,8 +33,8 @@ COPY src/ src/
 RUN uv venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 # Use package-specific SETUPTOOLS_SCM_PRETEND_VERSION since .git is not available in Docker build
-# The env var name uses normalized package name (deriva_ml_mcp)
-ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DERIVA_ML_MCP=${VERSION}
+# The env var name uses normalized package name (deriva_mcp)
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DERIVA_MCP=${VERSION}
 RUN uv pip install --no-cache .
 
 # Runtime stage
@@ -76,22 +76,22 @@ ARG GIT_COMMIT
 
 # Workflow metadata environment variables
 # These are used to create the MCP workflow and execution on connection
-ENV DERIVAML_MCP_WORKFLOW_NAME="DerivaML MCP Server"
-ENV DERIVAML_MCP_WORKFLOW_TYPE="DerivaML MCP"
-ENV DERIVAML_MCP_VERSION=${VERSION}
-ENV DERIVAML_MCP_GIT_COMMIT=${GIT_COMMIT}
-ENV DERIVAML_MCP_IMAGE_NAME="ghcr.io/informatics-isi-edu/deriva-ml-mcp"
+ENV DERIVA_MCP_WORKFLOW_NAME="Deriva MCP Server"
+ENV DERIVA_MCP_WORKFLOW_TYPE="Deriva MCP"
+ENV DERIVA_MCP_VERSION=${VERSION}
+ENV DERIVA_MCP_GIT_COMMIT=${GIT_COMMIT}
+ENV DERIVA_MCP_IMAGE_NAME="ghcr.io/informatics-isi-edu/deriva-mcp"
 
 # Flag to indicate running in Docker container
-ENV DERIVAML_MCP_IN_DOCKER="true"
+ENV DERIVA_MCP_IN_DOCKER="true"
 
 # MCP servers communicate via stdio
-ENTRYPOINT ["/entrypoint.sh", "deriva-ml-mcp"]
+ENTRYPOINT ["/entrypoint.sh", "deriva-mcp"]
 
 # Labels for container metadata
-LABEL org.opencontainers.image.title="DerivaML MCP Server"
-LABEL org.opencontainers.image.description="Model Context Protocol server for DerivaML ML workflows"
-LABEL org.opencontainers.image.source="https://github.com/informatics-isi-edu/deriva-ml-mcp"
+LABEL org.opencontainers.image.title="Deriva MCP Server"
+LABEL org.opencontainers.image.description="Model Context Protocol server for Deriva catalogs and ML workflows"
+LABEL org.opencontainers.image.source="https://github.com/informatics-isi-edu/deriva-mcp"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.version=${VERSION}
 LABEL org.opencontainers.image.revision=${GIT_COMMIT}

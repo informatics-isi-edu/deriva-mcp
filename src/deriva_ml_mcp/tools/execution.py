@@ -76,7 +76,7 @@ if TYPE_CHECKING:
 
     from deriva_ml_mcp.connection import ConnectionManager
 
-logger = logging.getLogger("deriva-ml-mcp")
+logger = logging.getLogger("deriva-mcp")
 
 # Store active executions by connection key
 _active_executions: dict[str, Any] = {}
