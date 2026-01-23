@@ -633,3 +633,54 @@ class ConnectionManager:
             )
 
         return matches[0][1]
+
+    def find_schema(self, schema_name: str):
+        """Find a schema by name in the active catalog.
+
+        Works for both DerivaML and plain ERMrest catalogs.
+
+        Args:
+            schema_name: Schema name (e.g., "isa", "deriva-ml")
+
+        Returns:
+            The schema object from the catalog model.
+
+        Raises:
+            DerivaMLException: If no active connection.
+            ValueError: If schema not found.
+        """
+        from deriva_ml import DerivaMLException
+
+        conn = self.get_active()
+        if conn is None:
+            raise DerivaMLException("No active catalog connection. Use 'connect_catalog' tool first.")
+
+        model = conn.get_model()
+
+        if schema_name not in model.schemas:
+            raise ValueError(f"Schema '{schema_name}' not found in catalog")
+
+        return model.schemas[schema_name]
+
+    def find_column(self, table_name: str, column_name: str):
+        """Find a column by name in the active catalog.
+
+        Works for both DerivaML and plain ERMrest catalogs.
+
+        Args:
+            table_name: Table name, optionally qualified with schema (e.g., "Image" or "isa.dataset")
+            column_name: Column name
+
+        Returns:
+            The column object from the table.
+
+        Raises:
+            DerivaMLException: If no active connection.
+            ValueError: If table or column not found.
+        """
+        table = self.find_table(table_name)
+
+        if column_name not in table.columns:
+            raise ValueError(f"Column '{column_name}' not found in table '{table.name}'")
+
+        return table.columns[column_name]

@@ -1270,38 +1270,93 @@ multirun_config(
     # =========================================================================
     # Annotation Resources
     # =========================================================================
+    # These resources work with both DerivaML and plain ERMrest catalogs
+    # by accessing the catalog model directly.
+
+    @mcp.resource(
+        "deriva-ml://schema/{schema_name}/annotations",
+        name="Schema Annotations",
+        description="All annotations for a schema",
+        mime_type="application/json",
+    )
+    def get_schema_annotations(schema_name: str) -> str:
+        """Return all annotations for a schema.
+
+        Works with both DerivaML and plain ERMrest catalogs.
+        """
+        conn_info = conn_manager.get_active()
+        if conn_info is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            schema = conn_manager.find_schema(schema_name)
+            return json.dumps(
+                {
+                    "schema": schema.name,
+                    "annotations": dict(schema.annotations),
+                },
+                indent=2,
+            )
+        except Exception as e:
+            return json.dumps({"error": str(e)})
 
     @mcp.resource(
         "deriva-ml://table/{table_name}/annotations",
         name="Table Annotations",
-        description="Display-related annotations for a table (display, visible-columns, visible-foreign-keys, table-display)",
+        description="All annotations for a table",
         mime_type="application/json",
     )
     def get_table_annotations(table_name: str) -> str:
-        """Return all display-related annotations for a table."""
-        ml = conn_manager.get_active_connection()
-        if ml is None:
+        """Return all annotations for a table.
+
+        Works with both DerivaML and plain ERMrest catalogs.
+        Accepts either 'table_name' or 'schema.table_name' format.
+        """
+        conn_info = conn_manager.get_active()
+        if conn_info is None:
             return json.dumps({"error": "No active catalog connection"})
 
         try:
-            return json.dumps(ml.get_table_annotations(table_name), indent=2)
+            table = conn_manager.find_table(table_name)
+            return json.dumps(
+                {
+                    "table": table.name,
+                    "schema": table.schema.name,
+                    "annotations": dict(table.annotations),
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
         "deriva-ml://table/{table_name}/column/{column_name}/annotations",
         name="Column Annotations",
-        description="Display-related annotations for a column (display, column-display)",
+        description="All annotations for a column",
         mime_type="application/json",
     )
     def get_column_annotations(table_name: str, column_name: str) -> str:
-        """Return all display-related annotations for a column."""
-        ml = conn_manager.get_active_connection()
-        if ml is None:
+        """Return all annotations for a column.
+
+        Works with both DerivaML and plain ERMrest catalogs.
+        Accepts either 'table_name' or 'schema.table_name' format.
+        """
+        conn_info = conn_manager.get_active()
+        if conn_info is None:
             return json.dumps({"error": "No active catalog connection"})
 
         try:
-            return json.dumps(ml.get_column_annotations(table_name, column_name), indent=2)
+            column = conn_manager.find_column(table_name, column_name)
+            table = conn_manager.find_table(table_name)
+            return json.dumps(
+                {
+                    "table": table.name,
+                    "schema": table.schema.name,
+                    "column": column.name,
+                    "annotations": dict(column.annotations),
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1312,13 +1367,47 @@ multirun_config(
         mime_type="application/json",
     )
     def get_table_foreign_keys(table_name: str) -> str:
-        """Return all foreign keys related to a table."""
-        ml = conn_manager.get_active_connection()
-        if ml is None:
+        """Return all foreign keys related to a table.
+
+        Works with both DerivaML and plain ERMrest catalogs.
+        Accepts either 'table_name' or 'schema.table_name' format.
+        """
+        conn_info = conn_manager.get_active()
+        if conn_info is None:
             return json.dumps({"error": "No active catalog connection"})
 
         try:
-            return json.dumps(ml.list_foreign_keys(table_name), indent=2)
+            table = conn_manager.find_table(table_name)
+
+            outbound = []
+            for fkey in table.foreign_keys:
+                outbound.append({
+                    "constraint_name": [fkey.constraint_schema.name, fkey.constraint_name],
+                    "from_table": table.name,
+                    "from_columns": [col.name for col in fkey.columns],
+                    "to_table": fkey.pk_table.name,
+                    "to_columns": [col.name for col in fkey.referenced_columns],
+                })
+
+            inbound = []
+            for fkey in table.referenced_by:
+                inbound.append({
+                    "constraint_name": [fkey.constraint_schema.name, fkey.constraint_name],
+                    "from_table": fkey.table.name,
+                    "from_columns": [col.name for col in fkey.columns],
+                    "to_table": table.name,
+                    "to_columns": [col.name for col in fkey.referenced_columns],
+                })
+
+            return json.dumps(
+                {
+                    "table": table.name,
+                    "schema": table.schema.name,
+                    "outbound": outbound,
+                    "inbound": inbound,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
