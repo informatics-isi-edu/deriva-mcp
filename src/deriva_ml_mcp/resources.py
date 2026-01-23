@@ -1640,6 +1640,61 @@ multirun_config(
     def get_chaise_query_params_doc() -> str:
         return fetch_doc("chaise", "docs/user-docs/query-parameters.md")
 
+    # ERMrestJS Documentation (annotation reference)
+    @mcp.resource(
+        "deriva-ml://docs/ermrestjs/annotation",
+        name="Annotation Reference",
+        description="Complete reference for all Deriva catalog annotations (display, visible-columns, etc.)",
+        mime_type="text/markdown",
+    )
+    def get_annotation_reference_doc() -> str:
+        return fetch_doc("ermrestjs", "docs/user-docs/annotation.md")
+
+    @mcp.resource(
+        "deriva-ml://docs/ermrestjs/contexts",
+        name="Annotation Contexts Reference",
+        description="Reference for annotation contexts (compact, detailed, entry, etc.)",
+        mime_type="text/markdown",
+    )
+    def get_contexts_reference_doc() -> str:
+        return fetch_doc("ermrestjs", "docs/user-docs/contexts.md")
+
+    @mcp.resource(
+        "deriva-ml://docs/ermrestjs/handlebars",
+        name="Handlebars Templating Reference",
+        description="Reference for Handlebars templating in annotations",
+        mime_type="text/markdown",
+    )
+    def get_handlebars_reference_doc() -> str:
+        return fetch_doc("ermrestjs", "docs/user-docs/handlebars.md")
+
+    @mcp.resource(
+        "deriva-ml://docs/ermrestjs/export",
+        name="Export Annotation Reference",
+        description="Reference for configuring data export annotations",
+        mime_type="text/markdown",
+    )
+    def get_export_reference_doc() -> str:
+        return fetch_doc("ermrestjs", "docs/user-docs/export.md")
+
+    @mcp.resource(
+        "deriva-ml://docs/ermrestjs/facet",
+        name="Facet Annotation Reference",
+        description="Reference for configuring faceted search annotations",
+        mime_type="text/markdown",
+    )
+    def get_facet_reference_doc() -> str:
+        return fetch_doc("ermrestjs", "docs/user-docs/facet.md")
+
+    @mcp.resource(
+        "deriva-ml://docs/ermrestjs/pre-format",
+        name="Pre-format Annotation Reference",
+        description="Reference for pre-format annotations (number formatting, boolean display)",
+        mime_type="text/markdown",
+    )
+    def get_preformat_reference_doc() -> str:
+        return fetch_doc("ermrestjs", "docs/user-docs/pre-format.md")
+
     # deriva-py Documentation
     @mcp.resource(
         "deriva-ml://docs/deriva-py/install",

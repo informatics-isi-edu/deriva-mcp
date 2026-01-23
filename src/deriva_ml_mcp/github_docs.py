@@ -26,6 +26,7 @@ GITHUB_REPOS = {
     "deriva-ml": "https://raw.githubusercontent.com/informatics-isi-edu/deriva-ml/main",
     "deriva-py": "https://raw.githubusercontent.com/informatics-isi-edu/deriva-py/master",
     "ermrest": "https://raw.githubusercontent.com/informatics-isi-edu/ermrest/master",
+    "ermrestjs": "https://raw.githubusercontent.com/informatics-isi-edu/ermrestjs/master",
     "chaise": "https://raw.githubusercontent.com/informatics-isi-edu/chaise/master",
 }
 
