@@ -66,7 +66,8 @@ class CatalogManager:
 
     def __init__(self, hostname: str):
         self.hostname = hostname
-        self.domain_schema = "test-schema"
+        self.default_schema = "test-schema"  # The default schema for table creation
+        self.domain_schemas = ["test-schema"]  # List of all domain schemas
         self.project_name = "ml-test"
         self.catalog = None
         self.catalog_id = None
@@ -79,7 +80,7 @@ class CatalogManager:
         print(f"\n🚀 Creating test catalog on {self.hostname}")
         self.catalog = create_ml_catalog(self.hostname, project_name=self.project_name)
         self.catalog_id = self.catalog.catalog_id
-        create_domain_schema(self.catalog, self.domain_schema)
+        create_domain_schema(self.catalog, self.default_schema)
         self.state = CatalogState.EMPTY
         print(f"   Created catalog {self.catalog_id}")
 
@@ -99,7 +100,7 @@ class CatalogManager:
         print("   Resetting catalog to empty state...")
         pb = self.catalog.getPathBuilder()
         ml_path = pb.schemas["deriva-ml"]
-        domain_path = pb.schemas[self.domain_schema]
+        domain_path = pb.schemas[self.default_schema]
 
         # Clear ML schema tables in dependency order
         ml_tables = [
@@ -155,7 +156,7 @@ class CatalogManager:
         return DerivaML(
             self.hostname,
             self.catalog_id,
-            domain_schema=self.domain_schema,
+            default_schema=self.default_schema,
             working_dir=working_dir,
             use_minid=False,
         )
@@ -299,7 +300,7 @@ def mcp_connection_manager(
     conn_manager.connect(
         hostname=catalog_manager.hostname,
         catalog_id=str(catalog_manager.catalog_id),
-        domain_schema=catalog_manager.domain_schema,
+        default_schema=catalog_manager.default_schema,
     )
     yield conn_manager
     # Disconnect after test
@@ -317,7 +318,7 @@ def populated_connection_manager(
     conn_manager.connect(
         hostname=catalog_manager.hostname,
         catalog_id=str(catalog_manager.catalog_id),
-        domain_schema=catalog_manager.domain_schema,
+        default_schema=catalog_manager.default_schema,
     )
     yield conn_manager
     conn_manager.disconnect()
@@ -334,7 +335,7 @@ def dataset_connection_manager(
     conn_manager.connect(
         hostname=catalog_manager.hostname,
         catalog_id=str(catalog_manager.catalog_id),
-        domain_schema=catalog_manager.domain_schema,
+        default_schema=catalog_manager.default_schema,
     )
     yield conn_manager, dataset_desc
     conn_manager.disconnect()

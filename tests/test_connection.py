@@ -86,7 +86,8 @@ class TestConnectionManager:
     def test_connect_success(self, mock_server, mock_derivaml, mock_check):
         """Test successful connection to a DerivaML catalog."""
         mock_instance = MagicMock()
-        mock_instance.domain_schema = "test_schema"
+        mock_instance.domain_schemas = frozenset(["test_schema"])
+        mock_instance.default_schema = "test_schema"
         mock_instance.host_name = "example.org"
         mock_instance.catalog_id = "123"
         mock_derivaml.return_value = mock_instance
@@ -101,7 +102,8 @@ class TestConnectionManager:
         mock_check.return_value = {
             "is_derivaml": True,
             "ml_schema": "deriva-ml",
-            "domain_schema": "test_schema",
+            "domain_schemas": ["test_schema"],
+            "default_schema": "test_schema",
         }
 
         manager = ConnectionManager()
@@ -122,7 +124,8 @@ class TestConnectionManager:
     def test_connect_creates_workflow_and_execution(self, mock_server, mock_derivaml, mock_check):
         """Test that connect creates MCP workflow and execution."""
         mock_instance = MagicMock()
-        mock_instance.domain_schema = "test_schema"
+        mock_instance.domain_schemas = frozenset(["test_schema"])
+        mock_instance.default_schema = "test_schema"
         mock_instance.host_name = "example.org"
         mock_instance.catalog_id = "123"
         mock_derivaml.return_value = mock_instance
@@ -137,7 +140,8 @@ class TestConnectionManager:
         mock_check.return_value = {
             "is_derivaml": True,
             "ml_schema": "deriva-ml",
-            "domain_schema": "test_schema",
+            "domain_schemas": ["test_schema"],
+            "default_schema": "test_schema",
         }
 
         mock_workflow = MagicMock()
@@ -160,6 +164,8 @@ class TestConnectionManager:
     def test_connect_reuses_existing(self, mock_server, mock_derivaml, mock_check):
         """Test that connecting to same catalog reuses connection."""
         mock_instance = MagicMock()
+        mock_instance.domain_schemas = frozenset(["test_schema"])
+        mock_instance.default_schema = "test_schema"
         mock_derivaml.return_value = mock_instance
 
         # Mock the server connection
@@ -172,7 +178,8 @@ class TestConnectionManager:
         mock_check.return_value = {
             "is_derivaml": True,
             "ml_schema": "deriva-ml",
-            "domain_schema": "test_schema",
+            "domain_schemas": ["test_schema"],
+            "default_schema": "test_schema",
         }
 
         manager = ConnectionManager()
@@ -192,6 +199,8 @@ class TestConnectionManager:
     def test_disconnect(self, mock_server, mock_derivaml, mock_check):
         """Test disconnecting from a catalog."""
         mock_instance = MagicMock()
+        mock_instance.domain_schemas = frozenset(["test_schema"])
+        mock_instance.default_schema = "test_schema"
         mock_derivaml.return_value = mock_instance
 
         # Mock the server connection
@@ -204,7 +213,8 @@ class TestConnectionManager:
         mock_check.return_value = {
             "is_derivaml": True,
             "ml_schema": "deriva-ml",
-            "domain_schema": "test_schema",
+            "domain_schemas": ["test_schema"],
+            "default_schema": "test_schema",
         }
 
         manager = ConnectionManager()
@@ -221,6 +231,8 @@ class TestConnectionManager:
     def test_disconnect_closes_execution(self, mock_server, mock_derivaml, mock_check):
         """Test that disconnect closes the execution context."""
         mock_instance = MagicMock()
+        mock_instance.domain_schemas = frozenset(["test_schema"])
+        mock_instance.default_schema = "test_schema"
         mock_derivaml.return_value = mock_instance
 
         # Mock the server connection
@@ -233,7 +245,8 @@ class TestConnectionManager:
         mock_check.return_value = {
             "is_derivaml": True,
             "ml_schema": "deriva-ml",
-            "domain_schema": "test_schema",
+            "domain_schemas": ["test_schema"],
+            "default_schema": "test_schema",
         }
 
         mock_execution = MagicMock()
@@ -259,6 +272,8 @@ class TestConnectionManager:
     def test_set_active(self, mock_server, mock_derivaml, mock_check):
         """Test setting active connection."""
         mock_instance = MagicMock()
+        mock_instance.domain_schemas = frozenset(["test_schema"])
+        mock_instance.default_schema = "test_schema"
         mock_derivaml.return_value = mock_instance
 
         # Mock the server connection
@@ -271,7 +286,8 @@ class TestConnectionManager:
         mock_check.return_value = {
             "is_derivaml": True,
             "ml_schema": "deriva-ml",
-            "domain_schema": "test_schema",
+            "domain_schemas": ["test_schema"],
+            "default_schema": "test_schema",
         }
 
         manager = ConnectionManager()
@@ -297,7 +313,8 @@ class TestConnectionManager:
     def test_list_connections_includes_execution_info(self, mock_server, mock_derivaml, mock_check):
         """Test listing connections includes workflow and execution info."""
         mock_instance = MagicMock()
-        mock_instance.domain_schema = None
+        mock_instance.domain_schemas = frozenset()
+        mock_instance.default_schema = None
         mock_derivaml.return_value = mock_instance
 
         # Mock the server connection
@@ -310,7 +327,8 @@ class TestConnectionManager:
         mock_check.return_value = {
             "is_derivaml": True,
             "ml_schema": "deriva-ml",
-            "domain_schema": None,
+            "domain_schemas": [],
+            "default_schema": None,
         }
 
         mock_execution = MagicMock()
@@ -331,7 +349,8 @@ class TestConnectionManager:
     def test_list_connections_multiple(self, mock_server, mock_derivaml, mock_check):
         """Test listing multiple connections."""
         mock_instance = MagicMock()
-        mock_instance.domain_schema = None
+        mock_instance.domain_schemas = frozenset()
+        mock_instance.default_schema = None
         mock_derivaml.return_value = mock_instance
 
         # Mock the server connection
@@ -344,7 +363,8 @@ class TestConnectionManager:
         mock_check.return_value = {
             "is_derivaml": True,
             "ml_schema": "deriva-ml",
-            "domain_schema": None,
+            "domain_schemas": [],
+            "default_schema": None,
         }
 
         manager = ConnectionManager()

@@ -51,14 +51,16 @@ class TestConnectCatalog:
         result = await captured_tools["connect_catalog"](
             hostname=catalog_manager.hostname,
             catalog_id=str(catalog_manager.catalog_id),
-            domain_schema=catalog_manager.domain_schema,
+            default_schema=catalog_manager.default_schema,
         )
 
         data = parse_json_result(result)
         assert data["status"] == "connected"
         assert data["hostname"] == catalog_manager.hostname
         assert data["catalog_id"] == str(catalog_manager.catalog_id)
-        assert data["domain_schema"] == catalog_manager.domain_schema
+        assert "domain_schemas" in data
+        assert catalog_manager.default_schema in data["domain_schemas"]
+        assert data["default_schema"] == catalog_manager.default_schema
         assert "workflow_rid" in data
         assert "execution_rid" in data
 

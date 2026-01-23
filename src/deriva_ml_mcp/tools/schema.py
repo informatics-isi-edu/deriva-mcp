@@ -117,7 +117,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                     fkey_defs.append(
                         ForeignKeyDefinition(
                             colnames=[fk["column"]],
-                            pk_sname=ml.domain_schema,
+                            pk_sname=ml.default_schema,
                             pk_tname=fk["referenced_table"],
                             pk_colnames=[fk.get("referenced_column", "RID")],
                             on_delete=fk.get("on_delete", "NO ACTION"),
@@ -383,7 +383,8 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             - schemas: Dict of schema definitions, each containing:
               - tables: Dict of table definitions with columns, foreign_keys
             For DerivaML catalogs, also includes:
-            - domain_schema: Name of the domain schema
+            - domain_schemas: List of domain schema names
+            - default_schema: Default schema for table creation
             - ml_schema: Name of the ML schema (deriva-ml)
 
         Example:

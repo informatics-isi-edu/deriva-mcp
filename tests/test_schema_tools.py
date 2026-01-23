@@ -176,7 +176,7 @@ class TestGetSchemaDescription:
         result = await tools["get_schema_description"]()
 
         data = parse_json_result(result)
-        assert "domain_schema" in data
+        assert "domain_schemas" in data
         assert "ml_schema" in data
         assert "schemas" in data
 

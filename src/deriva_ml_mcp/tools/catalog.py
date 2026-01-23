@@ -23,7 +23,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     async def connect_catalog(
         hostname: str,
         catalog_id: str,
-        domain_schema: str | None = None,
+        default_schema: str | None = None,
     ) -> str:
         """Connect to an existing Deriva catalog (DerivaML or plain ERMrest).
 
@@ -42,12 +42,13 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         Args:
             hostname: Server hostname (e.g., "dev.eye-ai.org", "www.atlas-d2k.org").
             catalog_id: Catalog ID number (e.g., "1", "52").
-            domain_schema: Schema name for domain tables. Auto-detected for DerivaML.
+            default_schema: Default schema for table creation when multiple domain
+                schemas exist. Auto-detected if catalog has exactly one domain schema.
 
         Returns:
             JSON with status, hostname, catalog_id, catalog_type, and additional
             fields depending on catalog type:
-            - DerivaML: domain_schema, project_name, workflow_rid, execution_rid
+            - DerivaML: domain_schemas, default_schema, project_name, workflow_rid, execution_rid
             - ERMrest: available schemas list
 
         Example:
@@ -55,7 +56,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             connect_catalog("www.example.org", "1") -> connects to ERMrest catalog
         """
         try:
-            conn_info = conn_manager.connect(hostname, catalog_id, domain_schema)
+            conn_info = conn_manager.connect(hostname, catalog_id, default_schema)
 
             result = {
                 "status": "connected",
@@ -68,7 +69,8 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             if conn_info.is_derivaml:
                 # DerivaML catalog - include ML-specific info
                 ml = conn_info.ml_instance
-                result["domain_schema"] = ml.domain_schema
+                result["domain_schemas"] = list(ml.domain_schemas)
+                result["default_schema"] = ml.default_schema
                 result["project_name"] = ml.project_name
                 result["workflow_rid"] = conn_info.workflow_rid
                 result["execution_rid"] = conn_info.execution.execution_rid if conn_info.execution else None
@@ -76,7 +78,8 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 # Plain ERMrest catalog - include basic schema info
                 model = conn_info.get_model()
                 result["schemas"] = list(model.schemas.keys())
-                result["domain_schema"] = conn_info.domain_schema
+                result["domain_schemas"] = conn_info.domain_schemas
+                result["default_schema"] = conn_info.default_schema
                 result["note"] = (
                     "This is a plain ERMrest catalog. Dataset, feature, and execution "
                     "tools are not available. Use schema, data, and annotation tools."
@@ -158,14 +161,16 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             model = catalog.getCatalogModel()
             model.create_schema(Schema.define(project_name))
 
-            # Connect to the newly created catalog
-            ml = conn_manager.connect(hostname, str(catalog.catalog_id), project_name)
+            # Connect to the newly created catalog (project_name is used as default_schema)
+            conn_info = conn_manager.connect(hostname, str(catalog.catalog_id), project_name)
+            ml = conn_info.ml_instance
 
             result = {
                 "status": "created",
                 "hostname": hostname,
                 "catalog_id": str(catalog.catalog_id),
-                "domain_schema": ml.domain_schema,
+                "domain_schemas": list(ml.domain_schemas),
+                "default_schema": ml.default_schema,
                 "project_name": project_name,
             }
             if catalog_alias:
@@ -174,6 +179,121 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to create catalog: {e}")
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
+
+    @mcp.tool()
+    async def add_ml_schema(
+        hostname: str,
+        catalog_id: str,
+        project_name: str | None = None,
+        navbar_brand_text: str = "ML Data Browser",
+        head_title: str = "Catalog ML",
+    ) -> str:
+        """Add the DerivaML schema to an existing ERMrest catalog and initialize it.
+
+        Transforms a plain ERMrest catalog into a DerivaML-compliant catalog by
+        adding the 'deriva-ml' schema with all required ML tables (Dataset,
+        Execution, Workflow, etc.). The existing schemas and data are preserved.
+        Also applies catalog annotations to configure the Chaise web interface.
+
+        Use this when you have an existing catalog with domain data and want to
+        add ML workflow tracking capabilities.
+
+        **What gets created:**
+        - 'deriva-ml' schema with core ML tables
+        - Dataset and Dataset_Version tables for data management
+        - Execution and Workflow tables for provenance tracking
+        - Execution_Asset and Execution_Metadata for artifact storage
+        - Required vocabulary tables (Feature_Name, Asset_Type, Asset_Role, etc.)
+
+        **What gets configured:**
+        - Navigation bar with organized menus for ML tables, domain tables, vocabularies, assets
+        - Display settings (underscores as spaces, system columns, faceted search)
+        - Bulk upload configuration for asset tables
+        - Default landing page set to Dataset table
+
+        **Prerequisites:**
+        - The catalog must not already have a 'deriva-ml' schema
+        - You must have schema creation permissions on the catalog
+
+        Args:
+            hostname: Server hostname (e.g., "www.example.org").
+            catalog_id: Catalog ID number to add the ML schema to.
+            project_name: Optional project name for CURIE prefixes in vocabularies.
+                Defaults to "deriva-ml" if not provided.
+            navbar_brand_text: Text shown in the navigation bar (default: "ML Data Browser").
+            head_title: Browser tab title (default: "Catalog ML").
+
+        Returns:
+            JSON with:
+            - status: "success" or "error"
+            - hostname: Server hostname
+            - catalog_id: Catalog ID
+            - ml_schema: Name of the created ML schema
+            - tables_created: List of tables created
+            - annotations_applied: Whether catalog annotations were applied
+
+        Example:
+            add_ml_schema("www.example.org", "42", "my_project")
+            -> Adds deriva-ml schema to catalog 42 and initializes it
+        """
+        try:
+            from deriva.core import DerivaServer, get_credential
+            from deriva_ml import DerivaML
+            from deriva_ml.schema import create_ml_schema
+
+            # Connect to the catalog
+            server = DerivaServer("https", hostname, credentials=get_credential(hostname))
+            catalog = server.connect_ermrest(catalog_id)
+            model = catalog.getCatalogModel()
+
+            # Check if ML schema already exists
+            if "deriva-ml" in model.schemas:
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "Catalog already has a 'deriva-ml' schema. "
+                        "Use is_derivaml_catalog to check catalog type.",
+                    }
+                )
+
+            # Create the ML schema
+            create_ml_schema(catalog, schema_name="deriva-ml", project_name=project_name)
+
+            # Get list of created tables
+            model = catalog.getCatalogModel()
+            ml_schema_obj = model.schemas.get("deriva-ml")
+            tables_created = list(ml_schema_obj.tables.keys()) if ml_schema_obj else []
+
+            # Initialize the catalog by applying annotations
+            # Create a DerivaML instance to apply annotations
+            ml = DerivaML(hostname=hostname, catalog_id=catalog_id)
+            ml.apply_catalog_annotations(
+                navbar_brand_text=navbar_brand_text,
+                head_title=head_title,
+            )
+
+            return json.dumps(
+                {
+                    "status": "success",
+                    "hostname": hostname,
+                    "catalog_id": catalog_id,
+                    "ml_schema": "deriva-ml",
+                    "tables_created": tables_created,
+                    "annotations_applied": True,
+                    "navbar_brand_text": navbar_brand_text,
+                    "head_title": head_title,
+                    "message": "DerivaML schema added and initialized successfully. "
+                    "Use connect_catalog to connect with full ML capabilities.",
+                }
+            )
+        except Exception as e:
+            logger.error(f"Failed to add ML schema: {e}")
             return json.dumps(
                 {
                     "status": "error",
@@ -674,14 +794,14 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             JSON with:
             - is_derivaml: True if catalog has the DerivaML schema
             - ml_schema: Name of the ML schema if found
-            - domain_schema: Auto-detected domain schema name (if DerivaML)
+            - domain_schemas: List of auto-detected domain schema names (if DerivaML)
             - reason: Explanation if not DerivaML
             - missing_tables: List of missing required tables (if partial)
             - available_tools: Summary of available functionality
 
         Examples:
             is_derivaml_catalog("dev.eye-ai.org", "52")
-            -> {"is_derivaml": true, "ml_schema": "deriva-ml", "domain_schema": "eye-ai"}
+            -> {"is_derivaml": true, "ml_schema": "deriva-ml", "domain_schemas": ["eye-ai"]}
 
             is_derivaml_catalog("www.example.org", "1")
             -> {"is_derivaml": false, "reason": "Schema 'deriva-ml' not found"}

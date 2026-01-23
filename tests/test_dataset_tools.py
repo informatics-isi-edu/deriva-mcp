@@ -185,7 +185,7 @@ class TestAddDatasetMembers:
 
         # Get a subject RID to add
         pb = ml.pathBuilder()
-        subjects = list(pb.schemas[ml.domain_schema].Subject.path.entities())
+        subjects = list(pb.schemas[ml.default_schema].Subject.path.entities())
         if subjects:
             subject_rid = subjects[0]["RID"]
 
@@ -231,7 +231,7 @@ class TestDeleteDatasetMembers:
 
         # Get a subject RID
         pb = ml.pathBuilder()
-        subjects = list(pb.schemas[ml.domain_schema].Subject.path.entities())
+        subjects = list(pb.schemas[ml.default_schema].Subject.path.entities())
         if subjects:
             subject_rid = subjects[0]["RID"]
 

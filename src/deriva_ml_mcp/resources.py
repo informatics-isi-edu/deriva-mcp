@@ -468,23 +468,26 @@ multirun_config(
                     "hostname": ml.host_name,
                     "catalog_id": str(ml.catalog_id),
                     "catalog_type": "derivaml",
-                    "domain_schema": ml.domain_schema,
+                    "domain_schemas": list(ml.domain_schemas),
+                    "default_schema": ml.default_schema,
                     "ml_schema": ml.ml_schema,
                     "tables": [],
                 }
-                # Get domain schema tables
-                domain = model.schemas.get(ml.domain_schema)
-                if domain:
-                    for table in domain.tables.values():
-                        table_info = {
-                            "name": table.name,
-                            "columns": [
-                                {"name": col.name, "type": _get_column_type_name(col)}
-                                for col in table.columns
-                            ],
-                            "is_vocabulary": ml.model.is_vocabulary(table),
-                        }
-                        schema_info["tables"].append(table_info)
+                # Get tables from all domain schemas
+                for domain_schema in ml.domain_schemas:
+                    domain = model.schemas.get(domain_schema)
+                    if domain:
+                        for table in domain.tables.values():
+                            table_info = {
+                                "name": table.name,
+                                "schema": domain_schema,
+                                "columns": [
+                                    {"name": col.name, "type": _get_column_type_name(col)}
+                                    for col in table.columns
+                                ],
+                                "is_vocabulary": ml.model.is_vocabulary(table),
+                            }
+                            schema_info["tables"].append(table_info)
             else:
                 # Plain ERMrest catalog
                 schema_info = {
@@ -642,8 +645,9 @@ multirun_config(
         try:
             ml = conn_info.ml_instance
             vocabularies = {}
-            # Iterate through schemas to find vocabulary tables
-            for schema_name in [ml.ml_schema, ml.domain_schema]:
+            # Iterate through ML schema and all domain schemas to find vocabulary tables
+            schemas_to_check = [ml.ml_schema] + list(ml.domain_schemas)
+            for schema_name in schemas_to_check:
                 schema = ml.model.schemas.get(schema_name)
                 if schema:
                     for table in schema.tables.values():
@@ -793,17 +797,20 @@ multirun_config(
             if conn_info.is_derivaml:
                 ml = conn_info.ml_instance
                 tables = []
-                for table in model.schemas[ml.domain_schema].tables.values():
-                    tables.append(
-                        {
-                            "name": table.name,
-                            "schema": table.schema.name,
-                            "comment": table.comment or "",
-                            "is_vocabulary": ml.model.is_vocabulary(table),
-                            "is_asset": ml.model.is_asset(table),
-                            "column_count": len(list(table.columns)),
-                        }
-                    )
+                # Get tables from all domain schemas
+                for domain_schema in ml.domain_schemas:
+                    if domain_schema in model.schemas:
+                        for table in model.schemas[domain_schema].tables.values():
+                            tables.append(
+                                {
+                                    "name": table.name,
+                                    "schema": table.schema.name,
+                                    "comment": table.comment or "",
+                                    "is_vocabulary": ml.model.is_vocabulary(table),
+                                    "is_asset": ml.model.is_asset(table),
+                                    "column_count": len(list(table.columns)),
+                                }
+                            )
             else:
                 # Plain ERMrest - list tables from all non-system schemas
                 system_schemas = {"public", "ERMrest", "ERMrest_Client", "_acl_admin"}
@@ -1903,7 +1910,8 @@ multirun_config(
 
             if conn_info.is_derivaml:
                 ml = conn_info.ml_instance
-                result["domain_schema"] = ml.domain_schema
+                result["domain_schemas"] = list(ml.domain_schemas)
+                result["default_schema"] = ml.default_schema
                 result["ml_schema"] = ml.ml_schema
                 result["project_name"] = ml.project_name
                 result["workflow_rid"] = conn_info.workflow_rid
@@ -1912,7 +1920,8 @@ multirun_config(
                 # Plain ERMrest - list schemas
                 model = conn_info.get_model()
                 result["schemas"] = list(model.schemas.keys())
-                result["domain_schema"] = conn_info.domain_schema
+                result["domain_schemas"] = conn_info.domain_schemas
+                result["default_schema"] = conn_info.default_schema
 
             return json.dumps(result, indent=2)
         except Exception as e:

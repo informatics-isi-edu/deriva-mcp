@@ -65,7 +65,8 @@ def check_is_derivaml_catalog(catalog: ErmrestCatalog) -> dict[str, Any]:
         Dictionary with:
         - is_derivaml: True if catalog has the deriva-ml schema
         - ml_schema: Name of the ML schema if found
-        - domain_schema: Auto-detected domain schema name if DerivaML
+        - domain_schemas: List of auto-detected domain schema names if DerivaML
+        - default_schema: First domain schema (for backwards compatibility)
         - missing_tables: List of missing required tables (if partial)
         - validation_report: Detailed validation results (if DerivaML)
     """
@@ -76,7 +77,8 @@ def check_is_derivaml_catalog(catalog: ErmrestCatalog) -> dict[str, Any]:
         return {
             "is_derivaml": False,
             "ml_schema": None,
-            "domain_schema": None,
+            "domain_schemas": [],
+            "default_schema": None,
             "reason": f"Schema '{ML_SCHEMA_NAME}' not found",
         }
 
@@ -90,23 +92,24 @@ def check_is_derivaml_catalog(catalog: ErmrestCatalog) -> dict[str, Any]:
         return {
             "is_derivaml": False,
             "ml_schema": ML_SCHEMA_NAME,
-            "domain_schema": None,
+            "domain_schemas": [],
+            "default_schema": None,
             "missing_tables": missing_tables,
             "reason": f"Missing required tables: {missing_tables}",
         }
 
-    # Auto-detect domain schema (first non-system schema that isn't deriva-ml)
-    system_schemas = {"public", "deriva-ml", "WWW", "_acl_admin"}
-    domain_schema = None
-    for schema_name in model.schemas:
-        if schema_name not in system_schemas:
-            domain_schema = schema_name
-            break
+    # Auto-detect all domain schemas (non-system schemas)
+    system_schemas = {"public", "deriva-ml", "www", "WWW", "_acl_admin"}
+    domain_schemas = sorted([
+        schema_name for schema_name in model.schemas
+        if schema_name.lower() not in {s.lower() for s in system_schemas}
+    ])
 
     return {
         "is_derivaml": True,
         "ml_schema": ML_SCHEMA_NAME,
-        "domain_schema": domain_schema,
+        "domain_schemas": domain_schemas,
+        "default_schema": domain_schemas[0] if len(domain_schemas) == 1 else None,
     }
 
 
@@ -123,7 +126,8 @@ class ConnectionInfo:
     catalog_type: CatalogType
     catalog: ErmrestCatalog  # Always available
     ml_instance: "DerivaML | None" = None  # Only for DerivaML catalogs
-    domain_schema: str | None = None
+    domain_schemas: list[str] | None = None  # All domain schemas
+    default_schema: str | None = None  # Default schema for table creation
     workflow_rid: str | None = None
     execution: Any = None  # Execution object from deriva_ml
 
@@ -233,7 +237,7 @@ class ConnectionManager:
         self,
         hostname: str,
         catalog_id: str | int,
-        domain_schema: str | None = None,
+        default_schema: str | None = None,
         set_active: bool = True,
         require_derivaml: bool = False,
     ) -> ConnectionInfo:
@@ -246,7 +250,8 @@ class ConnectionManager:
         Args:
             hostname: Hostname of the Deriva server.
             catalog_id: Catalog identifier.
-            domain_schema: Optional domain schema name (auto-detected for DerivaML).
+            default_schema: Optional default schema for table creation. If not
+                provided, auto-detected if there is exactly one domain schema.
             set_active: If True, set this as the active connection.
             require_derivaml: If True, raise error if catalog is not DerivaML.
 
@@ -278,12 +283,11 @@ class ConnectionManager:
             check_result = check_is_derivaml_catalog(catalog)
 
             if check_result["is_derivaml"]:
-                # Full DerivaML connection
-                detected_domain = domain_schema or check_result.get("domain_schema")
+                # Full DerivaML connection - pass default_schema if provided
                 ml = DerivaML(
                     hostname=hostname,
                     catalog_id=catalog_id,
-                    domain_schema=detected_domain,
+                    default_schema=default_schema,  # Let DerivaML auto-detect if not provided
                     check_auth=True,
                 )
 
@@ -296,7 +300,8 @@ class ConnectionManager:
                     catalog_type=CatalogType.DERIVAML,
                     catalog=catalog,
                     ml_instance=ml,
-                    domain_schema=ml.domain_schema,
+                    domain_schemas=sorted(ml.domain_schemas),
+                    default_schema=ml.default_schema,
                     workflow_rid=workflow_rid,
                     execution=execution,
                 )
@@ -314,7 +319,8 @@ class ConnectionManager:
                     catalog_type=CatalogType.ERMREST,
                     catalog=catalog,
                     ml_instance=None,
-                    domain_schema=domain_schema,
+                    domain_schemas=check_result.get("domain_schemas", []),
+                    default_schema=default_schema,
                     workflow_rid=None,
                     execution=None,
                 )
@@ -520,7 +526,8 @@ class ConnectionManager:
                 "catalog_id": info.catalog_id,
                 "catalog_type": info.catalog_type.value,
                 "is_derivaml": info.is_derivaml,
-                "domain_schema": info.domain_schema,
+                "domain_schemas": info.domain_schemas,
+                "default_schema": info.default_schema,
                 "is_active": key == self._active_connection,
                 "workflow_rid": info.workflow_rid,
                 "execution_rid": info.execution.execution_rid if info.execution else None,

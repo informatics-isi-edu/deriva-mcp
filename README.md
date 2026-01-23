@@ -691,7 +691,7 @@ DerivaMLConf = builds(DerivaMLConfig, populate_full_signature=True)
 conf = DerivaMLConf(
     hostname='deriva.example.org',
     catalog_id='42',
-    domain_schema='my_domain',
+    default_schema='my_domain',  # Optional: only needed for multi-schema catalogs
 )
 
 # Instantiate to get a DerivaMLConfig object, then create DerivaML

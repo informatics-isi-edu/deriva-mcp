@@ -15,6 +15,7 @@ from deriva_ml_mcp.prompts import register_prompts
 from deriva_ml_mcp.resources import register_resources
 from deriva_ml_mcp.tools import (
     register_annotation_tools,
+    register_auth_tools,
     register_catalog_tools,
     register_data_tools,
     register_dataset_tools,
@@ -517,6 +518,7 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     """Register all DerivaML tools, resources, and prompts with the MCP server."""
     # Register tools
     register_annotation_tools(mcp_server, conn_manager)
+    register_auth_tools(mcp_server)  # Auth tools don't need conn_manager
     register_catalog_tools(mcp_server, conn_manager)
     register_dataset_tools(mcp_server, conn_manager)
     register_vocabulary_tools(mcp_server, conn_manager)

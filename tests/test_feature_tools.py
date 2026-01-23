@@ -211,7 +211,7 @@ class TestAddFeatureValue:
 
         # Get an image RID to annotate
         pb = ml.pathBuilder()
-        images = list(pb.schemas[ml.domain_schema].Image.path.entities())
+        images = list(pb.schemas[ml.default_schema].Image.path.entities())
 
         if images:
             image_rid = images[0]["RID"]
@@ -257,7 +257,7 @@ class TestAddFeatureValue:
 
         # Get an image RID
         pb = ml.pathBuilder()
-        images = list(pb.schemas[ml.domain_schema].Image.path.entities())
+        images = list(pb.schemas[ml.default_schema].Image.path.entities())
 
         if images:
             image_rid = images[0]["RID"]
@@ -300,7 +300,7 @@ class TestAddFeatureValueRecord:
 
         # Get an image RID
         pb = ml.pathBuilder()
-        images = list(pb.schemas[ml.domain_schema].Image.path.entities())
+        images = list(pb.schemas[ml.default_schema].Image.path.entities())
 
         if images:
             image_rid = images[0]["RID"]
