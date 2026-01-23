@@ -644,6 +644,199 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             )
 
     @mcp.tool()
+    async def migrate_catalog(
+        source_hostname: str,
+        source_catalog_id: str,
+        dest_hostname: str,
+        dest_catalog_id: str | None = None,
+        add_ml_schema: bool = False,
+        copy_data: bool = True,
+        copy_annotations: bool = True,
+        copy_policy: bool = True,
+        exclude_schemas: list[str] | None = None,
+    ) -> str:
+        """Migrate a catalog from one server to another, leaving assets in the source hatrac.
+
+        This tool performs a cross-server catalog migration by:
+        1. Creating a backup of the source catalog (schema + data, with asset references)
+        2. Restoring the backup to a new catalog on the destination server
+        3. Optionally adding the DerivaML schema to the migrated catalog
+
+        **Key Feature**: Asset files (images, model weights, etc.) remain stored in the
+        source server's hatrac storage. The migrated catalog contains references to those
+        assets via their original URLs. This allows migration without downloading/uploading
+        large asset files.
+
+        **Use Cases**:
+        - Move a catalog from a development server to production
+        - Create a catalog on a new server while keeping assets on the original
+        - Add DerivaML capabilities to an existing catalog during migration
+
+        **Prerequisites**:
+        - Valid credentials for both source and destination servers
+        - Write permissions on the destination server to create catalogs
+        - Read permissions on the source catalog
+
+        Args:
+            source_hostname: Source server hostname (e.g., "dev.example.org").
+            source_catalog_id: ID of the catalog to migrate.
+            dest_hostname: Destination server hostname (e.g., "prod.example.org").
+            dest_catalog_id: Optional destination catalog ID. If None, creates a new catalog.
+            add_ml_schema: If True, add the DerivaML schema after migration.
+                Use this when migrating a plain ERMrest catalog that you want to
+                convert to a DerivaML catalog.
+            copy_data: If True (default), copy all table data.
+            copy_annotations: If True (default), copy all annotations.
+            copy_policy: If True (default), copy ACL (access control) policies.
+            exclude_schemas: List of schema names to exclude from migration.
+
+        Returns:
+            JSON with:
+            - status: "success" or "error"
+            - source_hostname: Source server
+            - source_catalog_id: Source catalog ID
+            - dest_hostname: Destination server
+            - dest_catalog_id: New catalog ID on destination
+            - ml_schema_added: Whether DerivaML schema was added
+            - message: Summary of migration
+
+        Example:
+            migrate_catalog(
+                "dev.example.org", "21",
+                "prod.example.org",
+                add_ml_schema=True
+            )
+            -> Migrates catalog 21 to prod server and adds DerivaML schema
+
+        Note:
+            This operation may take several minutes for large catalogs.
+            The backup is created in a temporary directory and cleaned up after migration.
+        """
+        import tempfile
+        from pathlib import Path
+
+        from deriva.transfer.backup import DerivaBackup
+        from deriva.transfer.restore import DerivaRestore
+
+        try:
+            # Create a temporary directory for the backup
+            with tempfile.TemporaryDirectory() as tmpdir:
+                backup_dir = Path(tmpdir) / "backup"
+                backup_dir.mkdir()
+
+                logger.info(f"Backing up catalog {source_hostname}:{source_catalog_id}")
+
+                # Step 1: Backup the source catalog
+                # Use include_assets="references" to store asset URLs without downloading files
+                backup_args = {
+                    "host": source_hostname,
+                    "protocol": "https",
+                    "catalog_id": source_catalog_id,
+                }
+                backup = DerivaBackup(
+                    backup_args,
+                    output_dir=str(backup_dir),
+                    no_data=not copy_data,
+                    include_assets="references",  # Store asset URLs, don't download files
+                    exclude_data=exclude_schemas if exclude_schemas else [],
+                )
+                backup.transfer()
+
+                # Find the backup output (it creates a bag in the output dir)
+                bag_dirs = list(backup_dir.glob("*"))
+                if not bag_dirs:
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "message": "Backup failed: no output created",
+                        }
+                    )
+                bag_path = bag_dirs[0]
+
+                logger.info(f"Restoring to {dest_hostname}")
+
+                # Step 2: Restore to destination server
+                restore_args = {
+                    "host": dest_hostname,
+                    "protocol": "https",
+                    "catalog_id": dest_catalog_id,  # None creates new catalog
+                }
+                restore = DerivaRestore(
+                    restore_args,
+                    input_path=str(bag_path),
+                    no_data=not copy_data,
+                    no_annotations=not copy_annotations,
+                    no_policy=not copy_policy,
+                    no_assets=True,  # Don't try to restore assets (they're references)
+                    exclude_schemas=exclude_schemas if exclude_schemas else [],
+                )
+                restore.restore()
+
+                # Get the destination catalog ID
+                dest_id = str(restore.dst_catalog.catalog_id) if restore.dst_catalog else dest_catalog_id
+
+                result = {
+                    "status": "success",
+                    "source_hostname": source_hostname,
+                    "source_catalog_id": source_catalog_id,
+                    "dest_hostname": dest_hostname,
+                    "dest_catalog_id": dest_id,
+                    "copy_data": copy_data,
+                    "copy_annotations": copy_annotations,
+                    "copy_policy": copy_policy,
+                    "ml_schema_added": False,
+                }
+
+                # Step 3: Optionally add DerivaML schema
+                if add_ml_schema and dest_id:
+                    try:
+                        from deriva.core import DerivaServer
+                        from deriva_ml.schema import create_ml_schema
+
+                        server = DerivaServer(
+                            "https", dest_hostname, credentials=get_credential(dest_hostname)
+                        )
+                        dest_catalog = server.connect_ermrest(dest_id)
+                        model = dest_catalog.getCatalogModel()
+
+                        # Only add if not already present
+                        if "deriva-ml" not in model.schemas:
+                            create_ml_schema(dest_catalog, schema_name="deriva-ml")
+                            result["ml_schema_added"] = True
+                            result["message"] = (
+                                f"Successfully migrated catalog to {dest_hostname}:{dest_id} "
+                                "and added DerivaML schema. "
+                                "Use connect_catalog to connect with full ML capabilities."
+                            )
+                        else:
+                            result["message"] = (
+                                f"Successfully migrated catalog to {dest_hostname}:{dest_id}. "
+                                "DerivaML schema was already present."
+                            )
+                    except Exception as e:
+                        result["ml_schema_error"] = str(e)
+                        result["message"] = (
+                            f"Catalog migrated to {dest_hostname}:{dest_id}, "
+                            f"but failed to add ML schema: {e}"
+                        )
+                else:
+                    result["message"] = (
+                        f"Successfully migrated catalog to {dest_hostname}:{dest_id}. "
+                        "Asset files remain on the source server's hatrac storage."
+                    )
+
+                return json.dumps(result)
+
+        except Exception as e:
+            logger.error(f"Failed to migrate catalog: {e}")
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
+
+    @mcp.tool()
     async def validate_rids(
         dataset_rids: list[str] | None = None,
         asset_rids: list[str] | None = None,

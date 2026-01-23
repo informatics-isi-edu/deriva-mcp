@@ -507,7 +507,7 @@ wheels = [
 [[package]]
 name = "deriva"
 version = "1.7.12"
-source = { git = "https://github.com/informatics-isi-edu/deriva-py?branch=typed-interface#47188e88916b0b8c9e30159bee71429a844d8633" }
+source = { editable = "../deriva-py" }
 dependencies = [
     { name = "bdbag" },
     { name = "fair-identifiers-client" },
@@ -521,10 +521,23 @@ dependencies = [
     { name = "urllib3" },
 ]
 
+[package.metadata]
+requires-dist = [
+    { name = "bdbag", specifier = ">=1.8.0" },
+    { name = "fair-identifiers-client", specifier = ">=0.5.1" },
+    { name = "fair-research-login", specifier = ">=0.3.1" },
+    { name = "globus-sdk", specifier = ">=3,<4" },
+    { name = "jsonschema", specifier = ">=3.1" },
+    { name = "packaging" },
+    { name = "pika" },
+    { name = "portalocker", specifier = ">=1.2.1" },
+    { name = "requests" },
+    { name = "urllib3", specifier = ">=1.26.20,<3" },
+]
+
 [[package]]
 name = "deriva-ml"
-version = "1.17.10.post168+g3e15e0cd5"
-source = { git = "https://github.com/informatics-isi-edu/deriva-ml.git?rev=typed-interface#3e15e0cd5879c2c6495048ae5906d2205ea2ea18" }
+source = { editable = "../deriva-ml" }
 dependencies = [
     { name = "bdbag" },
     { name = "bump-my-version" },
@@ -544,6 +557,44 @@ dependencies = [
     { name = "setuptools-scm" },
     { name = "sqlalchemy" },
 ]
+
+[package.metadata]
+requires-dist = [
+    { name = "bdbag" },
+    { name = "bump-my-version" },
+    { name = "deepdiff" },
+    { name = "deriva", editable = "../deriva-py" },
+    { name = "hydra-zen" },
+    { name = "nbconvert" },
+    { name = "nbstripout" },
+    { name = "pandas" },
+    { name = "pandas-stubs" },
+    { name = "papermill" },
+    { name = "pydantic", specifier = ">=2.11" },
+    { name = "pyyaml" },
+    { name = "regex" },
+    { name = "semver", specifier = ">3.0.0" },
+    { name = "setuptools", specifier = ">=80" },
+    { name = "setuptools-scm", specifier = ">=8.0" },
+    { name = "sqlalchemy" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "icecream", specifier = ">=2.1.4" },
+    { name = "ipykernel" },
+    { name = "jupyter", specifier = ">=1.1.1" },
+    { name = "mkdocs-jupyter" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extras = ["python"] },
+    { name = "pip-system-certs" },
+    { name = "pyright", specifier = ">=1.1.408" },
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-coverage", specifier = ">=0.0" },
+    { name = "pytest-mock" },
+    { name = "ruff" },
+]
+lint = [{ name = "ruff", specifier = ">=0.12.0" }]
 
 [[package]]
 name = "deriva-ml-mcp"
@@ -578,7 +629,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "bump-my-version" },
-    { name = "deriva-ml", git = "https://github.com/informatics-isi-edu/deriva-ml.git?rev=typed-interface" },
+    { name = "deriva-ml", editable = "../deriva-ml" },
     { name = "kaggle", specifier = ">=1.8.3" },
     { name = "kaggle", marker = "extra == 'scripts'", specifier = ">=1.5.0" },
     { name = "mcp", specifier = ">=1.2.0" },
