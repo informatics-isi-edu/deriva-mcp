@@ -10,6 +10,12 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual rebuild'
+        required: false
+        default: 'Manual rebuild triggered'
 
 env:
   REGISTRY: ghcr.io
