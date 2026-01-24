@@ -36,6 +36,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # The env var name uses normalized package name (deriva_mcp)
 ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DERIVA_MCP=${VERSION}
 # Install using [tool.uv.sources] which specifies git branches for deriva-ml and deriva-py
+# Note: deriva-ml's pyproject.toml also uses git URL for deriva-py (not local path)
 RUN uv pip install --no-cache .
 
 # Runtime stage
