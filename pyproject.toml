@@ -51,7 +51,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.uv.sources]
 deriva = {git = "https://github.com/informatics-isi-edu/deriva-py", branch = "typed-interface" }
-deriva-ml = { path = "../deriva-ml", editable = true }
+deriva-ml = { git = "https://github.com/informatics-isi-edu/deriva-ml", branch = "typed-interface" }
 
 [tool.setuptools.packages.find]
 where = ["src"]

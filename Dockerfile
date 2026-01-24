@@ -35,9 +35,8 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Use package-specific SETUPTOOLS_SCM_PRETEND_VERSION since .git is not available in Docker build
 # The env var name uses normalized package name (deriva_mcp)
 ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DERIVA_MCP=${VERSION}
-# Use --no-sources to ignore [tool.uv.sources] local path overrides (e.g., deriva-ml = { path = "../deriva-ml" })
-# This ensures Docker builds use PyPI versions instead of non-existent local paths
-RUN uv pip install --no-cache --no-sources .
+# Install using [tool.uv.sources] which specifies git branches for deriva-ml and deriva-py
+RUN uv pip install --no-cache .
 
 # Runtime stage
 FROM python:3.12-slim
