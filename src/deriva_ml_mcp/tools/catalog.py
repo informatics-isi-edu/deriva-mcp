@@ -583,11 +583,16 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         exclude_objects: list[str] | None = None,
         reinitialize_dataset_versions: bool = True,
         ignore_acl: bool = True,
+        skip_orphan_rows: bool = False,
     ) -> str:
         """Clone a catalog with optional cross-server support and selective asset copying.
 
-        Creates a new catalog as a clone of the source. Supports both same-server
-        (fast) and cross-server (via backup/restore) cloning.
+        Creates a new catalog as a clone of the source, containing only the data
+        you have access to. Due to row-level access controls, some records may not
+        be visible to you and won't be included in the clone. The clone represents
+        a consistent snapshot of your accessible view of the catalog.
+
+        Supports both same-server (fast) and cross-server (via backup/restore) cloning.
 
         **Same-server clone** (fast):
         When dest_hostname is None or matches source_hostname, uses ERMrest's native
@@ -636,6 +641,12 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 versions so bag downloads work. Set to False to skip this step.
             ignore_acl: If True (default), allow backup without catalog owner
                 permissions. Set to False to require owner permissions.
+            skip_orphan_rows: If True, skip rows that reference non-existent parent
+                rows via foreign keys. This commonly occurs when cloning catalogs
+                with row-level access controls where child records are visible but
+                their parent records are access-restricted. When enabled, orphan
+                rows are removed, ensuring referential integrity in your accessible
+                subset of the catalog. Default: False.
 
         Returns:
             JSON with status, source info, destination info, and operation details.
@@ -693,10 +704,12 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 exclude_objects=exclude_objects,
                 reinitialize_dataset_versions=reinitialize_dataset_versions,
                 ignore_acl=ignore_acl,
+                skip_orphan_rows=skip_orphan_rows,
             )
 
             response = {
-                "status": "cloned",
+                "status": "cloned" if result.success else "completed_with_errors",
+                "success": result.success,
                 "source_hostname": result.source_hostname,
                 "source_catalog_id": result.source_catalog_id,
                 "source_snapshot": result.source_snapshot,
@@ -705,14 +718,16 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "schema_only": result.schema_only,
                 "asset_mode": result.asset_mode.value,
                 "datasets_reinitialized": result.datasets_reinitialized,
+                "orphan_rows_skipped": result.orphan_rows_skipped,
             }
 
             if result.alias:
                 response["alias"] = result.alias
             if result.ml_schema_added:
                 response["ml_schema_added"] = True
-            if result.errors:
-                response["warnings"] = result.errors
+
+            # Include the detailed report
+            response["report"] = result.report.to_dict()
 
             # Determine clone type for message
             is_same_server = dest_hostname is None or dest_hostname == source_hostname
@@ -725,6 +740,10 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     f"Catalog migrated from {source_hostname}:{source_catalog_id} "
                     f"to {result.hostname}:{result.catalog_id}"
                 )
+
+            # Add human-readable report summary
+            if result.report.has_errors or result.report.has_warnings:
+                response["report_summary"] = str(result.report)
 
             return json.dumps(response)
         except Exception as e:
