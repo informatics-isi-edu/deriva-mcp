@@ -581,6 +581,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         copy_policy: bool = True,
         exclude_schemas: list[str] | None = None,
         reinitialize_dataset_versions: bool = True,
+        ignore_acl: bool = True,
     ) -> str:
         """Clone a catalog with optional cross-server support and selective asset copying.
 
@@ -628,6 +629,8 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             exclude_schemas: List of schema names to exclude from cloning.
             reinitialize_dataset_versions: If True (default), increment dataset
                 versions so bag downloads work. Set to False to skip this step.
+            ignore_acl: If True (default), allow backup without catalog owner
+                permissions. Set to False to require owner permissions.
 
         Returns:
             JSON with status, source info, destination info, and operation details.
@@ -683,6 +686,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 copy_policy=copy_policy,
                 exclude_schemas=exclude_schemas,
                 reinitialize_dataset_versions=reinitialize_dataset_versions,
+                ignore_acl=ignore_acl,
             )
 
             response = {
