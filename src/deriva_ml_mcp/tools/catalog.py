@@ -580,6 +580,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         copy_annotations: bool = True,
         copy_policy: bool = True,
         exclude_schemas: list[str] | None = None,
+        exclude_objects: list[str] | None = None,
         reinitialize_dataset_versions: bool = True,
         ignore_acl: bool = True,
     ) -> str:
@@ -627,6 +628,10 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             copy_annotations: If True (default), copy all annotations.
             copy_policy: If True (default), copy ACL (access control) policies.
             exclude_schemas: List of schema names to exclude from cloning.
+            exclude_objects: List of specific tables to exclude from cloning, in
+                "schema:table" format (e.g., ["isa:dataset_qc_issue"]). Use this
+                to skip problematic tables that may have schema issues like missing
+                key constraints.
             reinitialize_dataset_versions: If True (default), increment dataset
                 versions so bag downloads work. Set to False to skip this step.
             ignore_acl: If True (default), allow backup without catalog owner
@@ -685,6 +690,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 copy_annotations=copy_annotations,
                 copy_policy=copy_policy,
                 exclude_schemas=exclude_schemas,
+                exclude_objects=exclude_objects,
                 reinitialize_dataset_versions=reinitialize_dataset_versions,
                 ignore_acl=ignore_acl,
             )
@@ -924,6 +930,157 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to check catalog type: {e}")
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
+
+    @mcp.tool()
+    async def localize_assets(
+        hostname: str,
+        catalog_id: str,
+        asset_table: str,
+        asset_rids: list[str],
+        schema_name: str | None = None,
+        hatrac_namespace: str | None = None,
+        chunk_size: int | None = None,
+        dry_run: bool = False,
+    ) -> str:
+        """Localize remote hatrac assets to the local catalog server.
+
+        Downloads assets from remote hatrac servers and uploads them to the local
+        hatrac server, updating the asset table URLs to point to the local copies.
+
+        The source hatrac server for each asset is determined automatically from
+        the URL stored in the asset record - no need to specify it separately.
+
+        This is useful after cloning a catalog with asset_mode="refs" where the
+        asset URLs still point to the source server. Use this function to make
+        the assets fully local and independent of the source server.
+
+        **Workflow:**
+        1. Fetches all asset records in a single bulk query
+        2. For each asset, extracts the source server from the URL
+        3. Downloads the file from the source hatrac server
+        4. Uploads to the local hatrac server
+        5. Batch updates all asset table URLs at the end
+
+        **Performance optimizations:**
+        - Single bulk query for all asset records
+        - Cached connections to remote hatrac servers
+        - Batched catalog updates for efficiency
+        - Optional chunked uploads for large files
+
+        **When to use:**
+        - After `clone_catalog` with `asset_mode="refs"` to make assets local
+        - To migrate specific assets to the local server
+        - To create fully independent catalog copies
+
+        Args:
+            hostname: Hostname of the catalog server (e.g., "localhost").
+            catalog_id: Catalog ID containing the asset table.
+            asset_table: Name of the asset table containing the assets to localize
+                (e.g., "Image", "Model_Weights").
+            asset_rids: List of asset RIDs to localize. Each RID should be a
+                record in the asset table.
+            schema_name: Schema containing the asset table. If None, searches
+                all schemas to find the table.
+            hatrac_namespace: Optional hatrac namespace for uploaded files. If None,
+                uses "/hatrac/{asset_table}/{md5}.{filename}" pattern.
+            chunk_size: Optional chunk size in bytes for large file uploads. If None,
+                uses default upload behavior. Useful for very large files.
+            dry_run: If True, only report what would be done without making changes.
+                Useful for previewing the operation.
+
+        Returns:
+            JSON with:
+            - status: "success" or "error"
+            - assets_processed: Number of assets successfully localized
+            - assets_skipped: Number of assets skipped (already local)
+            - assets_failed: Number of assets that failed
+            - errors: List of error messages for failures
+            - localized_assets: List of [RID, old_url, new_url] for each localized asset
+
+        Examples:
+            Localize specific images after cloning:
+                localize_assets(
+                    hostname="localhost",
+                    catalog_id="42",
+                    asset_table="Image",
+                    asset_rids=["1-ABC", "2-DEF"]
+                )
+                -> {"status": "success", "assets_processed": 2, ...}
+
+            Dry run to preview:
+                localize_assets(
+                    hostname="localhost",
+                    catalog_id="42",
+                    asset_table="Model_Weights",
+                    asset_rids=["3-GHI"],
+                    dry_run=True
+                )
+                -> Shows what would be localized without making changes
+
+            Upload large files with chunking:
+                localize_assets(
+                    hostname="localhost",
+                    catalog_id="42",
+                    asset_table="Model_Weights",
+                    asset_rids=["4-JKL"],
+                    chunk_size=10485760  # 10MB chunks
+                )
+        """
+        try:
+            from deriva_ml.catalog import localize_assets as do_localize
+
+            # Get catalog connection - use active connection if available,
+            # otherwise create a new one
+            active = conn_manager.get_active()
+            if active and active.hostname == hostname and str(active.catalog_id) == str(catalog_id):
+                # Use the active connection's catalog
+                if active.is_derivaml and active.ml_instance:
+                    catalog = active.ml_instance
+                else:
+                    catalog = active.get_catalog()
+            else:
+                # Create a new connection
+                server = DerivaServer("https", hostname, credentials=get_credential(hostname))
+                catalog = server.connect_ermrest(catalog_id)
+
+            result = do_localize(
+                catalog=catalog,
+                asset_table=asset_table,
+                asset_rids=asset_rids,
+                schema_name=schema_name,
+                hatrac_namespace=hatrac_namespace,
+                chunk_size=chunk_size,
+                dry_run=dry_run,
+            )
+
+            response = {
+                "status": "success",
+                "assets_processed": result.assets_processed,
+                "assets_skipped": result.assets_skipped,
+                "assets_failed": result.assets_failed,
+            }
+
+            if result.errors:
+                response["errors"] = result.errors
+
+            if result.localized_assets:
+                response["localized_assets"] = [
+                    {"rid": rid, "old_url": old_url, "new_url": new_url}
+                    for rid, old_url, new_url in result.localized_assets
+                ]
+
+            if dry_run:
+                response["note"] = "Dry run - no changes were made"
+
+            return json.dumps(response)
+        except Exception as e:
+            logger.error(f"Failed to localize assets: {e}")
             return json.dumps(
                 {
                     "status": "error",
