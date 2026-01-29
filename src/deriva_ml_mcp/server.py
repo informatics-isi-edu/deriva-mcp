@@ -82,6 +82,11 @@ Always call `connect_catalog` before using other tools. This establishes the con
 - `update_catalog_alias` - Change alias target or owner
 - `delete_catalog_alias` - Remove an alias (catalog is not deleted)
 
+**Catalog provenance:**
+- `get_catalog_provenance` - Get information about how a catalog was created
+- `set_catalog_provenance` - Set provenance for programmatically created catalogs
+- Cloned catalogs automatically have provenance set including source schema URL
+
 **Working with datasets:**
 1. `create_dataset` - Create a new dataset with types
 2. `add_dataset_members` - Add assets or nested datasets as members
@@ -503,6 +508,60 @@ The `cite()` method:
 - By default returns a permanent URL with snapshot timestamp for reproducibility
 - With `current=True`, returns a URL to the current catalog state (useful for linking to live data)
 - Validates that the RID exists in the catalog
+
+## Catalog Provenance
+
+**Track how catalogs are created and where they came from.**
+
+Catalog provenance records metadata about a catalog's origin:
+- **creation_method**: How the catalog was created (`clone`, `create`, `schema`, `unknown`)
+- **created_at**: ISO timestamp when the catalog was created
+- **created_by**: User or system that created it (Globus identity)
+- **name** and **description**: Human-readable identification
+- **workflow_url** and **workflow_version**: Optional links to creating code
+
+**For cloned catalogs**, additional `clone_details` include:
+- Source catalog hostname and ID
+- Source catalog snapshot timestamp
+- Hatrac URL to the original source schema (`source-schema.json`)
+- Clone parameters (orphan_strategy, asset_mode, truncate_oversized, etc.)
+- Statistics (rows_copied, rows_skipped, truncated_count, etc.)
+
+**Setting provenance for new catalogs:**
+
+```python
+from deriva_ml.catalog import set_catalog_provenance
+
+set_catalog_provenance(
+    catalog,
+    name="CIFAR-10 Training Catalog",
+    description="Catalog for CIFAR-10 experiments",
+    workflow_url="https://github.com/org/repo/setup_catalog.py",
+    workflow_version="v1.2.0",
+)
+```
+
+**Accessing provenance:**
+
+```python
+# Via DerivaML property
+ml = DerivaML('localhost', '45')
+prov = ml.catalog_provenance
+
+if prov:
+    print(f"Created: {prov.created_at} by {prov.created_by}")
+    print(f"Method: {prov.creation_method.value}")
+    if prov.is_clone:
+        print(f"Cloned from: {prov.clone_details.source_hostname}")
+        print(f"Source schema: {prov.clone_details.source_schema_url}")
+```
+
+**MCP tools:**
+- `get_catalog_provenance()` - Get provenance for connected catalog
+- `set_catalog_provenance()` - Set provenance for programmatically created catalogs
+
+**MCP resource:**
+- `deriva-ml://catalog/provenance` - Read-only access to provenance info
 
 ## Before Calling Tools
 

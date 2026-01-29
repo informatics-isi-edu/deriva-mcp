@@ -582,8 +582,9 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         exclude_schemas: list[str] | None = None,
         exclude_objects: list[str] | None = None,
         reinitialize_dataset_versions: bool = True,
-        ignore_acl: bool = True,
-        skip_orphan_rows: bool = False,
+        orphan_strategy: str = "fail",
+        prune_hidden_fkeys: bool = False,
+        truncate_oversized: bool = False,
     ) -> str:
         """Clone a catalog with optional cross-server support and selective asset copying.
 
@@ -599,8 +600,10 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         clone_catalog() for efficient same-server cloning.
 
         **Cross-server clone**:
-        When dest_hostname differs from source_hostname, uses DerivaBackup/DerivaRestore
-        to migrate the catalog to the new server.
+        When dest_hostname differs from source_hostname, uses a three-stage approach:
+        1. Create schema WITHOUT foreign keys
+        2. Copy all accessible data
+        3. Apply foreign keys, handling violations based on orphan_strategy
 
         **Asset handling modes**:
         - "none": Don't copy assets (asset columns will be empty)
@@ -616,11 +619,17 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         - Version descriptions include a URL to the source catalog snapshot for
           provenance (e.g., "Cloned from https://source.org/chaise/recordset/#21@...")
 
+        **Orphan handling**:
+        When source catalog policies are incoherent (some domain tables have row-level
+        policies hiding data, but referring tables don't), cloning can result in
+        visible references to invisible rows. The orphan_strategy parameter controls
+        how these are handled.
+
         Args:
             source_hostname: Source server hostname (e.g., "www.eye-ai.org").
             source_catalog_id: ID of the catalog to clone.
             dest_hostname: Destination hostname. If None or same as source, uses
-                fast same-server cloning. Otherwise uses backup/restore.
+                fast same-server cloning. Otherwise uses three-stage clone.
             alias: Optional alias name for the new catalog (e.g., "my-project"
                 instead of numeric ID).
             add_ml_schema: If True, add the DerivaML schema to the clone if not
@@ -639,28 +648,39 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 key constraints.
             reinitialize_dataset_versions: If True (default), increment dataset
                 versions so bag downloads work. Set to False to skip this step.
-            ignore_acl: If True (default), allow backup without catalog owner
-                permissions. Set to False to require owner permissions.
-            skip_orphan_rows: If True, skip rows that reference non-existent parent
-                rows via foreign keys. This commonly occurs when cloning catalogs
-                with row-level access controls where child records are visible but
-                their parent records are access-restricted. When enabled, orphan
-                rows are removed, ensuring referential integrity in your accessible
-                subset of the catalog. Default: False.
+            orphan_strategy: How to handle rows with dangling FK references:
+                - "fail": Abort if FK violations occur (default)
+                - "delete": Delete orphan rows
+                - "nullify": Set dangling FK values to NULL (requires nullok columns)
+            prune_hidden_fkeys: If True, skip FKs where referenced columns have
+                "select": null rights (indicating potentially hidden data). This
+                prevents FK violations but degrades schema structure. Default: False.
+            truncate_oversized: If True, automatically truncate text values that
+                exceed PostgreSQL's btree index size limit (2704 bytes) instead of
+                skipping rows. Truncated values have "...[TRUNCATED]" appended.
+                If False (default), rows with oversized values are skipped.
+
+        **Provenance Tracking**:
+        The clone operation stores comprehensive provenance information:
+        - Source schema is uploaded to Hatrac at /hatrac/catalog/{id}/provenance/source-schema.json
+        - Catalog provenance annotation tracks creation method, creator, timestamp
+        - Clone-specific details (source, parameters, statistics) in clone_details
+        - Use get_catalog_provenance() to retrieve this information
 
         Returns:
             JSON with status, source info, destination info, and operation details.
-            Includes datasets_reinitialized count and source_snapshot ID.
+            Includes datasets_reinitialized count, orphan handling stats, and source_snapshot ID.
 
         Examples:
             Same-server clone:
                 clone_catalog("localhost", "21")
                 -> {"status": "cloned", "dest_catalog_id": "45", "datasets_reinitialized": 3}
 
-            Cross-server clone with alias:
-                clone_catalog("dev.example.org", "21",
-                              dest_hostname="prod.example.org",
-                              alias="my-project")
+            Cross-server clone with orphan deletion:
+                clone_catalog("www.facebase.org", "1",
+                              dest_hostname="localhost",
+                              alias="facebase-clone",
+                              orphan_strategy="delete")
 
             Schema-only clone for development:
                 clone_catalog("prod.example.org", "21",
@@ -673,7 +693,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                               add_ml_schema=True)
         """
         try:
-            from deriva_ml.catalog import AssetCopyMode, AssetFilter, clone_catalog as do_clone
+            from deriva_ml.catalog import AssetCopyMode, AssetFilter, OrphanStrategy, clone_catalog as do_clone
 
             # Convert asset_mode string to enum
             mode_map = {
@@ -682,6 +702,14 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "full": AssetCopyMode.FULL,
             }
             asset_mode_enum = mode_map.get(asset_mode.lower(), AssetCopyMode.REFERENCES)
+
+            # Convert orphan_strategy string to enum
+            strategy_map = {
+                "fail": OrphanStrategy.FAIL,
+                "delete": OrphanStrategy.DELETE,
+                "nullify": OrphanStrategy.NULLIFY,
+            }
+            orphan_strategy_enum = strategy_map.get(orphan_strategy.lower(), OrphanStrategy.FAIL)
 
             # Build asset filter if tables or rids specified
             asset_filter = None
@@ -703,13 +731,16 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 exclude_schemas=exclude_schemas,
                 exclude_objects=exclude_objects,
                 reinitialize_dataset_versions=reinitialize_dataset_versions,
-                ignore_acl=ignore_acl,
-                skip_orphan_rows=skip_orphan_rows,
+                orphan_strategy=orphan_strategy_enum,
+                prune_hidden_fkeys=prune_hidden_fkeys,
+                truncate_oversized=truncate_oversized,
             )
 
+            # Check if there were errors in the report
+            has_errors = result.report and result.report.fkeys_failed > 0
+
             response = {
-                "status": "cloned" if result.success else "completed_with_errors",
-                "success": result.success,
+                "status": "cloned" if not has_errors else "completed_with_errors",
                 "source_hostname": result.source_hostname,
                 "source_catalog_id": result.source_catalog_id,
                 "source_snapshot": result.source_snapshot,
@@ -718,16 +749,25 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "schema_only": result.schema_only,
                 "asset_mode": result.asset_mode.value,
                 "datasets_reinitialized": result.datasets_reinitialized,
-                "orphan_rows_skipped": result.orphan_rows_skipped,
+                "orphan_rows_removed": result.orphan_rows_removed,
+                "orphan_rows_nullified": result.orphan_rows_nullified,
+                "fkeys_pruned": result.fkeys_pruned,
+                "rows_skipped": result.rows_skipped,
+                "truncated_values_count": len(result.truncated_values),
             }
+
+            # Include truncated values details if any
+            if result.truncated_values:
+                response["truncated_values"] = [tv.to_dict() for tv in result.truncated_values]
 
             if result.alias:
                 response["alias"] = result.alias
             if result.ml_schema_added:
                 response["ml_schema_added"] = True
 
-            # Include the detailed report
-            response["report"] = result.report.to_dict()
+            # Include the detailed report if available
+            if result.report:
+                response["report"] = result.report.to_dict()
 
             # Determine clone type for message
             is_same_server = dest_hostname is None or dest_hostname == source_hostname
@@ -741,9 +781,9 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     f"to {result.hostname}:{result.catalog_id}"
                 )
 
-            # Add human-readable report summary
-            if result.report.has_errors or result.report.has_warnings:
-                response["report_summary"] = str(result.report)
+            # Add human-readable report summary if there were issues
+            if result.report and (len(result.report.issues) > 0):
+                response["report_summary"] = result.report.to_text()
 
             return json.dumps(response)
         except Exception as e:
@@ -754,6 +794,189 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     "message": str(e),
                 }
             )
+
+    @mcp.tool()
+    async def get_catalog_provenance() -> str:
+        """Get provenance information for the currently connected catalog.
+
+        Returns provenance information about how the catalog was created, by whom,
+        and with what parameters. Supports catalogs created by cloning, programmatic
+        creation, or schema definition.
+
+        **Provenance Information Includes**:
+        - Creation method: "clone", "create", "schema", or "unknown"
+        - Created at: ISO timestamp when the catalog was created
+        - Created by: User who created the catalog (Globus identity or name)
+        - Hostname and catalog ID
+        - Name and description
+        - Workflow URL and version (if set)
+
+        **For Cloned Catalogs** (when creation_method is "clone"):
+        Additional clone_details include:
+        - Source catalog hostname and ID
+        - Source catalog snapshot timestamp
+        - Hatrac URL to the original source schema (source-schema.json)
+        - Clone parameters (orphan_strategy, asset_mode, etc.)
+        - Statistics (rows copied, rows skipped, truncated values, etc.)
+
+        **Source Schema**:
+        For cloned catalogs, the source catalog's schema is stored in Hatrac.
+        This allows comparing the original schema with the clone to identify
+        differences caused by access restrictions or modifications.
+
+        Returns:
+            JSON with provenance information if available, or status indicating
+            no provenance found.
+
+        Example (cloned catalog):
+            get_catalog_provenance() ->
+            {
+                "status": "found",
+                "creation_method": "clone",
+                "created_at": "2025-01-28T15:30:00+00:00",
+                "created_by": "Carl Kesselman",
+                "hostname": "localhost",
+                "catalog_id": "45",
+                "name": "facebase-clone",
+                "description": "Cloned from www.facebase.org:1",
+                "clone_details": {
+                    "source_hostname": "www.facebase.org",
+                    "source_catalog_id": "1",
+                    "source_schema_url": "https://localhost/hatrac/catalog/45/provenance/source-schema.json",
+                    "rows_copied": 917148,
+                    ...
+                }
+            }
+
+        Example (programmatically created catalog):
+            get_catalog_provenance() ->
+            {
+                "status": "found",
+                "creation_method": "create",
+                "created_at": "2025-01-28T10:00:00+00:00",
+                "created_by": "setup_script.py",
+                "name": "CIFAR-10 Training Catalog",
+                "description": "Catalog for CIFAR-10 experiments",
+                "workflow_url": "https://github.com/org/repo/setup_catalog.py",
+                "workflow_version": "v1.2.0"
+            }
+        """
+        try:
+            conn_info = conn_manager.get_connection()
+
+            if conn_info.is_derivaml:
+                ml = conn_info.ml_instance
+                provenance = ml.catalog_provenance
+
+                if provenance:
+                    return json.dumps({
+                        "status": "found",
+                        **provenance.to_dict(),
+                    })
+                else:
+                    return json.dumps({
+                        "status": "not_found",
+                        "message": "This catalog does not have provenance information. "
+                                   "Provenance is set when catalogs are created using "
+                                   "clone_catalog or set_catalog_provenance.",
+                    })
+            else:
+                # Plain ERMrest catalog - check for the annotation directly
+                from deriva_ml.catalog.clone import get_catalog_provenance as do_get_provenance
+
+                catalog = conn_info.get_catalog()
+                provenance = do_get_provenance(catalog)
+
+                if provenance:
+                    return json.dumps({
+                        "status": "found",
+                        **provenance.to_dict(),
+                    })
+                else:
+                    return json.dumps({
+                        "status": "not_found",
+                        "message": "This catalog does not have provenance information.",
+                    })
+        except Exception as e:
+            logger.error(f"Failed to get catalog provenance: {e}")
+            return json.dumps({
+                "status": "error",
+                "message": str(e),
+            })
+
+    @mcp.tool()
+    async def set_catalog_provenance(
+        name: str | None = None,
+        description: str | None = None,
+        workflow_url: str | None = None,
+        workflow_version: str | None = None,
+        creation_method: str = "create",
+    ) -> str:
+        """Set provenance information for the currently connected catalog.
+
+        Use this to record how and why a catalog was created. This is similar
+        to workflow metadata but at the catalog level. Call this after creating
+        a new catalog programmatically.
+
+        Args:
+            name: Human-readable name for the catalog.
+            description: Description of the catalog's purpose.
+            workflow_url: URL to the workflow/script that created the catalog
+                (e.g., GitHub URL, notebook URL).
+            workflow_version: Version of the workflow (e.g., git commit hash,
+                package version, or semantic version).
+            creation_method: How the catalog was created: "create" (default),
+                "schema", or "unknown". Use "clone" only for clone_catalog.
+
+        Returns:
+            JSON with status and the provenance that was set.
+
+        Example:
+            set_catalog_provenance(
+                name="CIFAR-10 Training Catalog",
+                description="Catalog for CIFAR-10 image classification experiments",
+                workflow_url="https://github.com/org/repo/setup_catalog.py",
+                workflow_version="v1.2.0"
+            )
+        """
+        try:
+            from deriva_ml.catalog.clone import (
+                CatalogCreationMethod,
+                set_catalog_provenance as do_set_provenance,
+            )
+
+            conn_info = conn_manager.get_connection()
+            catalog = conn_info.get_catalog()
+
+            # Convert creation_method string to enum
+            method_map = {
+                "clone": CatalogCreationMethod.CLONE,
+                "create": CatalogCreationMethod.CREATE,
+                "schema": CatalogCreationMethod.SCHEMA,
+                "unknown": CatalogCreationMethod.UNKNOWN,
+            }
+            method_enum = method_map.get(creation_method.lower(), CatalogCreationMethod.CREATE)
+
+            provenance = do_set_provenance(
+                catalog=catalog,
+                name=name,
+                description=description,
+                workflow_url=workflow_url,
+                workflow_version=workflow_version,
+                creation_method=method_enum,
+            )
+
+            return json.dumps({
+                "status": "success",
+                "message": "Catalog provenance set successfully",
+                **provenance.to_dict(),
+            })
+        except Exception as e:
+            logger.error(f"Failed to set catalog provenance: {e}")
+            return json.dumps({
+                "status": "error",
+                "message": str(e),
+            })
 
     @mcp.tool()
     async def validate_rids(

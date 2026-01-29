@@ -1928,6 +1928,50 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
+        "deriva-ml://catalog/provenance",
+        name="Catalog Provenance",
+        description="Provenance information: how the catalog was created, by whom, and source details if cloned",
+        mime_type="application/json",
+    )
+    def get_catalog_provenance_resource() -> str:
+        """Return provenance information for the active catalog.
+
+        Includes information about how the catalog was created (clone, create,
+        schema, unknown), who created it, when, and for cloned catalogs,
+        details about the source catalog and clone parameters.
+
+        Works with both DerivaML and plain ERMrest catalogs.
+        """
+        conn_info = conn_manager.get_active()
+        if conn_info is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            from deriva_ml.catalog.clone import get_catalog_provenance
+
+            if conn_info.is_derivaml:
+                ml = conn_info.ml_instance
+                provenance = ml.catalog_provenance
+            else:
+                catalog = conn_info.get_catalog()
+                provenance = get_catalog_provenance(catalog)
+
+            if provenance:
+                return json.dumps({
+                    "status": "found",
+                    **provenance.to_dict(),
+                }, indent=2)
+            else:
+                return json.dumps({
+                    "status": "not_found",
+                    "message": "No provenance information available for this catalog. "
+                               "Provenance is set when catalogs are created using "
+                               "clone_catalog or set_catalog_provenance.",
+                }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
         "deriva-ml://catalog/users",
         name="Catalog Users",
         description="All users who have access to the active catalog",
