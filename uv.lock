@@ -576,8 +576,8 @@ dev = [
 
 [[package]]
 name = "deriva-ml"
-version = "1.17.11"
-source = { git = "https://github.com/informatics-isi-edu/deriva-ml?branch=typed-interface#2b1a205cd3627ae89d7efe1287d87b78f5e459a7" }
+version = "1.17.12"
+source = { git = "https://github.com/informatics-isi-edu/deriva-ml?branch=typed-interface#723cad8cf1dce7e54b0b800cbe9d168252a15126" }
 dependencies = [
     { name = "bdbag" },
     { name = "bump-my-version" },
