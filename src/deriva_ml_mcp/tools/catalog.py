@@ -796,6 +796,232 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             )
 
     @mcp.tool()
+    async def clone_subset_catalog(
+        source_hostname: str,
+        source_catalog_id: str,
+        root_rid: str,
+        include_tables: list[str] | None = None,
+        exclude_objects: list[str] | None = None,
+        exclude_schemas: list[str] | None = None,
+        include_associations: bool = True,
+        include_vocabularies: bool = True,
+        use_export_annotation: bool = False,
+        dest_hostname: str | None = None,
+        alias: str | None = None,
+        add_ml_schema: bool = False,
+        asset_mode: str = "refs",
+        copy_annotations: bool = True,
+        copy_policy: bool = True,
+        orphan_strategy: str = "fail",
+        prune_hidden_fkeys: bool = False,
+        truncate_oversized: bool = False,
+        reinitialize_dataset_versions: bool = True,
+    ) -> str:
+        """Clone a subset of a catalog containing only data reachable from a root RID.
+
+        Automatically discovers all tables connected to the root RID's table and
+        clones only the rows reachable from the root RID. This creates a minimal,
+        focused clone containing just the data you need.
+
+        **Table Discovery Methods**:
+
+        1. **FK Graph Traversal** (default, use_export_annotation=False):
+           Starting from the root RID's table, traverses the FK graph in both
+           directions to find all connected tables:
+           - Outbound FKs: tables this table references
+           - Inbound FKs: tables that reference this table
+
+        2. **Export Annotation** (use_export_annotation=True):
+           Uses the export annotation (tag:isrd.isi.edu,2019:export) on the root
+           table to determine which tables to clone. This matches the behavior
+           of the Chaise BDBag export button and is faster for large catalogs.
+           Recommended when cloning projects or datasets with pre-configured
+           export annotations.
+
+        Tables in exclude_objects or exclude_schemas are not discovered or cloned.
+        System schemas (public, _acl_admin, WWW) are automatically excluded.
+
+        **Use Cases**:
+        - Clone a single dataset with all its related data
+        - Clone a project (use_export_annotation=True for projects with export config)
+        - Create a test subset from a large production catalog
+        - Extract a self-contained subset for sharing or analysis
+        - Clone specific experiments with their dependencies
+
+        **Comparison with clone_catalog**:
+        - clone_catalog: Clones entire catalog, optionally excluding specific tables
+        - clone_subset_catalog: Clones only tables/rows reachable from a starting point
+
+        Args:
+            source_hostname: Source server hostname (e.g., "www.eye-ai.org").
+            source_catalog_id: ID of the catalog to clone from.
+            root_rid: Starting RID from which to trace reachability. All cloned
+                data will be connected to this RID through FK relationships.
+            include_tables: Optional list of additional table names ("schema:table"
+                format) to use as starting points for table discovery. Tables
+                reachable from these are also included in the clone.
+            exclude_objects: List of tables ("schema:table" format) to exclude
+                from cloning. Paths through these tables are not followed.
+            exclude_schemas: List of schema names to exclude entirely from cloning.
+            include_associations: If True (default), auto-include association tables
+                needed for FK integrity between discovered tables.
+            include_vocabularies: If True (default), auto-include vocabulary tables
+                referenced by discovered tables.
+            use_export_annotation: If True, use the export annotation on the root
+                table to determine which tables to clone (matches BDBag export).
+                If False (default), discover tables via FK graph traversal.
+            dest_hostname: Destination hostname. If None, uses source_hostname.
+            alias: Optional alias name for the new catalog.
+            add_ml_schema: If True, add DerivaML schema if not already present.
+            asset_mode: How to handle assets: "none", "refs" (default), or "full".
+            copy_annotations: If True (default), copy all annotations.
+            copy_policy: If True (default), copy ACL policies.
+            orphan_strategy: How to handle orphan rows: "fail" (default), "delete",
+                or "nullify".
+            prune_hidden_fkeys: If True, skip FKs with hidden reference data.
+            truncate_oversized: If True, truncate values exceeding index limits.
+            reinitialize_dataset_versions: If True (default), reinitialize versions
+                so bag downloads work in the clone.
+
+        Returns:
+            JSON with:
+            - status: "cloned" or "error"
+            - discovered_tables: List of tables that were discovered and cloned
+            - reachable_rows: Count of rows copied per table
+            - dest_hostname, dest_catalog_id: Location of the new catalog
+            - associations_added, vocabularies_added: Auto-included tables
+            - report: Detailed clone operation report
+
+        Examples:
+            Clone a project using export annotation (matches BDBag export):
+                clone_subset_catalog(
+                    "www.facebase.org", "1",
+                    root_rid="3-HXMC",
+                    use_export_annotation=True,
+                    alias="musmorph-clone"
+                )
+                -> Uses export annotation to determine tables (faster)
+
+            Clone all data reachable from a dataset:
+                clone_subset_catalog(
+                    "www.eye-ai.org", "52",
+                    root_rid="1-ABC",
+                    alias="dataset-subset"
+                )
+                -> Discovers all tables connected to dataset 1-ABC
+
+            Clone with exclusions:
+                clone_subset_catalog(
+                    "www.eye-ai.org", "52",
+                    root_rid="1-ABC",
+                    exclude_objects=["deriva-ml:Execution"],
+                    exclude_schemas=["audit"]
+                )
+                -> Skips Execution table and audit schema
+
+            Clone with additional starting points:
+                clone_subset_catalog(
+                    "www.eye-ai.org", "52",
+                    root_rid="1-ABC",
+                    include_tables=["demo:Configuration"],
+                )
+                -> Also includes tables reachable from Configuration
+        """
+        try:
+            from deriva_ml.catalog import (
+                AssetCopyMode,
+                OrphanStrategy,
+                clone_subset_catalog as do_clone_subset,
+            )
+
+            # Convert asset_mode string to enum
+            mode_map = {
+                "none": AssetCopyMode.NONE,
+                "refs": AssetCopyMode.REFERENCES,
+                "full": AssetCopyMode.FULL,
+            }
+            asset_mode_enum = mode_map.get(asset_mode.lower(), AssetCopyMode.REFERENCES)
+
+            # Convert orphan_strategy string to enum
+            strategy_map = {
+                "fail": OrphanStrategy.FAIL,
+                "delete": OrphanStrategy.DELETE,
+                "nullify": OrphanStrategy.NULLIFY,
+            }
+            orphan_strategy_enum = strategy_map.get(orphan_strategy.lower(), OrphanStrategy.FAIL)
+
+            # Perform the subset clone
+            result = do_clone_subset(
+                source_hostname=source_hostname,
+                source_catalog_id=source_catalog_id,
+                root_rid=root_rid,
+                include_tables=include_tables,
+                exclude_objects=exclude_objects,
+                exclude_schemas=exclude_schemas,
+                include_associations=include_associations,
+                include_vocabularies=include_vocabularies,
+                use_export_annotation=use_export_annotation,
+                dest_hostname=dest_hostname,
+                alias=alias,
+                add_ml_schema=add_ml_schema,
+                asset_mode=asset_mode_enum,
+                copy_annotations=copy_annotations,
+                copy_policy=copy_policy,
+                orphan_strategy=orphan_strategy_enum,
+                prune_hidden_fkeys=prune_hidden_fkeys,
+                truncate_oversized=truncate_oversized,
+                reinitialize_dataset_versions=reinitialize_dataset_versions,
+            )
+
+            # Check for errors in the report
+            has_errors = result.report and result.report.fkeys_failed > 0
+
+            response = {
+                "status": "cloned" if not has_errors else "completed_with_errors",
+                "source_hostname": result.source_hostname,
+                "source_catalog_id": result.source_catalog_id,
+                "root_rid": root_rid,
+                "dest_hostname": result.hostname,
+                "dest_catalog_id": result.catalog_id,
+                "asset_mode": result.asset_mode.value,
+                "datasets_reinitialized": result.datasets_reinitialized,
+                "rows_skipped": result.rows_skipped,
+                "truncated_values_count": len(result.truncated_values),
+            }
+
+            if result.alias:
+                response["alias"] = result.alias
+            if result.ml_schema_added:
+                response["ml_schema_added"] = True
+
+            # Include tables restored with row counts
+            if result.report and result.report.tables_restored:
+                response["tables_cloned"] = result.report.tables_restored
+
+            # Include the detailed report if available
+            if result.report:
+                response["report"] = result.report.to_dict()
+
+            response["message"] = (
+                f"Subset catalog cloned to {result.hostname}:{result.catalog_id} "
+                f"from root RID {root_rid}"
+            )
+
+            # Add human-readable report summary if there were issues
+            if result.report and len(result.report.issues) > 0:
+                response["report_summary"] = result.report.to_text()
+
+            return json.dumps(response)
+        except Exception as e:
+            logger.error(f"Failed to clone subset catalog: {e}")
+            return json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                }
+            )
+
+    @mcp.tool()
     async def get_catalog_provenance() -> str:
         """Get provenance information for the currently connected catalog.
 
@@ -1189,22 +1415,24 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         hatrac_namespace: str | None = None,
         chunk_size: int | None = None,
         dry_run: bool = False,
+        source_hostname: str | None = None,
     ) -> str:
         """Localize remote hatrac assets to the local catalog server.
 
         Downloads assets from remote hatrac servers and uploads them to the local
         hatrac server, updating the asset table URLs to point to the local copies.
 
-        The source hatrac server for each asset is determined automatically from
-        the URL stored in the asset record - no need to specify it separately.
+        The source hatrac server for each asset is determined:
+        1. From the URL if it's an absolute URL (e.g., https://source.org/hatrac/...)
+        2. From the source_hostname parameter if the URL is relative (e.g., /hatrac/...)
 
         This is useful after cloning a catalog with asset_mode="refs" where the
-        asset URLs still point to the source server. Use this function to make
-        the assets fully local and independent of the source server.
+        asset URLs still point to the source server (either as absolute URLs or
+        relative hatrac paths). Use this function to make the assets fully local.
 
         **Workflow:**
         1. Fetches all asset records in a single bulk query
-        2. For each asset, extracts the source server from the URL
+        2. For each asset, determines the source server from URL or source_hostname
         3. Downloads the file from the source hatrac server
         4. Uploads to the local hatrac server
         5. Batch updates all asset table URLs at the end
@@ -1216,7 +1444,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         - Optional chunked uploads for large files
 
         **When to use:**
-        - After `clone_catalog` with `asset_mode="refs"` to make assets local
+        - After `clone_catalog` or `clone_subset_catalog` with `asset_mode="refs"` to make assets local
         - To migrate specific assets to the local server
         - To create fully independent catalog copies
 
@@ -1235,6 +1463,9 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 uses default upload behavior. Useful for very large files.
             dry_run: If True, only report what would be done without making changes.
                 Useful for previewing the operation.
+            source_hostname: Hostname to use for assets with relative URLs (e.g.,
+                "www.facebase.org"). Required when localizing assets cloned with
+                asset_mode="refs" from a different server where URLs are relative.
 
         Returns:
             JSON with:
@@ -1254,6 +1485,17 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     asset_rids=["1-ABC", "2-DEF"]
                 )
                 -> {"status": "success", "assets_processed": 2, ...}
+
+            Localize assets with relative URLs from a cloned catalog:
+                localize_assets(
+                    hostname="localhost",
+                    catalog_id="296",
+                    asset_table="file",
+                    asset_rids=["TG0", "TG2"],
+                    schema_name="isa",
+                    source_hostname="www.facebase.org"
+                )
+                -> Downloads files from facebase.org and uploads to localhost
 
             Dry run to preview:
                 localize_assets(
@@ -1299,6 +1541,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 hatrac_namespace=hatrac_namespace,
                 chunk_size=chunk_size,
                 dry_run=dry_run,
+                source_hostname=source_hostname,
             )
 
             response = {
