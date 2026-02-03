@@ -600,8 +600,8 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 response["orphan_rows_nullified"] = result.report.summary.orphan_rows_nullified
                 response["fkeys_pruned"] = result.report.summary.fkeys_pruned
                 response["rows_skipped"] = result.report.summary.rows_skipped if hasattr(result.report.summary, 'rows_skipped') else 0
-                if result.truncated_values_count:
-                    response["truncated_values_count"] = result.truncated_values_count
+                if result.truncated_values:
+                    response["truncated_values_count"] = len(result.truncated_values)
                 # Include detailed report
                 response["report"] = {
                     "summary": {
