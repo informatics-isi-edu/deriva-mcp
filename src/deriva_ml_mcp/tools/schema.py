@@ -114,7 +114,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 for fk in foreign_keys:
                     fkey_defs.append(ForeignKeyDefinition(
                         colnames=[fk["column"]],
-                        pk_sname=ml.domain_schema,
+                        pk_sname=ml.default_schema,
                         pk_tname=fk["referenced_table"],
                         pk_colnames=[fk.get("referenced_column", "RID")],
                         on_delete=fk.get("on_delete", "NO ACTION"),

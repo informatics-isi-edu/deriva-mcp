@@ -50,7 +50,7 @@ class ConnectionInfo:
 
     hostname: str
     catalog_id: str | int
-    domain_schema: str | None
+    domain_schemas: set[str] | None
     ml_instance: DerivaML
     workflow_rid: str | None = None
     execution: Any = None  # Execution object from deriva_ml
@@ -147,7 +147,7 @@ class ConnectionManager:
         self,
         hostname: str,
         catalog_id: str | int,
-        domain_schema: str | None = None,
+        domain_schemas: set[str] | None = None,
         set_active: bool = True,
     ) -> DerivaML:
         """Connect to a DerivaML catalog.
@@ -155,7 +155,7 @@ class ConnectionManager:
         Args:
             hostname: Hostname of the Deriva server.
             catalog_id: Catalog identifier.
-            domain_schema: Optional domain schema name.
+            domain_schemas: Optional set of domain schema names. Auto-detected if omitted.
             set_active: If True, set this as the active connection.
 
         Returns:
@@ -179,7 +179,7 @@ class ConnectionManager:
             ml = DerivaML(
                 hostname=hostname,
                 catalog_id=catalog_id,
-                domain_schema=domain_schema,
+                domain_schemas=domain_schemas,
                 check_auth=True,
             )
 
@@ -189,7 +189,7 @@ class ConnectionManager:
             self._connections[key] = ConnectionInfo(
                 hostname=hostname,
                 catalog_id=catalog_id,
-                domain_schema=domain_schema,
+                domain_schemas=domain_schemas,
                 ml_instance=ml,
                 workflow_rid=workflow_rid,
                 execution=execution,
@@ -339,7 +339,7 @@ class ConnectionManager:
             {
                 "hostname": info.hostname,
                 "catalog_id": info.catalog_id,
-                "domain_schema": info.domain_schema,
+                "domain_schemas": list(info.domain_schemas) if info.domain_schemas else None,
                 "is_active": key == self._active_connection,
                 "workflow_rid": info.workflow_rid,
                 "execution_rid": info.execution.execution_rid if info.execution else None,

@@ -443,24 +443,27 @@ multirun_config(
             schema_info = {
                 "hostname": ml.host_name,
                 "catalog_id": str(ml.catalog_id),
-                "domain_schema": ml.domain_schema,
+                "domain_schemas": list(ml.domain_schemas),
+                "default_schema": ml.default_schema,
                 "ml_schema": ml.ml_schema,
                 "tables": [],
             }
 
-            # Get domain schema tables
-            domain = ml.model.schemas.get(ml.domain_schema)
-            if domain:
-                for table in domain.tables.values():
-                    table_info = {
-                        "name": table.name,
-                        "columns": [
-                            {"name": col.name, "type": str(col.type)}
-                            for col in table.columns
-                        ],
-                        "is_vocabulary": hasattr(table, "is_vocabulary") and table.is_vocabulary,
-                    }
-                    schema_info["tables"].append(table_info)
+            # Get tables from all domain schemas
+            for domain_schema in ml.domain_schemas:
+                domain = ml.model.schemas.get(domain_schema)
+                if domain:
+                    for table in domain.tables.values():
+                        table_info = {
+                            "name": table.name,
+                            "schema": domain_schema,
+                            "columns": [
+                                {"name": col.name, "type": str(col.type)}
+                                for col in table.columns
+                            ],
+                            "is_vocabulary": hasattr(table, "is_vocabulary") and table.is_vocabulary,
+                        }
+                        schema_info["tables"].append(table_info)
 
             return json.dumps(schema_info, indent=2)
         except Exception as e:
@@ -481,7 +484,8 @@ multirun_config(
         try:
             vocabularies = {}
             # Iterate through schemas to find vocabulary tables
-            for schema_name in [ml.ml_schema, ml.domain_schema]:
+            schemas_to_check = [ml.ml_schema] + list(ml.domain_schemas)
+            for schema_name in schemas_to_check:
                 schema = ml.model.schemas.get(schema_name)
                 if schema:
                     for table in schema.tables.values():
@@ -617,21 +621,25 @@ multirun_config(
         mime_type="application/json",
     )
     def get_catalog_tables() -> str:
-        """Return all tables in the domain schema with metadata."""
+        """Return all tables in the domain schemas with metadata."""
         ml = conn_manager.get_active_connection()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
         try:
             tables = []
-            for table in ml.model.schemas[ml.domain_schema].tables.values():
-                tables.append({
-                    "name": table.name,
-                    "comment": table.comment or "",
-                    "is_vocabulary": ml.model.is_vocabulary(table),
-                    "is_asset": ml.model.is_asset(table),
-                    "column_count": len(list(table.columns)),
-                })
+            for domain_schema in ml.domain_schemas:
+                if domain_schema not in ml.model.schemas:
+                    continue
+                for table in ml.model.schemas[domain_schema].tables.values():
+                    tables.append({
+                        "name": table.name,
+                        "schema": domain_schema,
+                        "comment": table.comment or "",
+                        "is_vocabulary": ml.model.is_vocabulary(table),
+                        "is_asset": ml.model.is_asset(table),
+                        "column_count": len(list(table.columns)),
+                    })
             return json.dumps(tables, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1514,7 +1522,8 @@ multirun_config(
             result = {
                 "hostname": ml.host_name,
                 "catalog_id": str(ml.catalog_id),
-                "domain_schema": ml.domain_schema,
+                "domain_schemas": list(ml.domain_schemas),
+                "default_schema": ml.default_schema,
                 "ml_schema": ml.ml_schema,
                 "project_name": ml.project_name,
             }

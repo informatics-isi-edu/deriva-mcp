@@ -44,14 +44,17 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             connect_catalog("dev.eye-ai.org", "52") -> connects to eye-ai catalog
         """
         try:
-            ml = conn_manager.connect(hostname, catalog_id, domain_schema)
+            # Convert single domain_schema to set for the new API
+            domain_schemas = {domain_schema} if domain_schema else None
+            ml = conn_manager.connect(hostname, catalog_id, domain_schemas)
             conn_info = conn_manager.get_active_connection_info()
 
             result = {
                 "status": "connected",
                 "hostname": hostname,
                 "catalog_id": catalog_id,
-                "domain_schema": ml.domain_schema,
+                "domain_schemas": list(ml.domain_schemas),
+                "default_schema": ml.default_schema,
                 "project_name": ml.project_name,
             }
 
@@ -133,13 +136,14 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             model.create_schema(Schema.define(project_name))
 
             # Connect to the newly created catalog
-            ml = conn_manager.connect(hostname, str(catalog.catalog_id), project_name)
+            ml = conn_manager.connect(hostname, str(catalog.catalog_id), {project_name})
 
             result = {
                 "status": "created",
                 "hostname": hostname,
                 "catalog_id": str(catalog.catalog_id),
-                "domain_schema": ml.domain_schema,
+                "domain_schemas": list(ml.domain_schemas),
+                "default_schema": ml.default_schema,
                 "project_name": project_name,
             }
             if catalog_alias:
