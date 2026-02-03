@@ -577,7 +577,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "clone_mode": clone_mode,
                 "source_hostname": source_hostname,
                 "source_catalog_id": source_catalog_id,
-                "dest_hostname": result.dest_hostname,
+                "dest_hostname": result.hostname,
                 "dest_catalog_id": result.catalog_id,
                 "schema_only": schema_only,
                 "asset_mode": asset_mode,
@@ -636,7 +636,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     "orphan_details": result.report.orphan_details,
                 }
                 response["clone_type"] = "cross_server" if dest_hostname and dest_hostname != source_hostname else "same_server"
-                response["message"] = f"Catalog {'subset ' if root_rid else ''}migrated from {source_hostname}:{source_catalog_id} to {result.dest_hostname}:{result.catalog_id}"
+                response["message"] = f"Catalog {'subset ' if root_rid else ''}migrated from {source_hostname}:{source_catalog_id} to {result.hostname}:{result.catalog_id}"
                 response["report_summary"] = result.report.format_report()
 
             return json.dumps(response)
