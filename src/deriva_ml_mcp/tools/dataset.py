@@ -1034,7 +1034,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
 
             # Download the dataset as a bag
-            dataset = ml.find_dataset(dataset_rid)
+            dataset = ml.lookup_dataset(dataset_rid)
             if version:
                 dataset = dataset.set_version(version)
 

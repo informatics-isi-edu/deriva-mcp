@@ -637,7 +637,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 }
                 response["clone_type"] = "cross_server" if dest_hostname and dest_hostname != source_hostname else "same_server"
                 response["message"] = f"Catalog {'subset ' if root_rid else ''}migrated from {source_hostname}:{source_catalog_id} to {result.hostname}:{result.catalog_id}"
-                response["report_summary"] = result.report.format_report()
+                response["report_summary"] = result.report.to_text()
 
             return json.dumps(response)
 
