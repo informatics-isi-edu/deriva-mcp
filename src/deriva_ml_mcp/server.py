@@ -15,6 +15,7 @@ from deriva_ml_mcp.prompts import register_prompts
 from deriva_ml_mcp.resources import register_resources
 from deriva_ml_mcp.tools import (
     register_annotation_tools,
+    register_background_task_tools,
     register_catalog_tools,
     register_data_tools,
     register_dataset_tools,
@@ -506,6 +507,40 @@ The `cite()` method:
 ## Before Calling Tools
 
 **Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
+
+## Background Tasks for Long-Running Operations
+
+Some operations like catalog cloning can take many minutes. Use the async versions
+of these tools to avoid timeout issues:
+
+**Starting a long-running operation:**
+```python
+# Instead of clone_catalog (which may timeout), use:
+clone_catalog_async("www.facebase.org", "1",
+                    root_rid="3-HXMC",
+                    dest_hostname="localhost",
+                    alias="my-clone")
+# Returns immediately with: {"task_id": "abc123", "status": "started", ...}
+```
+
+**Checking progress:**
+```python
+get_task_status("abc123")
+# Returns: {"status": "running", "progress": {"percent_complete": 45.0, ...}}
+```
+
+**When complete:**
+```python
+get_task_status("abc123")
+# Returns: {"status": "completed", "result": {...full clone result...}}
+```
+
+**Managing tasks:**
+- `list_tasks()` - See all your tasks
+- `list_tasks(status="running")` - Filter by status
+- `cancel_task("abc123")` - Cancel a running task
+
+Tasks are isolated per user - you can only see and manage your own tasks.
 """,
 )
 
@@ -517,6 +552,7 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     """Register all DerivaML tools, resources, and prompts with the MCP server."""
     # Register tools
     register_annotation_tools(mcp_server, conn_manager)
+    register_background_task_tools(mcp_server, conn_manager)
     register_catalog_tools(mcp_server, conn_manager)
     register_dataset_tools(mcp_server, conn_manager)
     register_vocabulary_tools(mcp_server, conn_manager)
@@ -541,6 +577,21 @@ register_all_tools(mcp, connection_manager)
 
 def main() -> None:
     """Run the DerivaML MCP server."""
+    import atexit
+
+    from deriva_ml_mcp.tasks import get_task_manager
+
+    # Register shutdown handler for background task manager
+    def shutdown_task_manager() -> None:
+        logger.info("Shutting down background task manager")
+        try:
+            task_manager = get_task_manager()
+            task_manager.shutdown(wait=False)  # Don't block on pending tasks
+        except Exception as e:
+            logger.warning(f"Error shutting down task manager: {e}")
+
+    atexit.register(shutdown_task_manager)
+
     logger.info("Starting DerivaML MCP server")
     mcp.run(transport="stdio")
 
