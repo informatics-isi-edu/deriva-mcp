@@ -55,8 +55,9 @@ services:
       - HOME=${HOME}
     restart: unless-stopped
     healthcheck:
-      # Health check verifies the HTTP server is listening (connection test only)
-      test: ["CMD", "curl", "-s", "--max-time", "2", "-o", "/dev/null", "http://localhost:8000/mcp"]
+      # Health check uses dedicated /health endpoint that does NOT create MCP sessions.
+      # Using /mcp would create orphan sessions every 30 seconds, causing resource exhaustion.
+      test: ["CMD", "curl", "-sf", "--max-time", "2", "http://localhost:8000/health"]
       interval: 30s
       timeout: 5s
       retries: 3

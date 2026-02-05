@@ -22,6 +22,8 @@ import logging
 from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from deriva_ml_mcp.connection import ConnectionManager
 from deriva_ml_mcp.prompts import register_prompts
@@ -600,6 +602,25 @@ def create_server(host: str = "127.0.0.1", port: int = 8000) -> FastMCP:
 
     # Register all tools, resources, and prompts
     register_all_tools(mcp, connection_manager)
+
+    # Health check endpoint - does NOT create MCP sessions
+    # This is critical for Docker health checks which poll every 30 seconds.
+    # Without this, each health check would create an orphan session that
+    # never gets cleaned up, leading to resource exhaustion.
+    @mcp.custom_route("/health", methods=["GET"])
+    async def health_check(request: Request) -> Response:
+        """Health check endpoint for container orchestration.
+
+        Returns basic server status without creating an MCP session.
+        Use this endpoint for Docker/Kubernetes health probes instead of /mcp.
+        """
+        from deriva_ml_mcp import __version__
+
+        return JSONResponse({
+            "status": "ok",
+            "service": "deriva-mcp",
+            "version": __version__,
+        })
 
     return mcp
 
