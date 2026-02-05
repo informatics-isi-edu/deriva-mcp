@@ -30,8 +30,7 @@
 
 services:
   deriva-mcp:
-    # Use local build for development, or ghcr.io/informatics-isi-edu/deriva-mcp:latest for production
-    image: deriva-mcp:local
+    image: ghcr.io/informatics-isi-edu/deriva-mcp:latest
     container_name: deriva-mcp
     command:
       - deriva-mcp
