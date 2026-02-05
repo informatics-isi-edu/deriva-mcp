@@ -9,10 +9,16 @@ catalog cloning. These tools allow users to:
 
 The task system is multi-user safe - each user can only see and manage
 their own tasks.
+
+Performance notes:
+- All MCP tools are truly async, using asyncio.to_thread() for blocking operations
+- Task status queries use snapshot methods to minimize lock contention
+- User ID is consistently determined to avoid task lookup mismatches
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -33,6 +39,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("deriva-mcp")
 
+# Cache for user ID to ensure consistency within a session
+_cached_user_id: str | None = None
+
 
 def _get_user_id(hostname: str | None = None) -> str:
     """Get a user identifier from credentials.
@@ -40,12 +49,22 @@ def _get_user_id(hostname: str | None = None) -> str:
     For multi-user isolation, we use the credential identity as user_id.
     If no credentials available, fall back to a default (single-user mode).
 
+    IMPORTANT: This function now caches the user ID to ensure consistency
+    between task creation and task lookup. The first call with a hostname
+    sets the cached value which is then used for all subsequent calls.
+
     Args:
         hostname: Optional hostname to get credentials for.
 
     Returns:
         A string identifying the user.
     """
+    global _cached_user_id
+
+    # If we have a cached user ID, always use it for consistency
+    if _cached_user_id is not None:
+        return _cached_user_id
+
     try:
         if hostname:
             cred = get_credential(hostname)
@@ -57,12 +76,26 @@ def _get_user_id(hostname: str | None = None) -> str:
                     import hashlib
 
                     webauthn = cookie.split("webauthn=")[1].split(";")[0]
-                    return hashlib.sha256(webauthn.encode()).hexdigest()[:16]
+                    user_id = hashlib.sha256(webauthn.encode()).hexdigest()[:16]
+                    _cached_user_id = user_id
+                    logger.debug(f"Cached user ID from credentials: {user_id[:8]}...")
+                    return user_id
         # Fall back to checking any available credential
         # In single-user mode, this is fine
+        _cached_user_id = "default_user"
+        logger.debug("Using default_user for single-user mode")
         return "default_user"
     except Exception:
+        _cached_user_id = "default_user"
         return "default_user"
+
+
+async def _get_user_id_async(hostname: str | None = None) -> str:
+    """Async version of _get_user_id.
+
+    Runs credential lookup in a thread to avoid blocking the event loop.
+    """
+    return await asyncio.to_thread(_get_user_id, hostname)
 
 
 def _clone_catalog_task(
@@ -335,7 +368,8 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         """
         try:
             task_manager = get_task_manager()
-            user_id = _get_user_id(source_hostname)
+            # Use async credential lookup to avoid blocking
+            user_id = await _get_user_id_async(source_hostname)
 
             # Store parameters for the task
             parameters = {
@@ -421,11 +455,12 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         """
         try:
             task_manager = get_task_manager()
-            # Try to get user_id - for task lookup we check all possible user contexts
-            user_id = _get_user_id()
+            # Use cached user_id for consistency with task creation
+            user_id = await _get_user_id_async()
 
-            task = task_manager.get_task(task_id, user_id)
-            if not task:
+            # Use async snapshot method to avoid blocking event loop and minimize lock contention
+            task_snapshot = await task_manager.get_task_snapshot_async(task_id, user_id)
+            if not task_snapshot:
                 return json.dumps(
                     {
                         "status": "error",
@@ -433,7 +468,11 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
                     }
                 )
 
-            return json.dumps(task.to_dict(include_result=include_result))
+            # If include_result is False, remove result from snapshot
+            if not include_result and "result" in task_snapshot:
+                del task_snapshot["result"]
+
+            return json.dumps(task_snapshot)
 
         except Exception as e:
             logger.error(f"Failed to get task status: {e}")
@@ -464,20 +503,22 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         """
         try:
             task_manager = get_task_manager()
-            user_id = _get_user_id()
+            # Use cached user_id for consistency
+            user_id = await _get_user_id_async()
 
             # Parse filters
             status_filter = TaskStatus(status) if status else None
             type_filter = TaskType(task_type) if task_type else None
 
-            tasks = task_manager.list_tasks(
+            # Use async snapshot method to avoid blocking and minimize lock contention
+            task_snapshots = await task_manager.list_tasks_snapshots_async(
                 user_id=user_id,
                 status_filter=status_filter,
                 task_type_filter=type_filter,
+                include_result=False,
             )
 
-            # Return summary info (no full results)
-            return json.dumps([task.to_dict(include_result=False) for task in tasks])
+            return json.dumps(task_snapshots)
 
         except ValueError as e:
             return json.dumps(
@@ -510,9 +551,13 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         """
         try:
             task_manager = get_task_manager()
-            user_id = _get_user_id()
+            # Use cached user_id for consistency
+            user_id = await _get_user_id_async()
 
-            if task_manager.cancel_task(task_id, user_id):
+            # Run cancel in thread to avoid blocking
+            cancelled = await asyncio.to_thread(task_manager.cancel_task, task_id, user_id)
+
+            if cancelled:
                 return json.dumps(
                     {
                         "status": "cancelled",

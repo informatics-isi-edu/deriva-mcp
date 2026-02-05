@@ -920,6 +920,39 @@ python -c "from deriva_ml import DerivaML; DerivaML.globus_login('your-server.or
 - Ensure each server has a unique name in the config
 - Restart Claude Desktop after config changes
 
+### Long-Running Operations (Catalog Cloning)
+
+Catalog cloning operations can take several minutes for large catalogs. The MCP server provides async tools (`clone_catalog_async`, `get_task_status`, `list_tasks`) to handle this:
+
+**Recommended workflow:**
+1. Use `clone_catalog_async()` to start the clone - returns a task_id immediately
+2. Periodically check `get_task_status(task_id)` for progress
+3. When status is "completed", the result contains the new catalog info
+
+**Connection timeout issues:**
+If `get_task_status` calls are taking too long or connections drop during clone operations:
+
+1. **Increase MCP tool timeout** - Set the `MCP_TOOL_TIMEOUT` environment variable:
+   ```json
+   {
+     "mcpServers": {
+       "deriva-ml": {
+         "type": "stdio",
+         "command": "/bin/sh",
+         "args": ["-c", "docker run -i --rm -e MCP_TOOL_TIMEOUT=300000 ..."],
+         "env": {
+           "MCP_TOOL_TIMEOUT": "300000"
+         }
+       }
+     }
+   }
+   ```
+   The value is in milliseconds (300000 = 5 minutes, default is 60000 = 1 minute).
+
+2. **Check task status after reconnection** - If the MCP connection drops, simply reconnect and call `list_tasks()` to find your running tasks. Note: Task state is stored in memory, so if the server process restarts (not just reconnects), running tasks will be lost.
+
+3. **Use the Docker-based server** - The Docker-based server is more stable for long-running operations as it runs in an isolated container.
+
 ## Development
 
 ### Running Tests

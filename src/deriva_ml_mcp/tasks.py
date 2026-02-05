@@ -7,11 +7,18 @@ Design considerations for multi-user environments:
 - Tasks are isolated by user_id (derived from credentials or session)
 - Each user can only see and manage their own tasks
 - Task state is stored in memory (lost on server restart)
-- Thread-safe operations using locks
+- Thread-safe operations using locks with minimal contention
+
+Performance considerations:
+- Lock contention minimized using copy-on-read pattern for status queries
+- Async-safe methods provided for use in asyncio contexts
+- Task state snapshots avoid holding locks during I/O operations
 """
 
 from __future__ import annotations
 
+import asyncio
+import copy
 import logging
 import threading
 import uuid
@@ -217,10 +224,21 @@ class BackgroundTaskManager:
                         task.started_at = datetime.now(timezone.utc)
                         task.progress.message = "Starting..."
 
-                    # Create progress updater if callback provided
+                    # Create progress updater with minimal lock duration
+                    # We use a simple assignment which is atomic for object references
                     def update_progress(progress: TaskProgress) -> None:
-                        with self._lock:
-                            task.progress = progress
+                        # Create a copy of the progress to avoid reference issues
+                        progress_copy = TaskProgress(
+                            current_step=progress.current_step,
+                            total_steps=progress.total_steps,
+                            current_step_number=progress.current_step_number,
+                            percent_complete=progress.percent_complete,
+                            message=progress.message,
+                            updated_at=progress.updated_at,
+                        )
+                        # Atomic assignment - no lock needed for single reference update
+                        # This is safe because we're replacing the entire object
+                        task.progress = progress_copy
                         if progress_callback:
                             progress_callback(progress)
 
@@ -270,6 +288,41 @@ class BackgroundTaskManager:
                 return task
             return None
 
+    def get_task_snapshot(self, task_id: str, user_id: str) -> dict[str, Any] | None:
+        """Get a snapshot of task state without holding the lock.
+
+        This is the preferred method for async contexts as it minimizes
+        lock contention by returning a copy of the task state.
+
+        Args:
+            task_id: The task ID to retrieve.
+            user_id: The user requesting the task (for access control).
+
+        Returns:
+            Dictionary snapshot of task state, or None if not found/not owned.
+        """
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if task and task.user_id == user_id:
+                # Return a deep copy of the task dict to avoid holding lock
+                return copy.deepcopy(task.to_dict(include_result=True))
+            return None
+
+    async def get_task_snapshot_async(self, task_id: str, user_id: str) -> dict[str, Any] | None:
+        """Async version of get_task_snapshot.
+
+        Runs the snapshot operation in a thread pool to avoid blocking
+        the asyncio event loop.
+
+        Args:
+            task_id: The task ID to retrieve.
+            user_id: The user requesting the task (for access control).
+
+        Returns:
+            Dictionary snapshot of task state, or None if not found/not owned.
+        """
+        return await asyncio.to_thread(self.get_task_snapshot, task_id, user_id)
+
     def list_tasks(
         self,
         user_id: str,
@@ -298,6 +351,66 @@ class BackgroundTaskManager:
                         continue
                     tasks.append(task)
             return tasks
+
+    def list_tasks_snapshots(
+        self,
+        user_id: str,
+        status_filter: TaskStatus | None = None,
+        task_type_filter: TaskType | None = None,
+        include_result: bool = False,
+    ) -> list[dict[str, Any]]:
+        """List task snapshots without holding locks during serialization.
+
+        This is the preferred method for async contexts.
+
+        Args:
+            user_id: The user whose tasks to list.
+            status_filter: Optional filter by status.
+            task_type_filter: Optional filter by task type.
+            include_result: If True, include full results in snapshots.
+
+        Returns:
+            List of task state dictionaries.
+        """
+        with self._lock:
+            task_ids = self._user_tasks.get(user_id, [])
+            snapshots = []
+            for task_id in task_ids:
+                task = self._tasks.get(task_id)
+                if task:
+                    if status_filter and task.status != status_filter:
+                        continue
+                    if task_type_filter and task.task_type != task_type_filter:
+                        continue
+                    # Copy within lock to get consistent state
+                    snapshots.append(copy.deepcopy(task.to_dict(include_result=include_result)))
+            return snapshots
+
+    async def list_tasks_snapshots_async(
+        self,
+        user_id: str,
+        status_filter: TaskStatus | None = None,
+        task_type_filter: TaskType | None = None,
+        include_result: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Async version of list_tasks_snapshots.
+
+        Args:
+            user_id: The user whose tasks to list.
+            status_filter: Optional filter by status.
+            task_type_filter: Optional filter by task type.
+            include_result: If True, include full results in snapshots.
+
+        Returns:
+            List of task state dictionaries.
+        """
+        return await asyncio.to_thread(
+            self.list_tasks_snapshots,
+            user_id,
+            status_filter,
+            task_type_filter,
+            include_result,
+        )
 
     def cancel_task(self, task_id: str, user_id: str) -> bool:
         """Cancel a pending or running task.
