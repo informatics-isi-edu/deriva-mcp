@@ -6,26 +6,35 @@ that may take longer than MCP connection timeouts (e.g., catalog cloning).
 Design considerations for multi-user environments:
 - Tasks are isolated by user_id (derived from credentials or session)
 - Each user can only see and manage their own tasks
-- Task state is stored in memory (lost on server restart)
+- Task state is stored in memory with periodic file backup for recovery
 - Thread-safe operations using locks with minimal contention
 
 Performance considerations:
 - Lock contention minimized using copy-on-read pattern for status queries
 - Async-safe methods provided for use in asyncio contexts
 - Task state snapshots avoid holding locks during I/O operations
+
+Persistence:
+- Tasks are backed up to a JSON file periodically (default: every 5 seconds)
+- On startup, tasks are recovered from the backup file
+- Running tasks from crashed servers are marked as failed
+- Completed tasks are cleaned up after retention period (default: 7 days)
 """
 
 from __future__ import annotations
 
 import asyncio
 import copy
+import fcntl
+import json
 import logging
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
@@ -112,6 +121,254 @@ class BackgroundTask:
             data["result"] = self.result
         return data
 
+    def to_persistence_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for persistence (always includes result and user_id)."""
+        data = self.to_dict(include_result=True)
+        data["user_id"] = self.user_id
+        return data
+
+    @classmethod
+    def from_persistence_dict(cls, data: dict[str, Any]) -> "BackgroundTask":
+        """Create a BackgroundTask from a persistence dictionary."""
+        # Parse progress
+        progress_data = data.get("progress", {})
+        progress = TaskProgress(
+            current_step=progress_data.get("current_step", ""),
+            total_steps=progress_data.get("total_steps", 0),
+            current_step_number=progress_data.get("current_step_number", 0),
+            percent_complete=progress_data.get("percent_complete", 0.0),
+            message=progress_data.get("message", ""),
+            updated_at=datetime.fromisoformat(progress_data["updated_at"])
+            if progress_data.get("updated_at")
+            else datetime.now(timezone.utc),
+        )
+
+        return cls(
+            task_id=data["task_id"],
+            user_id=data["user_id"],
+            task_type=TaskType(data["task_type"]),
+            status=TaskStatus(data["status"]),
+            created_at=datetime.fromisoformat(data["created_at"]),
+            started_at=datetime.fromisoformat(data["started_at"]) if data.get("started_at") else None,
+            completed_at=datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None,
+            parameters=data.get("parameters", {}),
+            result=data.get("result"),
+            error=data.get("error"),
+            progress=progress,
+            _future=None,  # Cannot restore futures
+        )
+
+
+class TaskPersistence:
+    """Handles periodic backup of task state to disk for recovery.
+
+    This class provides crash recovery for the BackgroundTaskManager by:
+    - Periodically saving task state to a JSON file
+    - Loading tasks on startup
+    - Marking running tasks from crashed servers as failed
+    - Cleaning up old completed tasks
+
+    The file format is human-readable JSON for easy debugging.
+    File locking (flock) is used to prevent corruption from concurrent writes.
+    """
+
+    DEFAULT_PATH = Path.home() / ".deriva-ml" / "task_state.json"
+    DEFAULT_SYNC_INTERVAL = 5  # seconds
+    DEFAULT_RETENTION_HOURS = 24 * 7  # 7 days
+
+    def __init__(
+        self,
+        path: Path | str | None = None,
+        sync_interval: int = DEFAULT_SYNC_INTERVAL,
+        retention_hours: int = DEFAULT_RETENTION_HOURS,
+    ):
+        """Initialize task persistence.
+
+        Args:
+            path: Path to the state file. Defaults to ~/.deriva-ml/task_state.json
+            sync_interval: Seconds between automatic saves. Defaults to 5.
+            retention_hours: Hours to retain completed tasks. Defaults to 168 (7 days).
+        """
+        self.path = Path(path) if path else self.DEFAULT_PATH
+        self.sync_interval = sync_interval
+        self.retention_hours = retention_hours
+        self.server_instance_id = str(uuid.uuid4())[:12]
+
+        # Ensure directory exists
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Thread safety
+        self._file_lock = threading.Lock()
+        self._sync_thread: threading.Thread | None = None
+        self._stop_sync = threading.Event()
+
+        logger.info(f"Task persistence initialized: {self.path}")
+
+    def start_sync_thread(self, get_tasks_fn: Callable[[], dict[str, BackgroundTask]]) -> None:
+        """Start the background sync thread.
+
+        Args:
+            get_tasks_fn: Function that returns current tasks dict (called under lock by caller).
+        """
+        if self._sync_thread is not None:
+            return
+
+        self._get_tasks_fn = get_tasks_fn
+        self._stop_sync.clear()
+        self._sync_thread = threading.Thread(target=self._sync_loop, daemon=True)
+        self._sync_thread.start()
+        logger.debug(f"Task sync thread started (interval: {self.sync_interval}s)")
+
+    def stop_sync_thread(self) -> None:
+        """Stop the background sync thread."""
+        if self._sync_thread is None:
+            return
+
+        self._stop_sync.set()
+        self._sync_thread.join(timeout=self.sync_interval + 1)
+        self._sync_thread = None
+        logger.debug("Task sync thread stopped")
+
+    def _sync_loop(self) -> None:
+        """Background loop that periodically saves task state."""
+        while not self._stop_sync.wait(timeout=self.sync_interval):
+            try:
+                tasks = self._get_tasks_fn()
+                self.save(tasks)
+            except Exception as e:
+                logger.warning(f"Task sync failed: {e}")
+
+    def save(self, tasks: dict[str, BackgroundTask]) -> None:
+        """Save tasks to the state file.
+
+        Args:
+            tasks: Dictionary of task_id -> BackgroundTask
+        """
+        state = {
+            "server_instance_id": self.server_instance_id,
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "tasks": {task_id: task.to_persistence_dict() for task_id, task in tasks.items()},
+        }
+
+        with self._file_lock:
+            try:
+                # Write to temp file first, then rename for atomicity
+                temp_path = self.path.with_suffix(".tmp")
+                with open(temp_path, "w") as f:
+                    # Use flock for advisory locking
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                    try:
+                        json.dump(state, f, indent=2)
+                    finally:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+                # Atomic rename
+                temp_path.rename(self.path)
+                logger.debug(f"Saved {len(tasks)} tasks to {self.path}")
+
+            except Exception as e:
+                logger.error(f"Failed to save task state: {e}")
+                # Clean up temp file if it exists
+                if temp_path.exists():
+                    temp_path.unlink()
+
+    def load(self) -> tuple[dict[str, BackgroundTask], dict[str, list[str]]]:
+        """Load tasks from the state file.
+
+        Returns:
+            Tuple of (tasks dict, user_tasks dict)
+        """
+        tasks: dict[str, BackgroundTask] = {}
+        user_tasks: dict[str, list[str]] = {}
+
+        if not self.path.exists():
+            logger.debug(f"No task state file found at {self.path}")
+            return tasks, user_tasks
+
+        try:
+            with self._file_lock:
+                with open(self.path) as f:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                    try:
+                        state = json.load(f)
+                    finally:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+            old_instance_id = state.get("server_instance_id", "")
+            tasks_data = state.get("tasks", {})
+
+            for task_id, task_data in tasks_data.items():
+                try:
+                    task = BackgroundTask.from_persistence_dict(task_data)
+
+                    # Mark running tasks from previous instances as failed
+                    if task.status == TaskStatus.RUNNING:
+                        logger.warning(f"Recovering crashed task {task_id} (was running)")
+                        task.status = TaskStatus.FAILED
+                        task.error = "Server crashed or restarted while task was running"
+                        task.completed_at = datetime.now(timezone.utc)
+                        task.progress.message = "Failed: Server crash"
+
+                    tasks[task_id] = task
+
+                    # Build user_tasks index
+                    if task.user_id not in user_tasks:
+                        user_tasks[task.user_id] = []
+                    user_tasks[task.user_id].append(task_id)
+
+                except Exception as e:
+                    logger.warning(f"Failed to load task {task_id}: {e}")
+
+            logger.info(
+                f"Loaded {len(tasks)} tasks from {self.path} "
+                f"(previous instance: {old_instance_id[:8]}...)"
+            )
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Corrupted task state file: {e}")
+        except Exception as e:
+            logger.error(f"Failed to load task state: {e}")
+
+        return tasks, user_tasks
+
+    def cleanup_old_tasks(
+        self, tasks: dict[str, BackgroundTask], user_tasks: dict[str, list[str]]
+    ) -> int:
+        """Remove completed tasks older than retention period.
+
+        Args:
+            tasks: Dictionary of task_id -> BackgroundTask (modified in place)
+            user_tasks: Dictionary of user_id -> [task_ids] (modified in place)
+
+        Returns:
+            Number of tasks removed
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=self.retention_hours)
+        removed = 0
+
+        # Find tasks to remove
+        to_remove = []
+        for task_id, task in tasks.items():
+            if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+                task_time = task.completed_at or task.created_at
+                if task_time < cutoff:
+                    to_remove.append(task_id)
+
+        # Remove them
+        for task_id in to_remove:
+            task = tasks.pop(task_id)
+            if task.user_id in user_tasks:
+                try:
+                    user_tasks[task.user_id].remove(task_id)
+                except ValueError:
+                    pass
+            removed += 1
+
+        if removed > 0:
+            logger.info(f"Cleaned up {removed} old tasks (older than {self.retention_hours}h)")
+
+        return removed
+
 
 class BackgroundTaskManager:
     """Manages background tasks for long-running operations.
@@ -120,18 +377,25 @@ class BackgroundTaskManager:
     - Tasks are isolated by user_id
     - Thread-safe operations
     - Configurable max workers per user and globally
+    - Persistent storage with periodic file backup for crash recovery
     """
 
     def __init__(
         self,
         max_workers: int = 4,
         max_tasks_per_user: int = 10,
+        persistence_path: Path | str | None = None,
+        sync_interval: int = TaskPersistence.DEFAULT_SYNC_INTERVAL,
+        retention_hours: int = TaskPersistence.DEFAULT_RETENTION_HOURS,
     ) -> None:
         """Initialize the task manager.
 
         Args:
             max_workers: Maximum concurrent tasks across all users.
             max_tasks_per_user: Maximum tasks (including history) per user.
+            persistence_path: Path to task state file for persistence. None to disable.
+            sync_interval: Seconds between automatic saves to disk.
+            retention_hours: Hours to retain completed tasks.
         """
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._tasks: dict[str, BackgroundTask] = {}  # task_id -> task
@@ -139,9 +403,29 @@ class BackgroundTaskManager:
         self._lock = threading.RLock()
         self._max_tasks_per_user = max_tasks_per_user
 
+        # Initialize persistence
+        self._persistence: TaskPersistence | None = None
+        if persistence_path is not False:  # False explicitly disables, None uses default
+            self._persistence = TaskPersistence(
+                path=persistence_path,
+                sync_interval=sync_interval,
+                retention_hours=retention_hours,
+            )
+            # Load existing tasks from disk
+            self._tasks, self._user_tasks = self._persistence.load()
+            # Clean up old tasks
+            self._persistence.cleanup_old_tasks(self._tasks, self._user_tasks)
+            # Start background sync thread
+            self._persistence.start_sync_thread(self._get_tasks_for_persistence)
+
     def _generate_task_id(self) -> str:
         """Generate a unique task ID."""
         return str(uuid.uuid4())[:12]
+
+    def _get_tasks_for_persistence(self) -> dict[str, BackgroundTask]:
+        """Get a copy of tasks dict for persistence (thread-safe)."""
+        with self._lock:
+            return dict(self._tasks)
 
     def _cleanup_old_tasks(self, user_id: str) -> None:
         """Remove oldest completed/failed/cancelled tasks if user exceeds limit.
@@ -448,15 +732,71 @@ class BackgroundTaskManager:
             wait: If True, wait for running tasks to complete.
         """
         logger.info("Shutting down task manager")
+
+        # Stop persistence sync thread and save final state
+        if self._persistence:
+            self._persistence.stop_sync_thread()
+            # Final save with current state
+            with self._lock:
+                self._persistence.save(self._tasks)
+            logger.info("Task state saved to disk")
+
         self._executor.shutdown(wait=wait)
 
 
 # Global task manager instance
 _task_manager: BackgroundTaskManager | None = None
 
+# Global configuration for task manager (set via init_task_manager)
+_task_manager_config: dict[str, Any] = {}
+
+
+def init_task_manager(
+    persistence_path: Path | str | None = None,
+    sync_interval: int = TaskPersistence.DEFAULT_SYNC_INTERVAL,
+    retention_hours: int = TaskPersistence.DEFAULT_RETENTION_HOURS,
+    max_workers: int = 4,
+    max_tasks_per_user: int = 10,
+) -> BackgroundTaskManager:
+    """Initialize the global task manager with configuration.
+
+    This should be called once at server startup to configure persistence
+    settings. If called multiple times, subsequent calls are ignored.
+
+    Args:
+        persistence_path: Path to task state file. None for default path.
+        sync_interval: Seconds between automatic saves to disk.
+        retention_hours: Hours to retain completed tasks.
+        max_workers: Maximum concurrent tasks across all users.
+        max_tasks_per_user: Maximum tasks (including history) per user.
+
+    Returns:
+        The initialized BackgroundTaskManager instance.
+    """
+    global _task_manager, _task_manager_config
+
+    if _task_manager is not None:
+        logger.debug("Task manager already initialized, ignoring reinit")
+        return _task_manager
+
+    _task_manager_config = {
+        "persistence_path": persistence_path,
+        "sync_interval": sync_interval,
+        "retention_hours": retention_hours,
+        "max_workers": max_workers,
+        "max_tasks_per_user": max_tasks_per_user,
+    }
+
+    _task_manager = BackgroundTaskManager(**_task_manager_config)
+    logger.info(f"Task manager initialized (persistence: {persistence_path or 'default'})")
+    return _task_manager
+
 
 def get_task_manager() -> BackgroundTaskManager:
-    """Get the global task manager instance, creating it if needed."""
+    """Get the global task manager instance, creating it if needed.
+
+    If init_task_manager() was not called, creates with default settings.
+    """
     global _task_manager
     if _task_manager is None:
         _task_manager = BackgroundTaskManager()

@@ -7,18 +7,27 @@ Supports two transport modes:
 - stdio (default): Standard input/output for local MCP clients
 - streamable-http: HTTP transport for persistent, long-running connections
 
+Features:
+- Persistent task storage with crash recovery
+- SSE keepalive for proxy-friendly long connections
+
 Usage:
     # STDIO mode (default)
     deriva-mcp
 
     # HTTP mode
     deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
+
+    # HTTP mode with custom keepalive interval
+    deriva-mcp --transport streamable-http --sse-keepalive-interval 30
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import os
+from pathlib import Path
 from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
@@ -559,6 +568,44 @@ Tasks are isolated per user - you can only see and manage your own tasks.
 # Global connection manager (shared across server instances)
 connection_manager = ConnectionManager()
 
+# SSE keepalive interval (seconds) - patched into EventSourceResponse
+_sse_keepalive_interval: int = 30
+
+
+def patch_sse_keepalive(ping_interval: int) -> None:
+    """Patch sse_starlette.EventSourceResponse to include keepalive pings.
+
+    The MCP SDK uses EventSourceResponse but doesn't expose the ping parameter.
+    This monkey-patch wraps the class to inject our configured ping interval,
+    preventing proxy timeouts for long-running SSE connections.
+
+    Args:
+        ping_interval: Seconds between keepalive pings (0 to disable)
+    """
+    global _sse_keepalive_interval
+    _sse_keepalive_interval = ping_interval
+
+    if ping_interval <= 0:
+        logger.info("SSE keepalive disabled")
+        return
+
+    try:
+        import sse_starlette
+
+        _original_init = sse_starlette.EventSourceResponse.__init__
+
+        def patched_init(self, *args, **kwargs):
+            # Inject ping if not already set
+            if "ping" not in kwargs:
+                kwargs["ping"] = _sse_keepalive_interval
+            _original_init(self, *args, **kwargs)
+
+        sse_starlette.EventSourceResponse.__init__ = patched_init
+        logger.info(f"SSE keepalive enabled (interval: {ping_interval}s)")
+
+    except Exception as e:
+        logger.warning(f"Failed to patch SSE keepalive: {e}")
+
 
 def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> None:
     """Register all DerivaML tools, resources, and prompts with the MCP server."""
@@ -643,8 +690,17 @@ Examples:
   # Run with HTTP transport (for persistent connections)
   deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 
-  # Run HTTP server on custom port
-  deriva-mcp --transport streamable-http --port 9000
+  # Run HTTP server with custom keepalive and task settings
+  deriva-mcp --transport streamable-http \\
+    --sse-keepalive-interval 30 \\
+    --task-state-path /data/tasks.json \\
+    --task-retention-hours 168
+
+Environment variables (override defaults):
+  DERIVA_MCP_TASK_STATE_PATH      - Path to task state file
+  DERIVA_MCP_TASK_RETENTION_HOURS - Hours to retain completed tasks
+  DERIVA_MCP_TASK_SYNC_INTERVAL   - Seconds between task state saves
+  DERIVA_MCP_SSE_KEEPALIVE        - SSE keepalive interval in seconds
 """,
     )
     parser.add_argument(
@@ -664,6 +720,35 @@ Examples:
         default=8000,
         help="Port to bind for HTTP transport (default: 8000)",
     )
+
+    # Task persistence options
+    parser.add_argument(
+        "--task-state-path",
+        type=Path,
+        default=None,
+        help="Path to task state file (default: ~/.deriva-ml/task_state.json)",
+    )
+    parser.add_argument(
+        "--task-retention-hours",
+        type=int,
+        default=None,
+        help="Hours to retain completed tasks (default: 168 = 7 days)",
+    )
+    parser.add_argument(
+        "--task-sync-interval",
+        type=int,
+        default=None,
+        help="Seconds between task state saves (default: 5)",
+    )
+
+    # SSE keepalive options
+    parser.add_argument(
+        "--sse-keepalive-interval",
+        type=int,
+        default=None,
+        help="SSE keepalive interval in seconds (default: 30, 0 to disable)",
+    )
+
     return parser.parse_args()
 
 
@@ -671,9 +756,41 @@ def main() -> None:
     """Run the DerivaML MCP server."""
     import atexit
 
-    from deriva_ml_mcp.tasks import get_task_manager
+    from deriva_ml_mcp.tasks import TaskPersistence, init_task_manager
 
     args = parse_args()
+
+    # Resolve configuration from args and environment variables
+    # Environment variables take precedence over defaults, CLI args override both
+
+    # Task persistence configuration
+    task_state_path = args.task_state_path
+    if task_state_path is None:
+        env_path = os.environ.get("DERIVA_MCP_TASK_STATE_PATH")
+        task_state_path = Path(env_path) if env_path else None
+
+    task_retention_hours = args.task_retention_hours
+    if task_retention_hours is None:
+        env_retention = os.environ.get("DERIVA_MCP_TASK_RETENTION_HOURS")
+        task_retention_hours = int(env_retention) if env_retention else TaskPersistence.DEFAULT_RETENTION_HOURS
+
+    task_sync_interval = args.task_sync_interval
+    if task_sync_interval is None:
+        env_sync = os.environ.get("DERIVA_MCP_TASK_SYNC_INTERVAL")
+        task_sync_interval = int(env_sync) if env_sync else TaskPersistence.DEFAULT_SYNC_INTERVAL
+
+    # SSE keepalive configuration
+    sse_keepalive_interval = args.sse_keepalive_interval
+    if sse_keepalive_interval is None:
+        env_keepalive = os.environ.get("DERIVA_MCP_SSE_KEEPALIVE")
+        sse_keepalive_interval = int(env_keepalive) if env_keepalive else 30
+
+    # Initialize task manager with persistence
+    init_task_manager(
+        persistence_path=task_state_path,
+        sync_interval=task_sync_interval,
+        retention_hours=task_retention_hours,
+    )
 
     # Create server with appropriate settings
     server = create_server(host=args.host, port=args.port)
@@ -682,6 +799,8 @@ def main() -> None:
     def shutdown_task_manager() -> None:
         logger.info("Shutting down background task manager")
         try:
+            from deriva_ml_mcp.tasks import get_task_manager
+
             task_manager = get_task_manager()
             task_manager.shutdown(wait=False)  # Don't block on pending tasks
         except Exception as e:
@@ -691,9 +810,13 @@ def main() -> None:
 
     transport: Literal["stdio", "streamable-http"] = args.transport
     if transport == "streamable-http":
+        # Enable SSE keepalive for HTTP transport
+        patch_sse_keepalive(sse_keepalive_interval)
+
         logger.info(
             f"Starting DerivaML MCP server (transport={transport}, "
-            f"host={args.host}, port={args.port})"
+            f"host={args.host}, port={args.port}, "
+            f"sse_keepalive={sse_keepalive_interval}s)"
         )
     else:
         logger.info(f"Starting DerivaML MCP server (transport={transport})")

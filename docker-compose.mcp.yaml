@@ -51,8 +51,16 @@ services:
       - ${HOME}/.bdbag:${HOME}/.bdbag
       # DerivaML working directory
       - ${HOME}/.deriva-ml:${HOME}/.deriva-ml
+      # Persistent task storage (survives container restarts)
+      - deriva-mcp-data:/app/data
     environment:
       - HOME=${HOME}
+      # Task persistence configuration
+      - DERIVA_MCP_TASK_STATE_PATH=/app/data/task_state.json
+      - DERIVA_MCP_TASK_RETENTION_HOURS=168
+      - DERIVA_MCP_TASK_SYNC_INTERVAL=5
+      # SSE keepalive to prevent proxy timeouts
+      - DERIVA_MCP_SSE_KEEPALIVE=30
     restart: unless-stopped
     healthcheck:
       # Health check uses dedicated /health endpoint that does NOT create MCP sessions.
@@ -62,6 +70,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+volumes:
+  # Named volume for persistent task state
+  deriva-mcp-data:
 
 networks:
   # Use the existing network from deriva-localhost stack

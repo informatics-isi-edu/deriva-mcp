@@ -86,6 +86,16 @@ ENV DERIVA_MCP_IMAGE_NAME="ghcr.io/informatics-isi-edu/deriva-mcp"
 # Flag to indicate running in Docker container
 ENV DERIVA_MCP_IN_DOCKER="true"
 
+# Task persistence and SSE keepalive configuration
+# These can be overridden at runtime via docker run -e or docker-compose
+ENV DERIVA_MCP_TASK_STATE_PATH="/app/data/task_state.json"
+ENV DERIVA_MCP_TASK_RETENTION_HOURS="168"
+ENV DERIVA_MCP_TASK_SYNC_INTERVAL="5"
+ENV DERIVA_MCP_SSE_KEEPALIVE="30"
+
+# Create data directory for task persistence
+RUN mkdir -p /app/data && chmod 755 /app/data
+
 # Expose HTTP port for streamable-http transport
 EXPOSE 8000
 

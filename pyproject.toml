@@ -44,7 +44,6 @@ scripts = [
 
 [project.scripts]
 deriva-mcp = "deriva_ml_mcp.server:main"
-bump-version = "deriva_ml_mcp.bump_version:main"
 
 [build-system]
 requires = ["setuptools>=80", "setuptools_scm[toml]>=8", "wheel"]
