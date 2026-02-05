@@ -27,6 +27,7 @@ dependencies = [
     "pip-system-certs>=5.3",
     "kaggle>=1.8.3",
     "bump-my-version",
+    "psutil>=5.9",
 ]
 
 [project.optional-dependencies]
@@ -50,7 +51,7 @@ requires = ["setuptools>=80", "setuptools_scm[toml]>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.uv.sources]
-deriva = {git = "https://github.com/informatics-isi-edu/deriva-py", branch = "master" }
+deriva = {git = "https://github.com/informatics-isi-edu/deriva-py", branch = "2.0-dev" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
