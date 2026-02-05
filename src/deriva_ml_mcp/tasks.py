@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Coroutine
 
 if TYPE_CHECKING:
     from concurrent.futures import Future
@@ -555,6 +555,101 @@ class BackgroundTaskManager:
 
             logger.info(f"Created task {task_id} for user {user_id}: {task_type.value}")
             return task
+
+    async def create_async_task(
+        self,
+        user_id: str,
+        task_type: TaskType,
+        task_fn: Callable[..., Coroutine[Any, Any, Any]],
+        parameters: dict[str, Any],
+        progress_callback: Callable[[TaskProgress], None] | None = None,
+    ) -> BackgroundTask:
+        """Create and start a new async background task.
+
+        Unlike create_task which runs sync functions in a thread pool,
+        this method runs async functions directly in the event loop.
+
+        Args:
+            user_id: Identifier for the user (for isolation).
+            task_type: Type of task being created.
+            task_fn: Async function to execute.
+            parameters: Parameters to pass to task_fn and store for reference.
+            progress_callback: Optional callback for progress updates.
+
+        Returns:
+            The created BackgroundTask.
+        """
+        with self._lock:
+            task_id = self._generate_task_id()
+
+            task = BackgroundTask(
+                task_id=task_id,
+                user_id=user_id,
+                task_type=task_type,
+                status=TaskStatus.PENDING,
+                created_at=datetime.now(timezone.utc),
+                parameters=parameters,
+            )
+
+            # Register task
+            self._tasks[task_id] = task
+            if user_id not in self._user_tasks:
+                self._user_tasks[user_id] = []
+            self._user_tasks[user_id].append(task_id)
+
+            # Cleanup old tasks if needed
+            self._cleanup_old_tasks(user_id)
+
+        # Create progress updater
+        def update_progress(progress: TaskProgress) -> None:
+            progress_copy = TaskProgress(
+                current_step=progress.current_step,
+                total_steps=progress.total_steps,
+                current_step_number=progress.current_step_number,
+                percent_complete=progress.percent_complete,
+                message=progress.message,
+                updated_at=progress.updated_at,
+            )
+            task.progress = progress_copy
+            if progress_callback:
+                progress_callback(progress)
+
+        # Create async wrapper to handle status updates
+        async def async_task_wrapper() -> Any:
+            try:
+                with self._lock:
+                    task.status = TaskStatus.RUNNING
+                    task.started_at = datetime.now(timezone.utc)
+                    task.progress.message = "Starting..."
+
+                # Execute the async task
+                result = await task_fn(progress_updater=update_progress, **parameters)
+
+                with self._lock:
+                    task.status = TaskStatus.COMPLETED
+                    task.completed_at = datetime.now(timezone.utc)
+                    task.result = result
+                    task.progress.message = "Completed"
+                    task.progress.percent_complete = 100.0
+
+                logger.info(f"Async task {task_id} completed successfully")
+                return result
+
+            except Exception as e:
+                with self._lock:
+                    task.status = TaskStatus.FAILED
+                    task.completed_at = datetime.now(timezone.utc)
+                    task.error = str(e)
+                    task.progress.message = f"Failed: {e}"
+
+                logger.error(f"Async task {task_id} failed: {e}")
+                raise
+
+        # Schedule the async task in the event loop
+        asyncio.create_task(async_task_wrapper())
+
+        logger.info(f"Created async task {task_id} for user {user_id}: {task_type.value}")
+        return task
 
     def get_task(self, task_id: str, user_id: str) -> BackgroundTask | None:
         """Get a task by ID, validating user ownership.
