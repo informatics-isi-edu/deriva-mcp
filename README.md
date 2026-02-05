@@ -310,6 +310,96 @@ Then enable in `.claude/settings.local.json`:
 }
 ```
 
+### HTTP Transport Mode (for Long-Running Operations)
+
+For operations that take more than a few minutes (like catalog cloning), HTTP transport provides a persistent connection that survives client disconnects. The server runs as a background service and maintains task state across reconnections.
+
+#### Starting the HTTP Server
+
+**Using Docker Compose (Recommended):**
+
+```bash
+# Requires the deriva-localhost Docker network for localhost catalogs
+docker-compose -f docker-compose.mcp.yaml up -d
+
+# View logs
+docker-compose -f docker-compose.mcp.yaml logs -f
+
+# Stop the server
+docker-compose -f docker-compose.mcp.yaml down
+```
+
+**Using Docker directly:**
+
+```bash
+docker run -d --name deriva-mcp \
+  -p 8000:8000 \
+  --network deriva-localhost_internal_network \
+  --add-host localhost:172.28.3.15 \
+  -e HOME=$HOME \
+  -v $HOME/.deriva:$HOME/.deriva:ro \
+  -v $HOME/.bdbag:$HOME/.bdbag \
+  -v $HOME/.deriva-ml:$HOME/.deriva-ml \
+  ghcr.io/informatics-isi-edu/deriva-mcp:latest \
+  deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
+```
+
+**Running locally (development):**
+
+```bash
+# From source
+uv run deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
+
+# If installed via pip
+deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
+```
+
+#### Client Configuration for HTTP
+
+**Claude Code (`~/.mcp.json`):**
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+**Claude Desktop:**
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+#### Benefits of HTTP Transport
+
+- **No idle timeouts**: Long-running operations complete without connection drops
+- **Persistent server**: Server survives client disconnects and restarts
+- **Task state preservation**: Background tasks continue even if you close Claude
+- **Multiple clients**: Multiple Claude sessions can share the same server
+- **Health checks**: Docker can automatically restart unhealthy servers
+
+#### Verifying the HTTP Server
+
+```bash
+# Check server health
+curl -s http://localhost:8000/mcp
+
+# View server logs
+docker-compose -f docker-compose.mcp.yaml logs -f
+```
+
 ### VS Code with Continue or Cline
 
 Add to your MCP configuration (typically `.vscode/mcp.json`):
@@ -922,36 +1012,49 @@ python -c "from deriva_ml import DerivaML; DerivaML.globus_login('your-server.or
 
 ### Long-Running Operations (Catalog Cloning)
 
-Catalog cloning operations can take several minutes for large catalogs. The MCP server provides async tools (`clone_catalog_async`, `get_task_status`, `list_tasks`) to handle this:
+Catalog cloning operations can take several minutes for large catalogs. The MCP server provides async tools (`clone_catalog_async`, `get_task_status`, `list_tasks`) to handle this.
 
-**Recommended workflow:**
+**Recommended: Use HTTP Transport for Long Operations**
+
+The HTTP transport mode solves connection timeout issues by running the server as a persistent service:
+
+```bash
+# Start the server with HTTP transport
+docker-compose -f docker-compose.mcp.yaml up -d
+
+# Or run directly
+deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
+```
+
+Then configure your MCP client to use HTTP:
+
+```json
+{
+  "mcpServers": {
+    "deriva-ml": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+See [HTTP Transport Mode](#http-transport-mode-for-long-running-operations) for complete setup instructions.
+
+**Alternative: STDIO with Async Tools**
+
+If using STDIO transport, the async workflow helps manage timeouts:
+
 1. Use `clone_catalog_async()` to start the clone - returns a task_id immediately
 2. Periodically check `get_task_status(task_id)` for progress
 3. When status is "completed", the result contains the new catalog info
 
-**Connection timeout issues:**
-If `get_task_status` calls are taking too long or connections drop during clone operations:
+**STDIO Connection timeout issues:**
+If connections drop during clone operations with STDIO transport:
 
-1. **Increase MCP tool timeout** - Set the `MCP_TOOL_TIMEOUT` environment variable:
-   ```json
-   {
-     "mcpServers": {
-       "deriva-ml": {
-         "type": "stdio",
-         "command": "/bin/sh",
-         "args": ["-c", "docker run -i --rm -e MCP_TOOL_TIMEOUT=300000 ..."],
-         "env": {
-           "MCP_TOOL_TIMEOUT": "300000"
-         }
-       }
-     }
-   }
-   ```
-   The value is in milliseconds (300000 = 5 minutes, default is 60000 = 1 minute).
+1. **Check task status after reconnection** - If the MCP connection drops, simply reconnect and call `list_tasks()` to find your running tasks. Note: Task state is stored in memory, so if the server process restarts (not just reconnects), running tasks will be lost.
 
-2. **Check task status after reconnection** - If the MCP connection drops, simply reconnect and call `list_tasks()` to find your running tasks. Note: Task state is stored in memory, so if the server process restarts (not just reconnects), running tasks will be lost.
-
-3. **Use the Docker-based server** - The Docker-based server is more stable for long-running operations as it runs in an isolated container.
+2. **Consider switching to HTTP transport** - HTTP connections don't have the idle timeout issues that STDIO connections have with some MCP clients.
 
 ## Development
 

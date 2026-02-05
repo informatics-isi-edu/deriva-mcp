@@ -2,11 +2,24 @@
 
 This module implements the Model Context Protocol server for DerivaML,
 exposing DerivaML operations as MCP tools that can be used by LLM applications.
+
+Supports two transport modes:
+- stdio (default): Standard input/output for local MCP clients
+- streamable-http: HTTP transport for persistent, long-running connections
+
+Usage:
+    # STDIO mode (default)
+    deriva-mcp
+
+    # HTTP mode
+    deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 """
 
 from __future__ import annotations
 
+import argparse
 import logging
+from typing import Literal
 
 from mcp.server.fastmcp import FastMCP
 
@@ -36,10 +49,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("deriva-mcp")
 
-# Initialize FastMCP server
-mcp = FastMCP(
-    "deriva-ml",
-    instructions="""MCP server for DerivaML - manage ML workflows, datasets, and features in Deriva catalogs
+# Server instructions (extracted for reuse)
+SERVER_INSTRUCTIONS = """MCP server for DerivaML - manage ML workflows, datasets, and features in Deriva catalogs
 
 ## Connection
 
@@ -541,10 +552,9 @@ get_task_status("abc123")
 - `cancel_task("abc123")` - Cancel a running task
 
 Tasks are isolated per user - you can only see and manage your own tasks.
-""",
-)
+"""
 
-# Global connection manager
+# Global connection manager (shared across server instances)
 connection_manager = ConnectionManager()
 
 
@@ -571,8 +581,69 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     register_prompts(mcp_server, conn_manager)
 
 
-# Register all tools
-register_all_tools(mcp, connection_manager)
+def create_server(host: str = "127.0.0.1", port: int = 8000) -> FastMCP:
+    """Create and configure the MCP server.
+
+    Args:
+        host: Host to bind for HTTP transport (default: 127.0.0.1)
+        port: Port to bind for HTTP transport (default: 8000)
+
+    Returns:
+        Configured FastMCP server instance
+    """
+    mcp = FastMCP(
+        "deriva-ml",
+        host=host,
+        port=port,
+        instructions=SERVER_INSTRUCTIONS,
+    )
+
+    # Register all tools, resources, and prompts
+    register_all_tools(mcp, connection_manager)
+
+    return mcp
+
+
+# For backward compatibility: create default server at module load time
+# This allows existing code that imports `mcp` directly to continue working
+mcp = create_server()
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="DerivaML MCP Server - Model Context Protocol server for Deriva catalogs",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run with STDIO transport (default, for local MCP clients)
+  deriva-mcp
+
+  # Run with HTTP transport (for persistent connections)
+  deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
+
+  # Run HTTP server on custom port
+  deriva-mcp --transport streamable-http --port 9000
+""",
+    )
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "streamable-http"],
+        default="stdio",
+        help="Transport protocol (default: stdio)",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind for HTTP transport (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind for HTTP transport (default: 8000)",
+    )
+    return parser.parse_args()
 
 
 def main() -> None:
@@ -580,6 +651,11 @@ def main() -> None:
     import atexit
 
     from deriva_ml_mcp.tasks import get_task_manager
+
+    args = parse_args()
+
+    # Create server with appropriate settings
+    server = create_server(host=args.host, port=args.port)
 
     # Register shutdown handler for background task manager
     def shutdown_task_manager() -> None:
@@ -592,8 +668,16 @@ def main() -> None:
 
     atexit.register(shutdown_task_manager)
 
-    logger.info("Starting DerivaML MCP server")
-    mcp.run(transport="stdio")
+    transport: Literal["stdio", "streamable-http"] = args.transport
+    if transport == "streamable-http":
+        logger.info(
+            f"Starting DerivaML MCP server (transport={transport}, "
+            f"host={args.host}, port={args.port})"
+        )
+    else:
+        logger.info(f"Starting DerivaML MCP server (transport={transport})")
+
+    server.run(transport=transport)
 
 
 if __name__ == "__main__":

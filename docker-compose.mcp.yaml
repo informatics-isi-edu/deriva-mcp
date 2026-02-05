@@ -1,0 +1,70 @@
+# Standalone MCP server with HTTP transport
+#
+# This docker-compose file runs the Deriva MCP server in HTTP mode,
+# which provides persistent connections that survive client disconnects
+# and support long-running operations like catalog cloning.
+#
+# Prerequisites:
+#   - The deriva-localhost Docker network must exist (from deriva-localhost stack)
+#   - Deriva credentials in ~/.deriva/
+#
+# Usage:
+#   # Start the MCP server
+#   docker-compose -f docker-compose.mcp.yaml up -d
+#
+#   # View logs
+#   docker-compose -f docker-compose.mcp.yaml logs -f
+#
+#   # Stop the server
+#   docker-compose -f docker-compose.mcp.yaml down
+#
+# Claude Code configuration (~/.mcp.json):
+#   {
+#     "mcpServers": {
+#       "deriva-ml": {
+#         "type": "http",
+#         "url": "http://localhost:8000/mcp"
+#       }
+#     }
+#   }
+
+services:
+  deriva-mcp:
+    # Use local build for development, or ghcr.io/informatics-isi-edu/deriva-mcp:latest for production
+    image: deriva-mcp:local
+    container_name: deriva-mcp
+    command:
+      - deriva-mcp
+      - --transport
+      - streamable-http
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+    networks:
+      - deriva-localhost_internal_network
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount credentials read-only for security
+      - ${HOME}/.deriva:${HOME}/.deriva:ro
+      # BDBag keychain for dataset operations
+      - ${HOME}/.bdbag:${HOME}/.bdbag
+      # DerivaML working directory
+      - ${HOME}/.deriva-ml:${HOME}/.deriva-ml
+    environment:
+      - HOME=${HOME}
+    restart: unless-stopped
+    healthcheck:
+      # Health check verifies the HTTP server is listening (connection test only)
+      test: ["CMD", "curl", "-s", "--max-time", "2", "-o", "/dev/null", "http://localhost:8000/mcp"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  # Use the existing network from deriva-localhost stack
+  # This allows the MCP server to communicate with the Deriva webserver
+  deriva-localhost_internal_network:
+    external: true

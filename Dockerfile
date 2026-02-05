@@ -42,10 +42,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install runtime dependencies (git needed for some deriva operations)
+# Install runtime dependencies (git needed for some deriva operations, curl for health checks)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtual environment from builder
@@ -85,8 +86,13 @@ ENV DERIVA_MCP_IMAGE_NAME="ghcr.io/informatics-isi-edu/deriva-mcp"
 # Flag to indicate running in Docker container
 ENV DERIVA_MCP_IN_DOCKER="true"
 
-# MCP servers communicate via stdio
-ENTRYPOINT ["/entrypoint.sh", "deriva-mcp"]
+# Expose HTTP port for streamable-http transport
+EXPOSE 8000
+
+# Default entrypoint runs deriva-mcp with STDIO transport
+# Override with: docker run ... deriva-mcp --transport streamable-http --port 8000
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["deriva-mcp"]
 
 # Labels for container metadata
 LABEL org.opencontainers.image.title="Deriva MCP Server"
