@@ -78,17 +78,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("deriva-mcp")
 
-# Store active executions by connection key
-_active_executions: dict[str, Any] = {}
-
 
 def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     """Register execution management tools with the MCP server."""
 
-    def _get_execution_key() -> str:
-        """Get a key for the current active connection."""
-        ml = conn_manager.get_active_or_raise()
-        return f"{ml.host_name}:{ml.catalog_id}"
+    def _get_active_tool_execution() -> Any | None:
+        """Get the active tool-created execution for the current connection."""
+        conn_info = conn_manager.get_active_connection_info_or_raise()
+        return conn_info.active_tool_execution
+
+    def _set_active_tool_execution(execution: Any) -> None:
+        """Set the active tool-created execution for the current connection."""
+        conn_info = conn_manager.get_active_connection_info_or_raise()
+        conn_info.active_tool_execution = execution
 
     @mcp.tool()
     async def create_execution(
@@ -97,6 +99,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         description: str = "",
         dataset_rids: list[str] | None = None,
         asset_rids: list[str] | None = None,
+        dry_run: bool = False,
     ) -> str:
         """Create a new execution to track an ML workflow run with provenance.
 
@@ -118,12 +121,17 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             description: What this execution does and why.
             dataset_rids: Input dataset RIDs for provenance tracking.
             asset_rids: Input asset RIDs for provenance tracking.
+            dry_run: If True, download input datasets/assets but skip creating
+                execution records in the catalog and skip uploading results.
+                Useful for testing data loading, configuration, and model
+                initialization without writing to the catalog.
 
         Returns:
-            JSON with execution_rid, workflow_rid, dataset_count, asset_count.
+            JSON with execution_rid, workflow_rid, dataset_count, asset_count, dry_run.
 
         Example:
             create_execution("CIFAR Training", "Training", "Train ResNet on CIFAR-10", ["1-ABC"])
+            create_execution("Test Run", "Training", "Debug data loading", dry_run=True)
         """
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec
@@ -149,9 +157,8 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 assets=asset_rids or [],
             )
 
-            execution = ml.create_execution(config)
-            key = _get_execution_key()
-            _active_executions[key] = execution
+            execution = ml.create_execution(config, dry_run=dry_run)
+            _set_active_tool_execution(execution)
 
             return json.dumps({
                 "status": "created",
@@ -160,6 +167,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 "description": description,
                 "dataset_count": len(datasets),
                 "asset_count": len(asset_rids or []),
+                "dry_run": dry_run,
             })
         except Exception as e:
             logger.error(f"Failed to create execution: {e}")
@@ -173,14 +181,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         status changes to "running".
         """
         try:
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "error",
                     "message": "No active execution. Use create_execution first.",
                 })
 
-            execution = _active_executions[key]
             execution.execution_start()
 
             return json.dumps({
@@ -199,14 +206,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         your ML workflow completes but BEFORE uploading outputs.
         """
         try:
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "error",
                     "message": "No active execution.",
                 })
 
-            execution = _active_executions[key]
             execution.execution_stop()
 
             return json.dumps({
@@ -231,8 +237,8 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             from deriva_ml.core.definitions import Status
 
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "error",
                     "message": "No active execution.",
@@ -248,7 +254,6 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             }
 
             status_enum = status_map.get(status.lower(), Status.running)
-            execution = _active_executions[key]
             execution.update_status(status_enum, message)
 
             return json.dumps({
@@ -299,14 +304,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             JSON with execution_rid, status, working_dir, upload_pending flag.
         """
         try:
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "no_active_execution",
                     "message": "No active execution. Use create_execution first.",
                 })
 
-            execution = _active_executions[key]
             has_pending_uploads = execution.uploaded_assets is None
 
             return json.dumps({
@@ -337,8 +341,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             ml = conn_manager.get_active_or_raise()
             execution = ml.restore_execution(execution_rid)
 
-            key = _get_execution_key()
-            _active_executions[key] = execution
+            _set_active_tool_execution(execution)
 
             return json.dumps({
                 "status": "restored",
@@ -388,14 +391,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             # Then write to the returned file_path
         """
         try:
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "error",
                     "message": "No active execution. Use create_execution first.",
                 })
 
-            execution = _active_executions[key]
             asset_path = execution.asset_file_path(
                 asset_name=asset_name,
                 file_name=file_name,
@@ -462,14 +464,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             deriva_ml for details.
         """
         try:
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "error",
                     "message": "No active execution.",
                 })
 
-            execution = _active_executions[key]
             results = execution.upload_execution_outputs(clean_folder=clean_folder)
 
             summary = {}
@@ -515,14 +516,12 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             from pathlib import Path
 
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "error",
                     "message": "No active execution. Use create_execution first.",
                 })
-
-            execution = _active_executions[key]
 
             # Use provided dest_dir or default to execution working dir
             if dest_dir:
@@ -567,14 +566,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             JSON with dataset_rid, execution_rid.
         """
         try:
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "error",
                     "message": "No active execution.",
                 })
 
-            execution = _active_executions[key]
             dataset = execution.create_dataset(
                 description=description,
                 dataset_types=dataset_types or [],
@@ -622,14 +620,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec
 
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "error",
                     "message": "No active execution.",
                 })
 
-            execution = _active_executions[key]
             spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
             bag = execution.download_dataset_bag(spec)
 
@@ -654,14 +651,13 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             JSON with working_dir path.
         """
         try:
-            key = _get_execution_key()
-            if key not in _active_executions:
+            execution = _get_active_tool_execution()
+            if execution is None:
                 return json.dumps({
                     "status": "error",
                     "message": "No active execution.",
                 })
 
-            execution = _active_executions[key]
             return json.dumps({
                 "working_dir": str(execution.working_dir),
                 "execution_rid": execution.execution_rid,

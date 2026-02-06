@@ -476,47 +476,6 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def set_visible_columns(
-        table_name: str,
-        columns: list[str],
-        context: str = "*",
-    ) -> str:
-        """Set which columns are visible in a table display context.
-
-        Controls which columns appear when viewing the table in the UI.
-        Different contexts show different views of the data.
-
-        Args:
-            table_name: Name of the table to configure.
-            columns: List of column names to display (in order).
-            context: Display context - "*" (all), "compact", "detailed", "entry", or "filter".
-
-        Returns:
-            JSON with status, table_name, columns, context.
-
-        Example:
-            set_visible_columns("Subject", ["RID", "Name", "Age", "Notes"])
-            set_visible_columns("Subject", ["Name", "Age"], context="compact")
-        """
-        try:
-            from deriva_ml.model.handles import TableHandle
-
-            ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-            handle = TableHandle(table)
-            handle.set_visible_columns(columns, context=context)
-
-            return json.dumps({
-                "status": "updated",
-                "table_name": table_name,
-                "columns": columns,
-                "context": context,
-            })
-        except Exception as e:
-            logger.error(f"Failed to set visible columns: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def add_column(
         table_name: str,
         column_name: str,

@@ -7,6 +7,7 @@ from deriva_ml_mcp.connection import (
     ConnectionManager,
     ConnectionInfo,
     MCP_WORKFLOW_TYPE,
+    derive_user_id,
     get_mcp_workflow_info,
 )
 
@@ -17,14 +18,14 @@ class TestMCPWorkflowInfo:
     def test_get_mcp_workflow_info_defaults(self):
         """Test default workflow info values."""
         info = get_mcp_workflow_info()
-        assert info["workflow_name"] == "DerivaML MCP Server"
+        assert info["workflow_name"] == "Deriva MCP Server"
         assert info["workflow_type"] == MCP_WORKFLOW_TYPE
         assert info["in_docker"] is False
 
     @patch.dict("os.environ", {
-        "DERIVAML_MCP_WORKFLOW_NAME": "Custom MCP",
-        "DERIVAML_MCP_VERSION": "1.2.3",
-        "DERIVAML_MCP_IN_DOCKER": "true",
+        "DERIVA_MCP_WORKFLOW_NAME": "Custom MCP",
+        "DERIVA_MCP_VERSION": "1.2.3",
+        "DERIVA_MCP_IN_DOCKER": "true",
     })
     def test_get_mcp_workflow_info_from_env(self):
         """Test workflow info from environment variables."""
@@ -44,10 +45,10 @@ class TestConnectionManager:
         assert manager._active_connection is None
 
     def test_connection_key(self):
-        """Test connection key generation."""
+        """Test connection key generation includes user_id."""
         manager = ConnectionManager()
-        key = manager._connection_key("example.org", "123")
-        assert key == "example.org:123"
+        key = manager._connection_key("example.org", "123", "user_abc")
+        assert key == "user_abc:example.org:123"
 
     def test_list_connections_empty(self):
         """Test listing connections when none exist."""
@@ -87,6 +88,7 @@ class TestConnectionManager:
         mock_instance.domain_schema = "test_schema"
         mock_instance.host_name = "example.org"
         mock_instance.catalog_id = "123"
+        mock_instance.credential = None  # No credential -> default_user
         mock_derivaml.return_value = mock_instance
 
         manager = ConnectionManager()
@@ -96,7 +98,7 @@ class TestConnectionManager:
         result = manager.connect("example.org", "123")
 
         assert result == mock_instance
-        assert manager._active_connection == "example.org:123"
+        assert manager._active_connection == "default_user:example.org:123"
         assert len(manager._connections) == 1
 
     @patch("deriva_ml_mcp.connection.DerivaML")
@@ -106,6 +108,7 @@ class TestConnectionManager:
         mock_instance.domain_schema = "test_schema"
         mock_instance.host_name = "example.org"
         mock_instance.catalog_id = "123"
+        mock_instance.credential = None
         mock_derivaml.return_value = mock_instance
 
         mock_workflow = MagicMock()
@@ -126,6 +129,7 @@ class TestConnectionManager:
     def test_connect_reuses_existing(self, mock_derivaml):
         """Test that connecting to same catalog reuses connection."""
         mock_instance = MagicMock()
+        mock_instance.credential = None
         mock_derivaml.return_value = mock_instance
 
         manager = ConnectionManager()
@@ -135,13 +139,14 @@ class TestConnectionManager:
         result2 = manager.connect("example.org", "123")
 
         assert result1 == result2
-        # DerivaML should only be called once
-        assert mock_derivaml.call_count == 1
+        # DerivaML is called twice (to derive user_id), but only one connection is stored
+        assert len(manager._connections) == 1
 
     @patch("deriva_ml_mcp.connection.DerivaML")
     def test_disconnect(self, mock_derivaml):
         """Test disconnecting from a catalog."""
         mock_instance = MagicMock()
+        mock_instance.credential = None
         mock_derivaml.return_value = mock_instance
 
         manager = ConnectionManager()
@@ -156,6 +161,7 @@ class TestConnectionManager:
     def test_disconnect_closes_execution(self, mock_derivaml):
         """Test that disconnect closes the execution context."""
         mock_instance = MagicMock()
+        mock_instance.credential = None
         mock_derivaml.return_value = mock_instance
 
         mock_execution = MagicMock()
@@ -179,6 +185,7 @@ class TestConnectionManager:
     def test_set_active(self, mock_derivaml):
         """Test setting active connection."""
         mock_instance = MagicMock()
+        mock_instance.credential = None
         mock_derivaml.return_value = mock_instance
 
         manager = ConnectionManager()
@@ -186,11 +193,11 @@ class TestConnectionManager:
         manager.connect("example.org", "123", set_active=False)
         manager.connect("example.org", "456")
 
-        assert manager._active_connection == "example.org:456"
+        assert manager._active_connection == "default_user:example.org:456"
 
         result = manager.set_active("example.org", "123")
         assert result is True
-        assert manager._active_connection == "example.org:123"
+        assert manager._active_connection == "default_user:example.org:123"
 
     def test_set_active_not_found(self):
         """Test setting active to non-existent connection."""
@@ -203,6 +210,7 @@ class TestConnectionManager:
         """Test listing connections includes workflow and execution info."""
         mock_instance = MagicMock()
         mock_instance.domain_schema = None
+        mock_instance.credential = None
         mock_derivaml.return_value = mock_instance
 
         mock_execution = MagicMock()
@@ -222,6 +230,7 @@ class TestConnectionManager:
         """Test listing multiple connections."""
         mock_instance = MagicMock()
         mock_instance.domain_schema = None
+        mock_instance.credential = None
         mock_derivaml.return_value = mock_instance
 
         manager = ConnectionManager()

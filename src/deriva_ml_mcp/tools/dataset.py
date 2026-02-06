@@ -91,15 +91,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             create_dataset("Training images for model v2", ["Training"])
         """
         try:
-            from deriva_ml_mcp.tools.execution import _active_executions
-
-            ml = conn_manager.get_active_or_raise()
+            conn_manager.get_active_or_raise()  # Ensure connection exists
 
             # Get execution: user-created execution takes priority over MCP connection execution
             execution = None
-            key = f"{ml.host_name}:{ml.catalog_id}"
-            if key in _active_executions:
-                execution = _active_executions[key]
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info and conn_info.active_tool_execution:
+                execution = conn_info.active_tool_execution
 
             # Fallback to MCP connection execution
             if execution is None:

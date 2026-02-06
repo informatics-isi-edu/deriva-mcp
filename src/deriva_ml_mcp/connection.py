@@ -3,12 +3,22 @@
 This module handles Deriva catalog connections, maintaining
 active connections and providing access to DerivaML instances.
 
+Multi-user isolation:
+- Each connection is keyed by (user_id, hostname, catalog_id) so two users
+  connecting to the same catalog get separate ConnectionInfo objects.
+- The active connection is tracked per async context using contextvars,
+  so concurrent requests in HTTP transport mode don't interfere.
+- User identity is derived from credentials at connect time and stored
+  on ConnectionInfo for use by other modules (background tasks, executions).
+
 When connecting to a catalog, an MCP workflow and execution are automatically
 created to track all operations performed through the MCP server.
 """
 
 from __future__ import annotations
 
+import contextvars
+import hashlib
 import logging
 import os
 from dataclasses import dataclass
@@ -23,6 +33,34 @@ logger = logging.getLogger("deriva-mcp")
 
 # Workflow type for MCP server operations
 MCP_WORKFLOW_TYPE = "Deriva MCP"
+
+# Per-request active connection tracking.
+# In HTTP transport, each async request gets its own contextvar scope,
+# preventing one user's connect() from overwriting another's active connection.
+# In stdio transport, there's only one context so this behaves like a simple variable.
+_active_connection_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "active_connection", default=None
+)
+
+
+def derive_user_id(credential: dict | None) -> str:
+    """Derive a user identifier from Deriva credentials.
+
+    Uses a hash of the webauthn cookie value for privacy.
+    Falls back to "default_user" for single-user (stdio) mode.
+
+    Args:
+        credential: Credential dict from DerivaML (contains 'cookie' key).
+
+    Returns:
+        A string identifying the user.
+    """
+    if credential:
+        cookie = credential.get("cookie", "")
+        if "webauthn=" in cookie:
+            webauthn = cookie.split("webauthn=")[1].split(";")[0]
+            return hashlib.sha256(webauthn.encode()).hexdigest()[:16]
+    return "default_user"
 
 
 def get_mcp_workflow_info() -> dict[str, str | bool]:
@@ -45,31 +83,51 @@ class ConnectionInfo:
     """Information about an active DerivaML connection.
 
     Each connection has an associated workflow and execution for tracking
-    all MCP operations performed on the catalog.
+    all MCP operations performed on the catalog. The user_id field
+    identifies who owns this connection for multi-user isolation.
     """
 
     hostname: str
     catalog_id: str | int
     domain_schemas: set[str] | None
     ml_instance: DerivaML
+    user_id: str = "default_user"
     workflow_rid: str | None = None
-    execution: Any = None  # Execution object from deriva_ml
+    execution: Any = None  # MCP session execution from deriva_ml
+    active_tool_execution: Any = None  # User-created execution via create_execution tool
 
 
 class ConnectionManager:
-    """Manages DerivaML catalog connections.
+    """Manages DerivaML catalog connections with multi-user isolation.
 
-    Maintains a registry of active connections and provides
-    methods to connect, disconnect, and access DerivaML instances.
+    Connections are keyed by (user_id, hostname, catalog_id) so different
+    users connecting to the same catalog get separate state. The active
+    connection is tracked per-request using contextvars, which prevents
+    concurrent HTTP requests from interfering with each other.
+
+    In stdio mode (one process per client), there's only one user and
+    one context, so this behaves identically to a simple instance variable.
     """
 
     def __init__(self) -> None:
         self._connections: dict[str, ConnectionInfo] = {}
-        self._active_connection: str | None = None
 
-    def _connection_key(self, hostname: str, catalog_id: str | int) -> str:
-        """Generate a unique key for a connection."""
-        return f"{hostname}:{catalog_id}"
+    @property
+    def _active_connection(self) -> str | None:
+        """Get the active connection key for the current request context."""
+        return _active_connection_var.get()
+
+    @_active_connection.setter
+    def _active_connection(self, value: str | None) -> None:
+        """Set the active connection key for the current request context."""
+        _active_connection_var.set(value)
+
+    def _connection_key(self, hostname: str, catalog_id: str | int, user_id: str = "") -> str:
+        """Generate a unique key for a connection.
+
+        Includes user_id so two users on the same catalog get separate entries.
+        """
+        return f"{user_id}:{hostname}:{catalog_id}"
 
     def _ensure_mcp_workflow_type(self, ml: DerivaML) -> None:
         """Ensure the 'DerivaML MCP' workflow type exists in the catalog.
@@ -164,15 +222,6 @@ class ConnectionManager:
         Raises:
             DerivaMLException: If connection fails.
         """
-        key = self._connection_key(hostname, catalog_id)
-
-        # Return existing connection if available
-        if key in self._connections:
-            if set_active:
-                self._active_connection = key
-            logger.info(f"Reusing existing connection to {key}")
-            return self._connections[key].ml_instance
-
         # Create new connection
         logger.info(f"Connecting to {hostname}, catalog {catalog_id}")
         try:
@@ -183,6 +232,17 @@ class ConnectionManager:
                 check_auth=True,
             )
 
+            # Derive user identity from the connection's credentials
+            user_id = derive_user_id(ml.credential)
+            key = self._connection_key(hostname, catalog_id, user_id)
+
+            # Return existing connection if available for this user
+            if key in self._connections:
+                if set_active:
+                    self._active_connection = key
+                logger.info(f"Reusing existing connection to {key}")
+                return self._connections[key].ml_instance
+
             # Create MCP workflow and execution for tracking operations
             workflow_rid, execution = self._create_mcp_execution(ml)
 
@@ -191,6 +251,7 @@ class ConnectionManager:
                 catalog_id=catalog_id,
                 domain_schemas=domain_schemas,
                 ml_instance=ml,
+                user_id=user_id,
                 workflow_rid=workflow_rid,
                 execution=execution,
             )
@@ -198,8 +259,10 @@ class ConnectionManager:
                 self._active_connection = key
             logger.info(f"Successfully connected to {key}")
             return ml
+        except DerivaMLException:
+            raise
         except Exception as e:
-            logger.error(f"Failed to connect to {key}: {e}")
+            logger.error(f"Failed to connect to {hostname}:{catalog_id}: {e}")
             raise DerivaMLException(f"Failed to connect to {hostname}:{catalog_id}: {e}")
 
     def disconnect(
@@ -224,7 +287,14 @@ class ConnectionManager:
         if hostname is None and catalog_id is None:
             key = self._active_connection
         else:
-            key = self._connection_key(hostname or "", catalog_id or "")
+            # Find the connection key for this user+host+catalog
+            conn_info = self._find_connection(hostname or "", catalog_id or "")
+            key = None
+            if conn_info:
+                for k, v in self._connections.items():
+                    if v is conn_info:
+                        key = k
+                        break
 
         if key and key in self._connections:
             conn_info = self._connections[key]
@@ -251,6 +321,25 @@ class ConnectionManager:
             logger.info(f"Disconnected from {key}")
             return True
         return False
+
+    def _find_connection(self, hostname: str, catalog_id: str | int) -> ConnectionInfo | None:
+        """Find a connection by hostname and catalog_id (any user).
+
+        Used for disconnect when we don't have user_id handy.
+        Prefers the active connection's user if available.
+        """
+        # Try active connection first
+        active = self._active_connection
+        if active and active in self._connections:
+            info = self._connections[active]
+            if info.hostname == hostname and str(info.catalog_id) == str(catalog_id):
+                return info
+
+        # Fall back to any matching connection
+        for info in self._connections.values():
+            if info.hostname == hostname and str(info.catalog_id) == str(catalog_id):
+                return info
+        return None
 
     def get_active(self) -> DerivaML | None:
         """Get the active DerivaML instance.
@@ -314,6 +403,22 @@ class ConnectionManager:
             return self._connections[self._active_connection]
         return None
 
+    def get_active_connection_info_or_raise(self) -> ConnectionInfo:
+        """Get the active connection info or raise an error.
+
+        Returns:
+            ConnectionInfo for the active connection.
+
+        Raises:
+            DerivaMLException: If no active connection.
+        """
+        info = self.get_active_connection_info()
+        if info is None:
+            raise DerivaMLException(
+                "No active catalog connection. Use 'connect' tool to connect to a catalog first."
+            )
+        return info
+
     def get_connection(self, hostname: str, catalog_id: str | int) -> DerivaML | None:
         """Get a specific connection.
 
@@ -324,10 +429,8 @@ class ConnectionManager:
         Returns:
             DerivaML instance or None if not connected.
         """
-        key = self._connection_key(hostname, catalog_id)
-        if key in self._connections:
-            return self._connections[key].ml_instance
-        return None
+        conn = self._find_connection(hostname, catalog_id)
+        return conn.ml_instance if conn else None
 
     def list_connections(self) -> list[dict[str, Any]]:
         """List all active connections.
@@ -357,8 +460,10 @@ class ConnectionManager:
         Returns:
             True if connection exists and was set as active.
         """
-        key = self._connection_key(hostname, catalog_id)
-        if key in self._connections:
-            self._active_connection = key
-            return True
+        conn = self._find_connection(hostname, catalog_id)
+        if conn:
+            for key, info in self._connections.items():
+                if info is conn:
+                    self._active_connection = key
+                    return True
         return False

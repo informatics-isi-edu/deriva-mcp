@@ -44,6 +44,7 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         comment: str = "",
         terms: list[str] | None = None,
         assets: list[str] | None = None,
+        metadata: list[str | dict] | None = None,
     ) -> str:
         """Create a new feature definition to associate metadata with domain objects.
 
@@ -71,13 +72,31 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             comment: Description of what this feature represents.
             terms: Vocabulary table names whose terms can be values (e.g., ["Diagnosis_Type"]).
             assets: Asset table names that can be referenced (e.g., ["Segmentation_Mask"]).
+            metadata: Additional columns or table references to include in the feature.
+                Each item can be:
+                - A string: Treated as a table name (adds a foreign key reference)
+                - A dict: Column definition with at minimum "name" and "type" keys.
+                  The "type" value should be a dict like {"typename": "float4"}.
+                  Valid type names: text, int2, int4, int8, float4, float8, boolean,
+                  date, timestamp, timestamptz, json, jsonb.
+                  Optional keys: "nullok" (bool), "default", "comment".
 
         Returns:
             JSON with status, feature_name, target_table.
 
-        Example:
+        Examples:
+            # Simple term-based feature
             create_feature("Image", "Diagnosis", "Clinical diagnosis label", terms=["Diagnosis_Type"])
-            create_feature("Image", "Segmentation", "Derived segmentation mask", assets=["Segmentation_Mask"])
+
+            # Feature with a confidence score column
+            create_feature("Image", "Diagnosis", "Diagnosis with confidence",
+                terms=["Diagnosis_Type"],
+                metadata=[{"name": "confidence", "type": {"typename": "float4"}}])
+
+            # Feature referencing another table
+            create_feature("Image", "Review", "Review annotations",
+                terms=["Review_Status"],
+                metadata=["Reviewer"])
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -86,6 +105,7 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 feature_name=feature_name,
                 terms=terms or [],
                 assets=assets or [],
+                metadata=metadata or [],
                 comment=comment,
             )
             return json.dumps({
@@ -163,17 +183,15 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             add_feature_value("Image", "Diagnosis", "1-ABC", "Normal")
         """
         try:
-            from deriva_ml_mcp.tools.execution import _active_executions
-
             ml = conn_manager.get_active_or_raise()
 
             # Get execution RID from active execution or parameter
             # Priority: explicit parameter > user-created execution > MCP connection execution
             exe_rid = execution_rid
             if not exe_rid:
-                key = f"{ml.host_name}:{ml.catalog_id}"
-                if key in _active_executions:
-                    exe_rid = _active_executions[key].execution_rid
+                conn_info = conn_manager.get_active_connection_info()
+                if conn_info and conn_info.active_tool_execution:
+                    exe_rid = conn_info.active_tool_execution.execution_rid
 
             # Fallback to MCP connection execution
             if not exe_rid:
@@ -276,17 +294,15 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             )
         """
         try:
-            from deriva_ml_mcp.tools.execution import _active_executions
-
             ml = conn_manager.get_active_or_raise()
 
             # Get execution RID from active execution or parameter
             # Priority: explicit parameter > user-created execution > MCP connection execution
             exe_rid = execution_rid
             if not exe_rid:
-                key = f"{ml.host_name}:{ml.catalog_id}"
-                if key in _active_executions:
-                    exe_rid = _active_executions[key].execution_rid
+                conn_info = conn_manager.get_active_connection_info()
+                if conn_info and conn_info.active_tool_execution:
+                    exe_rid = conn_info.active_tool_execution.execution_rid
 
             # Fallback to MCP connection execution
             if not exe_rid:

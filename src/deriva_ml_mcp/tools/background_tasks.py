@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 from deriva.core import get_credential
 
+from deriva_ml_mcp.connection import derive_user_id
 from deriva_ml_mcp.tasks import (
     TaskProgress,
     TaskStatus,
@@ -69,19 +70,12 @@ def _resolve_hostname(hostname: str | None) -> str | None:
     return hostname
 
 
-# Cache for user ID to ensure consistency within a session
-_cached_user_id: str | None = None
+def _get_user_id_from_credential(hostname: str | None = None) -> str:
+    """Derive a user identifier from credentials for the given hostname.
 
-
-def _get_user_id(hostname: str | None = None) -> str:
-    """Get a user identifier from credentials.
-
-    For multi-user isolation, we use the credential identity as user_id.
-    If no credentials available, fall back to a default (single-user mode).
-
-    IMPORTANT: This function now caches the user ID to ensure consistency
-    between task creation and task lookup. The first call with a hostname
-    sets the cached value which is then used for all subsequent calls.
+    Stateless — derives fresh each call. For multi-user isolation,
+    prefer using conn_manager.get_active_connection_info().user_id
+    when an active connection is available.
 
     Args:
         hostname: Optional hostname to get credentials for.
@@ -89,43 +83,13 @@ def _get_user_id(hostname: str | None = None) -> str:
     Returns:
         A string identifying the user.
     """
-    global _cached_user_id
-
-    # If we have a cached user ID, always use it for consistency
-    if _cached_user_id is not None:
-        return _cached_user_id
-
     try:
         if hostname:
             cred = get_credential(hostname)
-            if cred and "cookie" in cred:
-                # Extract webauthn from cookie for user identity
-                cookie = cred.get("cookie", "")
-                if "webauthn=" in cookie:
-                    # Use a hash of the webauthn value for privacy
-                    import hashlib
-
-                    webauthn = cookie.split("webauthn=")[1].split(";")[0]
-                    user_id = hashlib.sha256(webauthn.encode()).hexdigest()[:16]
-                    _cached_user_id = user_id
-                    logger.debug(f"Cached user ID from credentials: {user_id[:8]}...")
-                    return user_id
-        # Fall back to checking any available credential
-        # In single-user mode, this is fine
-        _cached_user_id = "default_user"
-        logger.debug("Using default_user for single-user mode")
-        return "default_user"
+            return derive_user_id(cred)
     except Exception:
-        _cached_user_id = "default_user"
-        return "default_user"
-
-
-async def _get_user_id_async(hostname: str | None = None) -> str:
-    """Async version of _get_user_id.
-
-    Runs credential lookup in a thread to avoid blocking the event loop.
-    """
-    return await asyncio.to_thread(_get_user_id, hostname)
+        pass
+    return "default_user"
 
 
 def _clone_catalog_task(
@@ -370,8 +334,12 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         """
         try:
             task_manager = get_task_manager()
-            # Use async credential lookup to avoid blocking
-            user_id = await _get_user_id_async(source_hostname)
+            # Get user_id from active connection if available, otherwise from credentials
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                user_id = conn_info.user_id
+            else:
+                user_id = await asyncio.to_thread(_get_user_id_from_credential, source_hostname)
 
             # Store parameters for the task
             parameters = {
@@ -455,8 +423,9 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         """
         try:
             task_manager = get_task_manager()
-            # Use cached user_id for consistency with task creation
-            user_id = await _get_user_id_async()
+            # Get user_id from active connection for consistent task lookup
+            conn_info = conn_manager.get_active_connection_info()
+            user_id = conn_info.user_id if conn_info else "default_user"
 
             # Use async snapshot method to avoid blocking event loop and minimize lock contention
             task_snapshot = await task_manager.get_task_snapshot_async(task_id, user_id)
@@ -503,8 +472,9 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         """
         try:
             task_manager = get_task_manager()
-            # Use cached user_id for consistency
-            user_id = await _get_user_id_async()
+            # Get user_id from active connection
+            conn_info = conn_manager.get_active_connection_info()
+            user_id = conn_info.user_id if conn_info else "default_user"
 
             # Parse filters
             status_filter = TaskStatus(status) if status else None
@@ -551,8 +521,9 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         """
         try:
             task_manager = get_task_manager()
-            # Use cached user_id for consistency
-            user_id = await _get_user_id_async()
+            # Get user_id from active connection
+            conn_info = conn_manager.get_active_connection_info()
+            user_id = conn_info.user_id if conn_info else "default_user"
 
             # Run cancel in thread to avoid blocking
             cancelled = await asyncio.to_thread(task_manager.cancel_task, task_id, user_id)
