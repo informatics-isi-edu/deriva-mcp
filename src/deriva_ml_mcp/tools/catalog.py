@@ -412,7 +412,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         root_rid: str,
         dest_hostname: str | None = None,
         alias: str | None = None,
-        add_ml_schema: bool = False,
+        add_ml_schema: bool = True,
         asset_mode: str = "refs",
         copy_annotations: bool = True,
         copy_policy: bool = True,
