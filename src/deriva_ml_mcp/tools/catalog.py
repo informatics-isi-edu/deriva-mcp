@@ -407,11 +407,10 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     async def clone_catalog(
         source_hostname: str,
         source_catalog_id: str,
-        root_rid: str | None = None,
+        root_rid: str,
         dest_hostname: str | None = None,
         alias: str | None = None,
         add_ml_schema: bool = False,
-        schema_only: bool = False,
         asset_mode: str = "refs",
         copy_annotations: bool = True,
         copy_policy: bool = True,
@@ -424,31 +423,17 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         include_tables: list[str] | None = None,
         include_associations: bool = True,
         include_vocabularies: bool = True,
-        use_export_annotation: bool = False,
     ) -> str:
-        """Clone a catalog, either fully or partially based on a root RID.
+        """Create an ML workspace by cloning data reachable from a root RID.
 
-        **Full clone** (root_rid=None):
-        Creates a complete clone of the source catalog containing all data you
-        have access to. Due to row-level access controls, some records may not
-        be visible and won't be included.
+        Creates a partial catalog clone containing only data reachable from the
+        root RID (e.g., a project, dataset, or experiment). Uses the root table's
+        export annotation (if available) to determine which tables and paths to
+        follow, then fills in any uncovered tables (vocabularies, associations).
 
-        **Partial clone** (root_rid provided):
-        Creates a subset clone containing only data reachable from the root RID
-        (e.g., a project, dataset, or experiment). Traces foreign key relationships
-        to discover related tables and rows. This is useful for creating focused
-        development catalogs from large production catalogs.
-
-        Supports both same-server (fast) and cross-server cloning.
-
-        **Same-server clone** (fast):
-        When dest_hostname is None or matches source_hostname, uses ERMrest's native
-        clone for efficient same-server cloning.
-
-        **Cross-server clone**:
-        When dest_hostname differs from source_hostname, uses a three-stage approach:
-        1. Create schema WITHOUT foreign keys
-        2. Copy accessible data (all or reachable from root_rid)
+        Uses a three-stage approach:
+        1. Create schema WITHOUT foreign keys (only for included tables)
+        2. Copy data asynchronously (export paths + fill-in tables)
         3. Apply foreign keys, handling violations based on orphan_strategy
 
         **Asset handling modes**:
@@ -464,131 +449,76 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         Args:
             source_hostname: Source server hostname (e.g., "www.facebase.org").
             source_catalog_id: ID of the catalog to clone.
-            root_rid: Optional RID to clone from. If provided, creates a partial
-                clone containing only data reachable from this RID (e.g., a project
-                RID like "3-HXMC"). If None, clones the entire catalog.
-            dest_hostname: Destination hostname. If None or same as source, uses
-                fast same-server cloning. Otherwise uses three-stage clone.
+            root_rid: The starting RID from which to trace reachability
+                (e.g., a project RID like "3-HXMC").
+            dest_hostname: Destination hostname. If None, uses source hostname.
             alias: Optional alias name for the new catalog.
             add_ml_schema: If True, add the DerivaML schema to the clone.
-            schema_only: If True, copy only schema structure without any data.
             asset_mode: How to handle assets: "none", "refs" (default), or "full".
             copy_annotations: If True (default), copy all annotations.
             copy_policy: If True (default), copy ACL policies.
             exclude_schemas: List of schema names to exclude from cloning.
             exclude_objects: List of tables ("schema:table" format) to exclude.
-            reinitialize_dataset_versions: If True (default), increment dataset
-                versions so bag downloads work.
+            reinitialize_dataset_versions: If True (default), reinitialize dataset versions.
             orphan_strategy: How to handle orphan rows: "fail", "delete", or "nullify".
             prune_hidden_fkeys: If True, skip FKs with hidden reference data.
             truncate_oversized: If True, truncate values exceeding index size limits.
-            include_tables: (Partial clone only) Additional tables to include as
-                starting points for discovery.
-            include_associations: (Partial clone only) If True, auto-include
-                association tables for FK integrity.
-            include_vocabularies: (Partial clone only) If True, auto-include
-                referenced vocabulary tables.
-            use_export_annotation: (Partial clone only) If True, use the export
-                annotation on the root table to determine tables to clone.
+            include_tables: Additional tables to include.
+            include_associations: If True, auto-include association tables.
+            include_vocabularies: If True, auto-include vocabulary tables.
 
         Returns:
-            JSON with status, source info, destination info, clone type, and
+            JSON with status, source info, destination info, and
             operation details including tables restored and orphan handling stats.
 
         Examples:
-            Full cross-server clone:
-                clone_catalog("www.facebase.org", "1",
-                              dest_hostname="localhost",
-                              alias="facebase-clone",
-                              orphan_strategy="delete")
-
-            Partial clone of a project:
-                clone_catalog("www.facebase.org", "1",
-                              root_rid="3-HXMC",
-                              dest_hostname="localhost",
-                              alias="facebase-musmorph",
-                              add_ml_schema=True,
-                              orphan_strategy="delete")
-
-            Same-server full clone:
-                clone_catalog("localhost", "21")
-
-            Schema-only clone:
-                clone_catalog("prod.example.org", "21",
-                              dest_hostname="localhost",
-                              schema_only=True)
+            clone_catalog("www.facebase.org", "1",
+                          root_rid="3-HXMC",
+                          dest_hostname="localhost",
+                          alias="facebase-musmorph",
+                          add_ml_schema=True,
+                          orphan_strategy="delete")
         """
         try:
-            from deriva_ml.catalog import AssetCopyMode, OrphanStrategy
+            from deriva_ml.catalog import AssetCopyMode, OrphanStrategy, create_ml_workspace
 
             # Convert string parameters to enums
             asset_mode_enum = AssetCopyMode(asset_mode)
             orphan_strategy_enum = OrphanStrategy(orphan_strategy)
 
-            # Determine if this is a partial or full clone
-            if root_rid:
-                # Partial clone - use clone_subset_catalog
-                from deriva_ml.catalog import clone_subset_catalog as do_clone
-
-                result = do_clone(
-                    source_hostname=source_hostname,
-                    source_catalog_id=source_catalog_id,
-                    root_rid=root_rid,
-                    include_tables=include_tables,
-                    exclude_objects=exclude_objects,
-                    exclude_schemas=exclude_schemas,
-                    include_associations=include_associations,
-                    include_vocabularies=include_vocabularies,
-                    use_export_annotation=use_export_annotation,
-                    dest_hostname=dest_hostname,
-                    alias=alias,
-                    add_ml_schema=add_ml_schema,
-                    asset_mode=asset_mode_enum,
-                    copy_annotations=copy_annotations,
-                    copy_policy=copy_policy,
-                    orphan_strategy=orphan_strategy_enum,
-                    prune_hidden_fkeys=prune_hidden_fkeys,
-                    truncate_oversized=truncate_oversized,
-                    reinitialize_dataset_versions=reinitialize_dataset_versions,
-                )
-                clone_mode = "partial"
-            else:
-                # Full clone - use clone_catalog
-                from deriva_ml.catalog import clone_catalog as do_clone
-
-                result = do_clone(
-                    source_hostname=source_hostname,
-                    source_catalog_id=source_catalog_id,
-                    dest_hostname=dest_hostname,
-                    alias=alias,
-                    add_ml_schema=add_ml_schema,
-                    schema_only=schema_only,
-                    asset_mode=asset_mode_enum,
-                    copy_annotations=copy_annotations,
-                    copy_policy=copy_policy,
-                    exclude_schemas=exclude_schemas,
-                    exclude_objects=exclude_objects,
-                    reinitialize_dataset_versions=reinitialize_dataset_versions,
-                    orphan_strategy=orphan_strategy_enum,
-                    prune_hidden_fkeys=prune_hidden_fkeys,
-                    truncate_oversized=truncate_oversized,
-                )
-                clone_mode = "full"
+            result = create_ml_workspace(
+                source_hostname=source_hostname,
+                source_catalog_id=source_catalog_id,
+                root_rid=root_rid,
+                include_tables=include_tables,
+                exclude_objects=exclude_objects,
+                exclude_schemas=exclude_schemas,
+                include_associations=include_associations,
+                include_vocabularies=include_vocabularies,
+                dest_hostname=dest_hostname,
+                alias=alias,
+                add_ml_schema=add_ml_schema,
+                asset_mode=asset_mode_enum,
+                copy_annotations=copy_annotations,
+                copy_policy=copy_policy,
+                orphan_strategy=orphan_strategy_enum,
+                prune_hidden_fkeys=prune_hidden_fkeys,
+                truncate_oversized=truncate_oversized,
+                reinitialize_dataset_versions=reinitialize_dataset_versions,
+            )
 
             # Build response from CloneCatalogResult
             response: dict[str, Any] = {
                 "status": "cloned",
-                "clone_mode": clone_mode,
+                "clone_mode": "partial",
                 "source_hostname": source_hostname,
                 "source_catalog_id": source_catalog_id,
                 "dest_hostname": result.hostname,
                 "dest_catalog_id": result.catalog_id,
-                "schema_only": schema_only,
+                "root_rid": root_rid,
                 "asset_mode": asset_mode,
             }
 
-            if root_rid:
-                response["root_rid"] = root_rid
             if result.source_snapshot:
                 response["source_snapshot"] = result.source_snapshot
             if alias:
@@ -603,7 +533,6 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 response["orphan_rows_removed"] = result.report.summary.orphan_rows_removed
                 response["orphan_rows_nullified"] = result.report.summary.orphan_rows_nullified
                 response["fkeys_pruned"] = result.report.summary.fkeys_pruned
-                response["rows_skipped"] = result.report.summary.rows_skipped if hasattr(result.report.summary, 'rows_skipped') else 0
                 if result.truncated_values:
                     response["truncated_values_count"] = len(result.truncated_values)
                 # Include detailed report
@@ -640,13 +569,16 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     "orphan_details": result.report.orphan_details,
                 }
                 response["clone_type"] = "cross_server" if dest_hostname and dest_hostname != source_hostname else "same_server"
-                response["message"] = f"Catalog {'subset ' if root_rid else ''}migrated from {source_hostname}:{source_catalog_id} to {result.hostname}:{result.catalog_id}"
+                response["message"] = (
+                    f"Workspace created from {source_hostname}:{source_catalog_id} (root: {root_rid}) "
+                    f"to {result.hostname}:{result.catalog_id}"
+                )
                 response["report_summary"] = result.report.to_text()
 
             return json.dumps(response)
 
         except Exception as e:
-            logger.error(f"Failed to clone catalog: {e}")
+            logger.error(f"Failed to create workspace: {e}")
             return json.dumps({
                 "status": "error",
                 "message": str(e),
