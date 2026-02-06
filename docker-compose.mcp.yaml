@@ -40,6 +40,8 @@ services:
       - "0.0.0.0"
       - --port
       - "8000"
+    extra_hosts:
+      - "localhost:172.28.3.250"
     networks:
       - deriva-localhost_internal_network
     ports:
@@ -61,6 +63,11 @@ services:
       - DERIVA_MCP_TASK_SYNC_INTERVAL=5
       # SSE keepalive to prevent proxy timeouts
       - DERIVA_MCP_SSE_KEEPALIVE=30
+      # Remap 'localhost' to Docker DNS name for network access to Deriva server
+      - DERIVA_MCP_LOCALHOST_HOSTNAME=deriva
+      # CA bundle for self-signed localhost certificates
+      # pip-system-certs/truststore ignores REQUESTS_CA_BUNDLE but respects SSL_CERT_FILE
+      - SSL_CERT_FILE=${HOME}/.deriva/allCAbundle-with-local.pem
     restart: unless-stopped
     healthcheck:
       # Health check uses dedicated /health endpoint that does NOT create MCP sessions.

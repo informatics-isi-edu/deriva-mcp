@@ -68,6 +68,9 @@ rm -f /tmp/hosts.tmp\n\
 # Set default CA bundle for localhost with self-signed certificates if not already set\n\
 : "${REQUESTS_CA_BUNDLE:=$HOME/.deriva/allCAbundle-with-local.pem}"\n\
 export REQUESTS_CA_BUNDLE\n\
+# pip-system-certs/truststore ignores REQUESTS_CA_BUNDLE but respects SSL_CERT_FILE\n\
+: "${SSL_CERT_FILE:=$REQUESTS_CA_BUNDLE}"\n\
+export SSL_CERT_FILE\n\
 exec "$@"\n\
 ' > /entrypoint.sh && chmod +x /entrypoint.sh
 

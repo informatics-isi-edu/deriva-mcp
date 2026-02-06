@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 from deriva.core import DerivaServer, get_credential
 
+from deriva_ml_mcp.tools.background_tasks import _resolve_hostname
+
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
@@ -486,8 +488,14 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             asset_mode_enum = AssetCopyMode(asset_mode)
             orphan_strategy_enum = OrphanStrategy(orphan_strategy)
 
+            # Resolve hostnames for Docker network environments
+            resolved_dest = _resolve_hostname(dest_hostname)
+            resolved_source = _resolve_hostname(source_hostname)
+            source_credential = get_credential(source_hostname) if resolved_source != source_hostname else None
+            dest_credential = get_credential(dest_hostname) if resolved_dest != dest_hostname else None
+
             result = create_ml_workspace(
-                source_hostname=source_hostname,
+                source_hostname=resolved_source,
                 source_catalog_id=source_catalog_id,
                 root_rid=root_rid,
                 include_tables=include_tables,
@@ -495,12 +503,14 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 exclude_schemas=exclude_schemas,
                 include_associations=include_associations,
                 include_vocabularies=include_vocabularies,
-                dest_hostname=dest_hostname,
+                dest_hostname=resolved_dest,
                 alias=alias,
                 add_ml_schema=add_ml_schema,
                 asset_mode=asset_mode_enum,
                 copy_annotations=copy_annotations,
                 copy_policy=copy_policy,
+                source_credential=source_credential,
+                dest_credential=dest_credential,
                 orphan_strategy=orphan_strategy_enum,
                 prune_hidden_fkeys=prune_hidden_fkeys,
                 truncate_oversized=truncate_oversized,

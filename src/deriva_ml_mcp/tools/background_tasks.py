@@ -29,6 +29,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import TYPE_CHECKING, Any
 
 from deriva.core import get_credential
@@ -46,6 +47,27 @@ if TYPE_CHECKING:
     from deriva_ml_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-mcp")
+
+
+def _resolve_hostname(hostname: str | None) -> str | None:
+    """Resolve hostname for Docker network environments.
+
+    When the MCP server runs in a Docker container, 'localhost' doesn't refer
+    to the host machine. The DERIVA_MCP_LOCALHOST_HOSTNAME environment variable
+    allows remapping 'localhost' to the Docker DNS name of the Deriva server
+    (e.g., 'deriva').
+
+    Credentials are looked up using the original hostname ('localhost') since
+    that's how they're stored in ~/.deriva/credential.json, but network
+    connections use the resolved hostname.
+    """
+    if hostname == "localhost":
+        resolved = os.environ.get("DERIVA_MCP_LOCALHOST_HOSTNAME")
+        if resolved:
+            logger.info(f"Remapping localhost -> {resolved} (DERIVA_MCP_LOCALHOST_HOSTNAME)")
+            return resolved
+    return hostname
+
 
 # Cache for user ID to ensure consistency within a session
 _cached_user_id: str | None = None
@@ -148,6 +170,15 @@ def _clone_catalog_task(
     asset_mode_enum = AssetCopyMode(asset_mode)
     orphan_strategy_enum = OrphanStrategy(orphan_strategy)
 
+    # Resolve hostnames for Docker network environments.
+    # Credentials are looked up using the original hostname (e.g., 'localhost')
+    # since that's how they're stored, but network connections use the resolved
+    # hostname (e.g., 'deriva' Docker DNS name).
+    resolved_dest = _resolve_hostname(dest_hostname)
+    resolved_source = _resolve_hostname(source_hostname)
+    source_credential = get_credential(source_hostname) if resolved_source != source_hostname else None
+    dest_credential = get_credential(dest_hostname) if resolved_dest != dest_hostname else None
+
     # Create a progress callback that updates the task progress
     def progress_callback(message: str, percent_complete: float) -> None:
         progress.current_step = message
@@ -158,7 +189,7 @@ def _clone_catalog_task(
     progress_callback(f"Starting workspace creation from RID {root_rid}...", 10.0)
 
     result = create_ml_workspace(
-        source_hostname=source_hostname,
+        source_hostname=resolved_source,
         source_catalog_id=source_catalog_id,
         root_rid=root_rid,
         include_tables=include_tables,
@@ -166,12 +197,14 @@ def _clone_catalog_task(
         exclude_schemas=exclude_schemas,
         include_associations=include_associations,
         include_vocabularies=include_vocabularies,
-        dest_hostname=dest_hostname,
+        dest_hostname=resolved_dest,
         alias=alias,
         add_ml_schema=add_ml_schema,
         asset_mode=asset_mode_enum,
         copy_annotations=copy_annotations,
         copy_policy=copy_policy,
+        source_credential=source_credential,
+        dest_credential=dest_credential,
         orphan_strategy=orphan_strategy_enum,
         prune_hidden_fkeys=prune_hidden_fkeys,
         truncate_oversized=truncate_oversized,
