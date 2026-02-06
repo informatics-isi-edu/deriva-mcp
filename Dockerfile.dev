@@ -1,0 +1,78 @@
+# Development Dockerfile for Deriva MCP Server
+# Build context must be the parent directory containing deriva-mcp, deriva-ml, and deriva-py
+#
+# Usage:
+#   docker build -f deriva-mcp/Dockerfile.dev -t deriva-mcp:dev /Users/carl/GitHub
+
+FROM python:3.12-slim AS builder
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv
+
+# Copy local sources from parent build context
+COPY deriva-py /app/deriva-py
+COPY deriva-ml /app/deriva-ml
+COPY deriva-mcp/pyproject.toml deriva-mcp/README.md /app/deriva-mcp/
+COPY deriva-mcp/src /app/deriva-mcp/src
+
+# Create virtual environment
+RUN uv venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DERIVA_MCP="0.0.0.dev0"
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DERIVA_ML="0.0.0.dev0"
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DERIVA="0.0.0.dev0"
+
+# Use uv with overrides to resolve local vs git URL conflicts.
+# Install all three local packages, overriding their git source references
+# to point to the local paths instead.
+RUN uv pip install --no-cache \
+    --override /dev/stdin \
+    /app/deriva-py /app/deriva-ml /app/deriva-mcp \
+    <<'OVERRIDES'
+deriva @ file:///app/deriva-py
+deriva-ml @ file:///app/deriva-ml
+OVERRIDES
+
+# Runtime stage
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Same entrypoint as production Dockerfile
+RUN printf '#!/bin/sh\n\
+cp /etc/hosts /tmp/hosts.tmp\n\
+sed -e "s/^127\\.0\\.0\\.1[[:space:]]\\+localhost/#&/" -e "s/^::1[[:space:]]\\+localhost/#&/" /tmp/hosts.tmp > /etc/hosts 2>/dev/null || true\n\
+rm -f /tmp/hosts.tmp\n\
+: "${REQUESTS_CA_BUNDLE:=$HOME/.deriva/allCAbundle-with-local.pem}"\n\
+export REQUESTS_CA_BUNDLE\n\
+exec "$@"\n\
+' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+ENV DERIVA_MCP_WORKFLOW_NAME="Deriva MCP Server (dev)"
+ENV DERIVA_MCP_WORKFLOW_TYPE="Deriva MCP"
+ENV DERIVA_MCP_IN_DOCKER="true"
+ENV DERIVA_MCP_TASK_STATE_PATH="/app/data/task_state.json"
+ENV DERIVA_MCP_TASK_RETENTION_HOURS="168"
+ENV DERIVA_MCP_TASK_SYNC_INTERVAL="5"
+ENV DERIVA_MCP_SSE_KEEPALIVE="30"
+
+RUN mkdir -p /app/data && chmod 755 /app/data
+
+EXPOSE 8000
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["deriva-mcp"]

@@ -1,0 +1,15 @@
+# Development override for docker-compose.mcp.yaml
+# Builds from local source with local deriva-ml and deriva-py
+#
+# Usage:
+#   docker compose -f docker-compose.mcp.yaml -f docker-compose.dev.yaml build --no-cache
+#   docker compose -f docker-compose.mcp.yaml -f docker-compose.dev.yaml up -d
+
+services:
+  deriva-mcp:
+    build:
+      context: ..
+      dockerfile: deriva-mcp/Dockerfile.dev
+    image: deriva-mcp:dev
+    extra_hosts:
+      - "localhost:172.28.3.250"
