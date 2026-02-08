@@ -1486,7 +1486,18 @@ create_dataset(description="...", dataset_types=["Training", "Labeled"])
 
 ## Step 7: Create Nested Datasets (Optional)
 
-Create training/testing splits as child datasets:
+Create training/testing splits as child datasets.
+
+**IMPORTANT - Code Provenance for Splits:**
+If the split is generated via a script, the script MUST be committed to the repository BEFORE
+running it to create the split datasets. This ensures the execution record has valid code
+provenance (git commit hash) linking back to the exact split logic. Different split strategies
+produce different datasets, so provenance tracking is critical for reproducibility.
+
+**Best Practice - Parameterize Splits via Hydra:**
+Parameterize split operations (ratio, seed, stratification column) via hydra-zen configuration
+rather than hardcoding values. This enables running different splits without modifying code and
+tracking parameters alongside experiment configuration.
 
 **Python API (recommended):**
 ```python
@@ -1627,6 +1638,8 @@ list_dataset_children("1-ABC")
 - Read `deriva-ml://catalog/datasets` resource to find existing datasets
 - Use semantic versioning: patch=metadata, minor=elements, major=breaking
 - Nested datasets share elements - good for train/test splits
+- **Commit split scripts before running them** - ensures execution has code provenance
+- **Parameterize splits via Hydra config** - ratio, seed, stratification column should be configurable
 - Pin versions for reproducible training
 - Use `download_dataset` to get local copies for ML training
 

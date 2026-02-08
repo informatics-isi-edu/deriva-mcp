@@ -438,6 +438,30 @@ If there are uncommitted changes, the execution record won't have a valid code r
 
 **Pattern:** Create separate dataset types like `Training`, `Testing`, `Labeled_Training`, `Labeled_Testing` to clearly distinguish datasets with and without ground truth.
 
+**Code provenance for split scripts:**
+
+If a dataset split is generated via a script, the script MUST be committed to the repository
+BEFORE running it to create the split datasets. This ensures the execution record has valid
+code provenance (git commit hash) linking back to the exact split logic used. Different split
+strategies (e.g., stratified, random, k-fold) produce different datasets, so tracking which
+script and parameters generated each split is critical for reproducibility.
+
+**Parameterize splits via Hydra configuration:**
+
+Best practice is to parameterize dataset split operations (split ratio, random seed, stratification
+column, etc.) via hydra-zen configuration rather than hardcoding values in the script. This allows:
+- Running different split configurations without modifying code
+- Tracking split parameters alongside other experiment configuration
+- Reproducing exact splits via configuration replay
+
+Example:
+```python
+# In configs/splits.py
+splits_store = store(group="split")
+splits_store({"ratio": 0.8, "seed": 42, "stratify_by": "Mouse_Type"}, name="default_split")
+splits_store({"ratio": 0.9, "seed": 42, "stratify_by": "Mouse_Type"}, name="90_10_split")
+```
+
 ## Notebook Display Utilities
 
 **Dataset and Experiment classes provide markdown output methods:**
