@@ -1484,65 +1484,56 @@ create_dataset_type_term("Augmented", "Data created through augmentation")
 create_dataset(description="...", dataset_types=["Training", "Labeled"])
 ```
 
-## Step 7: Create Nested Datasets (Optional)
+## Step 7: Split Dataset into Train/Test (Optional)
 
-Create training/testing splits as child datasets.
+**Use `split_dataset` to create train/test splits automatically.** This is the preferred
+method - it handles execution context, provenance, dataset hierarchy, and versioning.
 
-**IMPORTANT - Code Provenance for Splits:**
-If the split is generated via a script, the script MUST be committed to the repository BEFORE
-running it to create the split datasets. This ensures the execution record has valid code
-provenance (git commit hash) linking back to the exact split logic. Different split strategies
-produce different datasets, so provenance tracking is critical for reproducibility.
+**MCP Tool (recommended):**
+```
+# Simple random 80/20 split
+split_dataset("<source-dataset-rid>", test_size=0.2, seed=42)
 
-**Best Practice - Parameterize Splits via Hydra:**
-Parameterize split operations (ratio, seed, stratification column) via hydra-zen configuration
-rather than hardcoding values. This enables running different splits without modifying code and
-tracking parameters alongside experiment configuration.
+# Stratified split preserving class distribution
+split_dataset("<source-dataset-rid>",
+              test_size=0.2,
+              seed=42,
+              stratify_by_column="Image_Classification_Image_Class",
+              include_tables=["Image", "Image_Classification"])
 
-**Python API (recommended):**
+# Labeled split (both train and test have ground truth)
+split_dataset("<source-dataset-rid>",
+              test_size=0.2,
+              seed=42,
+              training_types=["Labeled"],
+              testing_types=["Labeled"])
+
+# Preview without modifying catalog
+split_dataset("<source-dataset-rid>", test_size=0.2, dry_run=True)
+```
+
+**Python API:**
 ```python
-config = ExecutionConfiguration(
-    workflow=Workflow(name="Create Train/Test Split", workflow_type="Preprocessing", description="Split data")
-)
+from deriva_ml.dataset.split import split_dataset
 
-with ml.create_execution(config) as exe:
-    # Create training subset
-    training_ds = exe.create_execution_dataset("Training subset (80%)", ["Training"])
-    # Add training members...
-
-    # Create testing subset
-    testing_ds = exe.create_execution_dataset("Testing subset (20%)", ["Testing"])
-    # Add testing members...
-
-# Upload AFTER exiting context manager
-exe.upload_execution_outputs()
-
-# Link as nested datasets
-ml.add_dataset_child("<parent-rid>", training_ds.rid)
-ml.add_dataset_child("<parent-rid>", testing_ds.rid)
+result = split_dataset(ml, "<source-dataset-rid>", test_size=0.2, seed=42)
+print(f"Training: {result['training']} ({result['train_count']} samples)")
+print(f"Testing:  {result['testing']} ({result['test_count']} samples)")
 ```
 
-**MCP Tools:**
+`split_dataset` creates a three-level dataset hierarchy:
 ```
-# Create parent "Complete" dataset first (via execution)
-# Then create children
-create_execution("Create Train/Test Split", "Preprocessing", "Split data")
-
-# Create training subset
-create_dataset(description="Training subset (80%)", dataset_types=["Training"])
-# Add training members...
-
-# Create testing subset
-create_dataset(description="Testing subset (20%)", dataset_types=["Testing"])
-# Add testing members...
-
-# Upload outputs
-upload_execution_outputs()
-
-# Link as nested datasets
-add_dataset_child("<parent-rid>", "<training-rid>")
-add_dataset_child("<parent-rid>", "<testing-rid>")
+Split (parent, type: "Split")
+├── Training (child, type: "Training")
+└── Testing (child, type: "Testing")
 ```
+
+The `stratify_by_column` uses denormalized column naming: `{TableName}_{ColumnName}`.
+Use `denormalize_dataset` to discover available column names before stratifying.
+
+**IMPORTANT - Code Provenance:**
+If using a custom script instead of `split_dataset`, commit the script BEFORE running it
+to ensure valid code provenance. The `split_dataset` tool handles provenance automatically.
 
 ## Step 8: Version Management
 
@@ -1557,10 +1548,12 @@ increment_dataset_version("<dataset-rid>", "major", "Schema change")
 list_dataset_members("<dataset-rid>", version="1.0.0")
 ```
 
-## Complete Example: Create Train/Test Split
+## Complete Example: Create Dataset and Split
 
 **Python API (recommended):**
 ```python
+from deriva_ml.dataset.split import split_dataset
+
 config = ExecutionConfiguration(
     workflow=Workflow(name="Dataset Curation", workflow_type="Preprocessing", description="Create ML datasets")
 )
@@ -1569,30 +1562,20 @@ with ml.create_execution(config) as exe:
     # Ensure element types registered
     ml.add_dataset_element_type("Image")
 
-    # Create main dataset
+    # Create complete dataset
     complete_ds = exe.create_execution_dataset("Complete Image Set", ["Complete"])
 
     # Add all images
     ml.add_dataset_members(complete_ds.rid, ["2-D01", "2-D02", "2-D03", ..., "2-D100"])
 
-    # Create training split
-    training_ds = exe.create_execution_dataset("Training Set (80%)", ["Training"])
-    ml.add_dataset_members(training_ds.rid, ["2-D01", "2-D02", ..., "2-D80"])
-
-    # Create test split
-    testing_ds = exe.create_execution_dataset("Test Set (20%)", ["Testing"])
-    ml.add_dataset_members(testing_ds.rid, ["2-D81", ..., "2-D100"])
-
 # Upload AFTER exiting context manager
 exe.upload_execution_outputs()
 
-# Link as children
-ml.add_dataset_child(complete_ds.rid, training_ds.rid)
-ml.add_dataset_child(complete_ds.rid, testing_ds.rid)
-
-# Verify
-ml.get_dataset(complete_ds.rid)  # Shows children
-ml.list_dataset_children(complete_ds.rid)
+# Split into train/test (creates its own execution for provenance)
+result = split_dataset(ml, complete_ds.rid, test_size=0.2, seed=42,
+                       training_types=["Labeled"], testing_types=["Labeled"])
+print(f"Training: {result['training']} ({result['train_count']} samples)")
+print(f"Testing:  {result['testing']} ({result['test_count']} samples)")
 ```
 
 **MCP Tools:**
@@ -1603,32 +1586,23 @@ create_execution("Dataset Curation", "Preprocessing", "Create ML datasets")
 # 2. Ensure element types registered
 add_dataset_element_type("Image")
 
-# 3. Create main dataset
+# 3. Create complete dataset
 create_dataset(description="Complete Image Set", dataset_types=["Complete"])
 # Returns dataset_rid: "1-ABC"
 
 # 4. Add all images
 add_dataset_members("1-ABC", ["2-D01", "2-D02", "2-D03", ..., "2-D100"])
 
-# 5. Create training split
-create_dataset(description="Training Set (80%)", dataset_types=["Training"])
-# Returns: "1-DEF"
-add_dataset_members("1-DEF", ["2-D01", "2-D02", ..., "2-D80"])
-
-# 6. Create test split
-create_dataset(description="Test Set (20%)", dataset_types=["Testing"])
-# Returns: "1-GHI"
-add_dataset_members("1-GHI", ["2-D81", ..., "2-D100"])
-
-# 7. Upload and link as children
+# 5. Upload outputs
 upload_execution_outputs()
 
-add_dataset_child("1-ABC", "1-DEF")
-add_dataset_child("1-ABC", "1-GHI")
+# 6. Split into train/test (uses split_dataset tool)
+split_dataset("1-ABC", test_size=0.2, seed=42,
+              training_types=["Labeled"], testing_types=["Labeled"])
+# Returns: {"split": "1-XYZ", "training": "1-DEF", "testing": "1-GHI", ...}
 
-# 8. Verify - use resources to check
-# deriva-ml://dataset/1-ABC  # Shows children
-list_dataset_children("1-ABC")
+# 7. Verify
+list_dataset_children("1-XYZ")
 ```
 
 ## Tips
@@ -1637,9 +1611,10 @@ list_dataset_children("1-ABC")
 - **Always provide descriptive `description` values** - explains what the dataset contains and its purpose
 - Read `deriva-ml://catalog/datasets` resource to find existing datasets
 - Use semantic versioning: patch=metadata, minor=elements, major=breaking
-- Nested datasets share elements - good for train/test splits
-- **Commit split scripts before running them** - ensures execution has code provenance
-- **Parameterize splits via Hydra config** - ratio, seed, stratification column should be configurable
+- **Use `split_dataset` for train/test splits** - handles provenance, hierarchy, and versioning automatically
+- Use `stratify_by_column` to preserve class distribution across splits
+- Use `dry_run=True` to preview split sizes before modifying the catalog
+- Use `restructure_assets` after downloading to organize files for ML frameworks (e.g., PyTorch ImageFolder)
 - Pin versions for reproducible training
 - Use `download_dataset` to get local copies for ML training
 

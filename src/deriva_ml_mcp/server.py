@@ -116,7 +116,9 @@ Always call `connect_catalog` before using other tools. This establishes the con
 1. `create_dataset` - Create a new dataset with types
 2. `add_dataset_members` - Add assets or nested datasets as members
 3. `list_dataset_members` - View dataset contents
-4. `download_dataset` - Download dataset assets locally
+4. `split_dataset` - Create train/test splits with optional stratification
+5. `download_dataset` - Download dataset assets locally
+6. `restructure_assets` - Organize downloaded assets into ML-ready directories
 
 **Adding features:**
 1. `create_feature` - Define a new feature linking a target table to vocabulary terms
@@ -428,6 +430,24 @@ If there are uncommitted changes, the execution record won't have a valid code r
 
 ## Dataset Splits for Evaluation
 
+**Use the `split_dataset` tool to create train/test splits.** It follows scikit-learn conventions
+and handles provenance tracking automatically.
+
+**Simple random split:**
+```python
+split_dataset("1-ABC", test_size=0.2, seed=42)
+```
+
+**Stratified split (maintains class distribution):**
+```python
+split_dataset("1-ABC", test_size=0.2,
+              stratify_by_column="Image_Classification_Image_Class",
+              include_tables=["Image", "Image_Classification"])
+```
+
+The `stratify_by_column` uses the denormalized column name format `{TableName}_{ColumnName}`.
+Use `denormalize_dataset` first to discover available column names.
+
 **When creating train/test splits, consider whether ground truth labels are needed:**
 
 - **Unlabeled test splits**: Test partition has no ground truth labels. Use for training pipelines where test evaluation isn't needed during training.
@@ -436,31 +456,51 @@ If there are uncommitted changes, the execution record won't have a valid code r
   - Generating ROC curves or other evaluation metrics
   - Comparing model predictions to ground truth
 
-**Pattern:** Create separate dataset types like `Training`, `Testing`, `Labeled_Training`, `Labeled_Testing` to clearly distinguish datasets with and without ground truth.
+**Pattern:** Use `training_types=["Labeled"]` and `testing_types=["Labeled"]` when both splits need ground truth labels:
+```python
+split_dataset("1-ABC", test_size=0.2, seed=42,
+              training_types=["Labeled"], testing_types=["Labeled"])
+```
+
+**Dry run to preview split plan:**
+```python
+split_dataset("1-ABC", test_size=0.2, dry_run=True)
+# Returns counts and strategy without modifying catalog
+```
 
 **Code provenance for split scripts:**
 
-If a dataset split is generated via a script, the script MUST be committed to the repository
-BEFORE running it to create the split datasets. This ensures the execution record has valid
-code provenance (git commit hash) linking back to the exact split logic used. Different split
-strategies (e.g., stratified, random, k-fold) produce different datasets, so tracking which
-script and parameters generated each split is critical for reproducibility.
+If a dataset split is generated via a script (instead of the `split_dataset` tool), the script
+MUST be committed to the repository BEFORE running it. This ensures valid code provenance.
+The `split_dataset` tool handles provenance automatically within an execution context.
 
-**Parameterize splits via Hydra configuration:**
+## Restructuring Assets for ML Frameworks
 
-Best practice is to parameterize dataset split operations (split ratio, random seed, stratification
-column, etc.) via hydra-zen configuration rather than hardcoding values in the script. This allows:
-- Running different split configurations without modifying code
-- Tracking split parameters alongside other experiment configuration
-- Reproducing exact splits via configuration replay
+After downloading a dataset, use `restructure_assets` to organize files into the directory
+structure expected by ML frameworks (e.g., PyTorch ImageFolder):
 
-Example:
 ```python
-# In configs/splits.py
-splits_store = store(group="split")
-splits_store({"ratio": 0.8, "seed": 42, "stratify_by": "Mouse_Type"}, name="default_split")
-splits_store({"ratio": 0.9, "seed": 42, "stratify_by": "Mouse_Type"}, name="90_10_split")
+restructure_assets(dataset_rid="1-ABC", asset_table="Image",
+                   output_dir="./ml_data", group_by=["Diagnosis"])
 ```
+
+This creates:
+```
+./ml_data/
+  Training/
+    Normal/
+      image1.jpg
+      image2.jpg
+    Abnormal/
+      image3.jpg
+  Testing/
+    Normal/
+      image4.jpg
+    Abnormal/
+      image5.jpg
+```
+
+By default, symlinks are used to save disk space. Set `use_symlinks=False` to copy files instead.
 
 ## Notebook Display Utilities
 

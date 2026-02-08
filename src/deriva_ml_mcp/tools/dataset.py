@@ -1062,3 +1062,120 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         except Exception as e:
             logger.error(f"Failed to restructure assets: {e}")
             return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def split_dataset(
+        source_dataset_rid: str,
+        test_size: float = 0.2,
+        train_size: float | None = None,
+        seed: int = 42,
+        shuffle: bool = True,
+        stratify_by_column: str | None = None,
+        element_table: str | None = None,
+        include_tables: list[str] | None = None,
+        training_types: list[str] | None = None,
+        testing_types: list[str] | None = None,
+        split_description: str = "",
+        dry_run: bool = False,
+    ) -> str:
+        """Split a dataset into training and testing subsets.
+
+        Creates a new dataset hierarchy with full provenance tracking:
+        - Split (parent, type: "Split")
+          - Training (child, type: "Training" + training_types)
+          - Testing (child, type: "Testing" + testing_types)
+
+        The API follows scikit-learn's train_test_split conventions for
+        test_size, train_size, shuffle, and seed parameters.
+
+        **Splitting strategies:**
+
+        - **Random** (default): Shuffles members and splits at the boundary.
+          No denormalization needed. Fast for any dataset size.
+        - **Stratified**: Maintains class distribution across splits.
+          Requires stratify_by_column and include_tables. Uses scikit-learn
+          internally.
+
+        **Column naming for stratification:**
+
+        When using stratify_by_column, the column name must match the
+        denormalized DataFrame format: ``{TableName}_{ColumnName}``.
+        For example, to stratify by the Image_Class column from the
+        Image_Classification feature table, use
+        ``Image_Classification_Image_Class``.
+
+        Use denormalize_dataset() first to see available column names.
+
+        Args:
+            source_dataset_rid: RID of the source dataset to split.
+            test_size: Test set size as a fraction (0-1) or absolute count.
+                Default: 0.2 (20% of data).
+            train_size: Train set size as a fraction (0-1) or absolute count.
+                Default: None (complement of test_size).
+            seed: Random seed for reproducibility. Default: 42.
+            shuffle: Whether to shuffle before splitting. Default: True.
+            stratify_by_column: Column name in the denormalized DataFrame
+                for stratified splitting. Maintains class distribution
+                across train/test sets. Requires include_tables.
+                Example: "Image_Classification_Image_Class".
+            element_table: Element table to split (e.g., "Image"). If not
+                specified, auto-detected from the dataset's members.
+            include_tables: Tables to include when denormalizing. Required
+                when using stratify_by_column.
+                Example: ["Image", "Image_Classification"].
+            training_types: Additional dataset types for the training set
+                beyond "Training". Example: ["Labeled"].
+            testing_types: Additional dataset types for the testing set
+                beyond "Testing". Example: ["Labeled"].
+            split_description: Description for the parent Split dataset.
+            dry_run: If True, return what would happen without modifying
+                the catalog. Useful for previewing split sizes.
+
+        Returns:
+            JSON with split results including:
+            - split: RID and version of the parent Split dataset
+            - training: RID, version, and member count of the Training dataset
+            - testing: RID, version, and member count of the Testing dataset
+            - source: RID of the source dataset
+
+        Example:
+            # Random 80/20 split
+            split_dataset("28D0", test_size=0.2, seed=42)
+
+            # Stratified split maintaining class balance
+            split_dataset("28D0", test_size=0.2,
+                         stratify_by_column="Image_Classification_Image_Class",
+                         include_tables=["Image", "Image_Classification"])
+
+            # Fixed-count split with labeled types
+            split_dataset("28D0", train_size=400, test_size=100,
+                         training_types=["Labeled"], testing_types=["Labeled"])
+
+            # Dry run to preview
+            split_dataset("28D0", test_size=0.2, dry_run=True)
+        """
+        try:
+            from deriva_ml.dataset.split import split_dataset as _split_dataset
+
+            ml = conn_manager.get_active_or_raise()
+
+            result = _split_dataset(
+                ml=ml,
+                source_dataset_rid=source_dataset_rid,
+                test_size=test_size,
+                train_size=train_size,
+                seed=seed,
+                shuffle=shuffle,
+                stratify_by_column=stratify_by_column,
+                element_table=element_table,
+                include_tables=include_tables,
+                training_types=training_types,
+                testing_types=testing_types,
+                split_description=split_description,
+                dry_run=dry_run,
+            )
+
+            return json.dumps({"status": "success", **result})
+        except Exception as e:
+            logger.error(f"Failed to split dataset: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
