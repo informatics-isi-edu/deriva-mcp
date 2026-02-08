@@ -144,6 +144,13 @@ Before creating an execution:
 - Vocabularies: Controlled term lists for consistent labeling
 - Assets: Tables with file attachments (images, models, etc.)
 
+**IMPORTANT: Always use RID as the surrogate key for foreign key relationships.**
+
+- Every table in Deriva has a system-generated `RID` column (unique, immutable identifier)
+- When creating foreign keys between tables, always reference the `RID` column, never natural keys like `id`, `name`, or other domain-specific columns
+- RID is the standard surrogate key across all Deriva catalogs and ensures consistent behavior with DerivaML tools (datasets, features, associations)
+- Using non-RID keys (e.g., integer `id` columns) for FKs can cause type mismatches and break dataset member operations
+
 ## Notebook Configuration Pattern
 
 Notebooks use hydra-zen configuration as the primary source of parameters:
