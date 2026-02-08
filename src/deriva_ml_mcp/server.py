@@ -75,6 +75,14 @@ Always call `connect_catalog` before using other tools. This establishes the con
 - High-level tools properly initialize default values, enforce data integrity constraints, and handle relationships
 - Only use `insert_records` as a last resort when no high-level API exists for your use case - it bypasses business logic and may leave required fields uninitialized
 
+**Prefer DerivaML API and datapath over raw ERMRest URLs:**
+
+- Always use MCP tools or the DerivaML Python API (`ml.pathBuilder()`) for data operations
+- Never construct raw ERMRest REST URLs (e.g., `https://host/ermrest/catalog/N/entity/...`) for inserts, updates, or deletes
+- Raw ERMRest URLs bypass business logic, FK validation, provenance tracking, and version management
+- For bulk operations not covered by MCP tools, use the DerivaML Python API with `ml.pathBuilder()` which provides type-safe datapath operations
+- If you must read data and no MCP tool exists, use `query_table` rather than constructing ERMRest URLs
+
 **Provenance tracking:**
 
 - Use `create_execution` to track the provenance of datasets, features, and other artifacts
