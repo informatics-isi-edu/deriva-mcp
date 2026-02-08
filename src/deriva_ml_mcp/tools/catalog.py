@@ -26,6 +26,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         hostname: str,
         catalog_id: str,
         domain_schema: str | None = None,
+        default_schema: str | None = None,
     ) -> str:
         """Connect to an existing DerivaML catalog. Must be called before using other tools.
 
@@ -37,18 +38,24 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             hostname: Server hostname (e.g., "dev.eye-ai.org", "www.atlas-d2k.org").
             catalog_id: Catalog ID number (e.g., "1", "52").
             domain_schema: Schema name for domain tables. Auto-detected if omitted.
+            default_schema: Default schema for table creation and lookups. If omitted
+                and there is exactly one domain schema, that schema is used. Required
+                when multiple domain schemas exist and you want to avoid specifying
+                the schema on every operation.
 
         Returns:
-            JSON with status, hostname, catalog_id, domain_schema, project_name,
-            workflow_rid, execution_rid.
+            JSON with status, hostname, catalog_id, domain_schemas, default_schema,
+            project_name, workflow_rid, execution_rid.
 
         Example:
             connect_catalog("dev.eye-ai.org", "52") -> connects to eye-ai catalog
+            connect_catalog("localhost", "10", domain_schema="isa", default_schema="isa")
         """
         try:
             # Convert single domain_schema to set for the new API
             domain_schemas = {domain_schema} if domain_schema else None
-            ml = conn_manager.connect(hostname, catalog_id, domain_schemas)
+            ml = conn_manager.connect(hostname, catalog_id, domain_schemas,
+                                      default_schema=default_schema)
             conn_info = conn_manager.get_active_connection_info()
 
             result = {
@@ -99,6 +106,49 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             "status": "error",
             "message": f"No connection found for {hostname}:{catalog_id}",
         })
+
+    @mcp.tool()
+    async def set_default_schema(schema_name: str) -> str:
+        """Set the default schema for the active catalog connection.
+
+        When a catalog has multiple domain schemas, many operations require
+        knowing which schema to use. Setting a default schema avoids having
+        to specify it on every call.
+
+        Args:
+            schema_name: Name of the domain schema to set as default
+                (e.g., "isa", "my_project"). Must be one of the catalog's
+                domain schemas.
+
+        Returns:
+            JSON with status, default_schema, and domain_schemas.
+
+        Example:
+            set_default_schema("isa") -> sets "isa" as the default schema
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+            if schema_name not in ml.domain_schemas:
+                return json.dumps({
+                    "status": "error",
+                    "message": (
+                        f"'{schema_name}' is not a domain schema. "
+                        f"Available domain schemas: {sorted(ml.domain_schemas)}"
+                    ),
+                })
+            ml.model.default_schema = schema_name
+            ml.default_schema = schema_name
+            return json.dumps({
+                "status": "success",
+                "default_schema": schema_name,
+                "domain_schemas": sorted(ml.domain_schemas),
+            })
+        except Exception as e:
+            logger.error(f"Failed to set default schema: {e}")
+            return json.dumps({
+                "status": "error",
+                "message": str(e),
+            })
 
     @mcp.tool()
     async def create_catalog(

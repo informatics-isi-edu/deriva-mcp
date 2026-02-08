@@ -206,6 +206,7 @@ class ConnectionManager:
         hostname: str,
         catalog_id: str | int,
         domain_schemas: set[str] | None = None,
+        default_schema: str | None = None,
         set_active: bool = True,
     ) -> DerivaML:
         """Connect to a DerivaML catalog.
@@ -214,6 +215,7 @@ class ConnectionManager:
             hostname: Hostname of the Deriva server.
             catalog_id: Catalog identifier.
             domain_schemas: Optional set of domain schema names. Auto-detected if omitted.
+            default_schema: Optional default schema for table creation and lookups.
             set_active: If True, set this as the active connection.
 
         Returns:
@@ -229,6 +231,7 @@ class ConnectionManager:
                 hostname=hostname,
                 catalog_id=catalog_id,
                 domain_schemas=domain_schemas,
+                default_schema=default_schema,
                 check_auth=True,
             )
 
