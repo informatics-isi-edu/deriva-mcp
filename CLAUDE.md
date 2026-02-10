@@ -21,7 +21,14 @@ uv run pytest
 # Lint and format
 uv run ruff check src/
 uv run ruff format src/
+
+# Bump version (requires clean working tree — commit first)
+uv run bump-version patch   # Bug fix (0.5.1 → 0.5.2)
+uv run bump-version minor   # New feature (0.5.1 → 0.6.0)
+uv run bump-version major   # Breaking change (0.5.1 → 1.0.0)
 ```
+
+**Version bumping:** Use `bump-version` from deriva-ml (not `bump-my-version` directly). It finds the latest git tag, increments the version, creates a new tag, and pushes both the tag and commits to remote. The working tree must be clean (all changes committed) before bumping. Version is derived dynamically from git tags via `setuptools_scm`.
 
 ## Architecture
 
