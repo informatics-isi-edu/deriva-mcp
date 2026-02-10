@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with the deriva-ml-mcp codebase.
+This file provides guidance to Claude Code when working with the deriva-mcp codebase.
 
 ## Project Overview
 
@@ -13,7 +13,7 @@ DerivaML MCP Server is a Model Context Protocol (MCP) server that exposes Deriva
 uv sync
 
 # Run the MCP server directly (for testing)
-uv run deriva-ml-mcp
+uv run deriva-mcp
 
 # Run tests
 uv run pytest
@@ -47,7 +47,7 @@ src/deriva_ml_mcp/
 
 ### Key Components
 
-**server.py**: FastMCP server initialization and tool/resource registration. Entry point via `deriva-ml-mcp` command.
+**server.py**: FastMCP server initialization and tool/resource registration. Entry point via `deriva-mcp` command.
 
 **connection.py**: `ConnectionManager` class that maintains multiple DerivaML connections with one active connection. All tools access the catalog through `conn_manager.get_active_connection()`.
 
@@ -121,7 +121,7 @@ Uses the published Docker image. No local setup required.
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     }
@@ -139,7 +139,7 @@ Uses the published Docker image. No local setup required.
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     }
@@ -180,7 +180,7 @@ If Deriva runs directly on the host (not in Docker), use `host-gateway`:
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml deriva-ml-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     }
@@ -190,7 +190,14 @@ If Deriva runs directly on the host (not in Docker), use `host-gateway`:
 
 #### Deriva Running in Docker (deriva-localhost)
 
-If Deriva runs in Docker (e.g., deriva-localhost), join the same network and map localhost to the webserver IP:
+If Deriva runs in Docker (e.g., deriva-localhost), join the same network and map localhost to the webserver.
+
+First, find the webserver IP:
+```bash
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deriva-webserver
+```
+
+Then use it in the `--add-host` argument (replace `<WEBSERVER_IP>` with the actual IP):
 
 ```json
 {
@@ -200,17 +207,12 @@ If Deriva runs in Docker (e.g., deriva-localhost), join the same network and map
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --network deriva-localhost_internal_network --add-host localhost:172.28.3.15 -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml deriva-ml-mcp:latest"
+        "docker run -i --rm --network deriva-localhost_internal_network --add-host localhost:<WEBSERVER_IP> -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     }
   }
 }
-```
-
-**Find the webserver IP:**
-```bash
-docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deriva-webserver
 ```
 
 The entrypoint script automatically adjusts `/etc/hosts` so that `--add-host` takes effect for localhost resolution. It also sets `REQUESTS_CA_BUNDLE` to `$HOME/.deriva/allCAbundle-with-local.pem` by default.
@@ -238,7 +240,7 @@ Run directly using `uv`. Use this when developing or modifying the MCP server.
     "deriva-ml": {
       "type": "stdio",
       "command": "uv",
-      "args": ["--directory", "/path/to/deriva-ml-mcp", "run", "deriva-ml-mcp"],
+      "args": ["--directory", "/path/to/deriva-mcp", "run", "deriva-mcp"],
       "env": {}
     }
   }
@@ -253,8 +255,8 @@ Run directly using `uv`. Use this when developing or modifying the MCP server.
     "deriva-ml": {
       "type": "stdio",
       "command": "uv",
-      "args": ["run", "deriva-ml-mcp"],
-      "cwd": "/path/to/deriva-ml-mcp",
+      "args": ["run", "deriva-mcp"],
+      "cwd": "/path/to/deriva-mcp",
       "env": {}
     }
   }
@@ -267,10 +269,10 @@ Build and test locally:
 
 ```bash
 # Build the image
-docker build -t deriva-ml-mcp .
+docker build -t deriva-mcp .
 
 # Test the image
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' | docker run -i --rm deriva-ml-mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' | docker run -i --rm deriva-mcp
 ```
 
 The Dockerfile uses a multi-stage build:

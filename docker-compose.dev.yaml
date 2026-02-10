@@ -11,5 +11,3 @@ services:
       context: ..
       dockerfile: deriva-mcp/Dockerfile.dev
     image: deriva-mcp:dev
-    extra_hosts:
-      - "localhost:172.28.3.250"
