@@ -1,12 +1,34 @@
-# MCP OAuth Integration & Docker Compose — Implementation Plan
+# MCP OAuth Integration & Docker Compose --- Implementation Plan
 
 ## Summary
 
-This plan covers two workstreams for adding authenticated HTTP transport to the `deriva-mcp` DerivaML MCP server, and running it in the `deriva-docker` Docker Compose stack:
+This plan covers two workstreams for adding authenticated HTTP transport
+to the `deriva-mcp` DerivaML MCP server, and running it in the
+`deriva-docker` Docker Compose stack.
 
-**Workstream 1 — Additional Docker Integration:** Add deriva-mcp as a service in the `deriva-docker` compose stack, routed via Traefik at `/mcp/*`. Can be implemented before auth is ready using mounted `~/.deriva` credentials (same approach as the standalone Docker setup), but this is a temporary scaffold for internal testing -- not an end state.
+**Workstream 1 --- Additional Docker Integration:**\
+Add `deriva-mcp` as a service in the `deriva-docker` compose stack,
+routed via Traefik at `/mcp/*`. This can be implemented before auth is
+ready using mounted `~/.deriva` credentials (same approach as the
+standalone Docker setup), but this is a temporary scaffold for internal
+testing --- not an end state.
 
-**Workstream 2 — OIDC Authentication:** Secure the MCP server's streamable-http transport using OAuth 2.1, with Credenza as a narrow OAuth AS and the upstream IDP (Keycloak, Okta, Cognito, Globus) handling identity. The MCP server (deriva-mcp) acts as an OAuth Resource Server using FastMCP's built-in `IntrospectionTokenVerifier` to validate opaque bearer tokens against Credenza. Credenza adds a narrow slice of AS functionality (authorization code + PKCE issuance, token introspection, token exchange) on top of its existing session brokering. MCP sessions use a medium TTL (4-8h) with no refresh tokens or offline_access. Derived DERIVA tokens are short-lived (30 min) and re-obtained via RFC 8693 token exchange as needed.
+**Workstream 2 --- OAuth 2.1 Authentication:**\
+Secure the MCP server's streamable-http transport using OAuth 2.1, with
+Credenza acting as a **narrow OAuth Authorization Server (AS)** and
+upstream IDPs handling identity.
+
+The MCP server (`deriva-mcp`) acts as an OAuth Resource Server using
+FastMCP's built-in `IntrospectionTokenVerifier` to validate opaque
+bearer tokens via RFC 7662 introspection against Credenza.
+
+Credenza adds a narrow slice of OAuth AS functionality on top of its
+existing session brokering:
+
+-   Authorization Code + PKCE (OAuth 2.1)
+-   RFC 7662 Token Introspection
+-   RFC 8693 Token Exchange
+-   RFC 8414 Authorization Server Metadata
 
 **Key constraints driving the design:**
 - Every major MCP client (Claude Desktop, Claude Code, VS Code) only supports `authorization_code` with PKCE -- no device_code flow support exists in the MCP ecosystem
@@ -199,7 +221,10 @@ Credenza's core role remains the same: session broker that delegates identity to
 
 **What's new (AS behavior):**
 - Authorization code issuance (`/authorize` + code generation)
-- Code-for-token exchange (`/token` with `grant_type=authorization_code`)
+- Unified `/token` endpoint supporting:
+  - `grant_type=authorization_code`
+  - `grant_type=urn:ietf:params:oauth:grant-type:device_code` (device polling)
+  - `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`
 
 **What's a thin wrapper over existing logic:**
 - OAuth metadata (RFC 8414) -- static discovery document
@@ -264,17 +289,18 @@ Must return JSON with at minimum:
   "issuer": "https://{hostname}/authn",
   "authorization_endpoint": "https://{hostname}/authn/authorize",
   "token_endpoint": "https://{hostname}/authn/token",
+  "device_authorization_endpoint": "https://{hostname}/authn/device_authorization",
   "introspection_endpoint": "https://{hostname}/authn/introspect",
   "response_types_supported": ["code"],
   "grant_types_supported": [
     "authorization_code",
+    "refresh_token",
     "urn:ietf:params:oauth:grant-type:device_code",
     "urn:ietf:params:oauth:grant-type:token-exchange"
   ],
   "code_challenge_methods_supported": ["S256"],
-  "token_endpoint_auth_methods_supported": ["none"],
-  "introspection_endpoint_auth_methods_supported": ["bearer"],
-  "scopes_supported": ["openid", "profile", "email"],
+  "token_endpoint_auth_methods_supported": ["client_secret_basic","client_secret_post","none"],
+  "introspection_endpoint_auth_methods_supported": ["client_secret_basic","client_secret_post"],
   "resource_indicators_supported": true
 }
 ```
@@ -294,7 +320,7 @@ Static metadata derived from Credenza's configuration. Low complexity. Can optio
    - Pass `resource` through to the upstream IDP's authorization request (if the IDP supports it, otherwise store for later binding at callback time)
    - On callback, bind the resource to the created session's userinfo (same pattern as `service_flow.py:290-298`)
 
-2. **`rest/device_flow.py`** — Accept `resource` parameter on `/device/start`:
+2. **`rest/device_flow.py`** — Accept `resource` parameter on `/device_authorization`:
    - Store `resource` in the device flow data
    - On token poll response, ensure the returned session is resource-bound
 
@@ -332,6 +358,8 @@ Response (RFC 7662 format):
   "scope": "openid profile email",
   "exp": 1707600000,
   "iat": 1707596400,
+  "client_id": "mcp-client",
+  "token_type": "Bearer",
   "groups": ["admin", "curator"],
   "email": "user@example.com"
 }
@@ -342,12 +370,16 @@ Implementation approach:
 - Reuse the resource intersection logic from `session.py:65-126` (same validation, different entry point)
 - Reformat output per RFC 7662 field names (same data as `make_session_response()`, different shape)
 - Return `{"active": false}` for invalid/expired/resource-mismatched tokens (never 401/403 on introspection -- that's the RFC spec)
+- Reuse existing `claim_mapper.resolve_claim()` logic used by `/session`
+- Emit canonical claims as flat top-level members only (no nested `"claims"` container)
+- M2M assertions are injected into `session.userinfo` under canonical claim keys and resolved identically to IDP claims
 
 #### 2B.4 RFC 8693 — Token Exchange (NEW, but pattern exists)
 
-**File:** New blueprint `credenza/rest/token_exchange.py`
+**File:** Implemented within the unified `credenza/rest/token.py` endpoint (handling multiple grant types)
 
-**Endpoint:** `POST /token` with `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`
+**Endpoint:** `POST /token` with `grant_type=urn:ietf:params:oauth:grant-type:token-exchange`  
+(Handled by the same `/token` endpoint that processes authorization code and device polling flows.)
 
 Credenza already brokers sessions between upstream IDPs and downstream DERIVA services -- that is its core job. Token exchange is a new entry point into that same brokering: the MCP server presents an existing session token and asks Credenza to mint a new session scoped to a different resource. This is analogous to how `service_flow.py` already mints resource-scoped sessions from adapter-verified credentials, just with a different input (an existing Credenza session token instead of a client_secret or AWS presigned URL).
 
@@ -376,7 +408,7 @@ Response:
 
 Implementation:
 1. Validate the `subject_token` (look up in session store via existing `get_session_by_session_key()`, verify active)
-2. Verify the subject token is `mcp:*`-scoped (prevent lateral movement)
+2. Verify the subject token is bound to an allowed source resource according to configured exchange policy (default-deny; no hard-coded resource prefixes).
 3. Verify the requested `resource` is an allowed target (e.g., `deriva:*`)
 4. Check authorization: does this user/principal have access to the requested resource?
 5. Mint a new opaque session token with `resource=[deriva:ermrest]` (reuse existing `service_flow.issue()`)
@@ -388,13 +420,21 @@ This is the one piece of the facade that is NOT a thin wrapper over existing log
 
 **What's genuinely new:**
 - **Authorization code issuance**: `/authorize` must generate a short-lived authorization code, store it, and redirect to the client's `redirect_uri?code=X&state=Y`
-- **Code-for-token exchange**: `/token` with `grant_type=authorization_code` must validate the code, look up the associated session, and return the opaque bearer token
+- **Code-for-token exchange**: `/token` with `grant_type=authorization_code` must validate the code, look up the associated session, and return the opaque bearer token 
+  - The same `/token` endpoint also handles:
+    - `grant_type=urn:ietf:params:oauth:grant-type:device_code` for RFC 8628 device polling
+    - `grant_type=urn:ietf:params:oauth:grant-type:token-exchange` for RFC 8693 token exchange
 - **PKCE validation**: The code exchange must verify `code_verifier` against the `code_challenge` sent at authorization time
 
 **What's reused from existing logic:**
 - The IDP redirect (same as `/login` -- redirect browser to upstream IDP)
 - The IDP callback handling (same as `/callback` -- exchange IDP code for tokens, create session)
 - Session creation and opaque token minting (same as existing `session_store.create_session()`)
+
+**Notes:**
+- PKCE is mandatory. Only `S256` is accepted; `plain` MUST be rejected.
+- Authorization codes are single-use and short-lived.
+- `redirect_uri` MUST exactly match the original authorization request.
 
 **Flow:**
 1. MCP client opens browser to `/authorize?response_type=code&client_id=X&redirect_uri=Y&scope=Z&resource=R&code_challenge=C&state=S`
@@ -445,7 +485,7 @@ Can be done immediately; no Credenza changes needed. Auth is disabled (env var n
 2. RFC 8414 metadata endpoint (`/.well-known/oauth-authorization-server`)
 3. RFC 7662 introspection endpoint (`POST /introspect`) — protected by client auth
 4. Extend `resource` parameter to login and device flows (RFC 8707)
-5. `/authorize` and `/token` endpoints (authorization code issuance + exchange) — `/token` protected by client auth for confidential clients
+5. `/authorize` endpoint and unified `/token` endpoint (authorization_code, device_code polling, and token-exchange) — `/token` protected by client auth where required
 
 ### Phase 3: MCP Server Auth Activation
 
@@ -603,10 +643,10 @@ This is why Credenza must support authorization code issuance (2B.5) -- there is
 - `config/client_auth.json` — NEW (client registry: client_id, client_secret, allowed grant types per client)
 - `rest/oauth_metadata.py` — NEW (static RFC 8414 metadata)
 - `rest/introspect.py` — NEW (RFC 7662 reformatting of existing `GET /session` logic)
-- `rest/token_exchange.py` — NEW (RFC 8693 entry point into existing `service_flow.issue()`)
-- `rest/oauth_endpoints.py` — NEW (authorization code flow: `/authorize` + `/token` with code issuance and exchange)
-- `rest/login_flow.py` — MODIFY (accept `resource` parameter, store in session)
-- `rest/device_flow.py` — MODIFY (accept `resource` parameter, store in session)
+- `rest/token.py` — NEW (unified `/token` endpoint handling authorization_code, device_code polling, and token-exchange)
+- `rest/authorize.py` — NEW (`/authorize` endpoint for authorization code issuance)
+- `rest/login.py` — MODIFY (accept `resource` parameter, store in session)
+- `rest/device.py` — MODIFY (accept `resource` parameter, store in session)
 - `rest/session.py` — MODIFY (generalize resource binding validation to all session types)
 - `app.py` — MODIFY (register new blueprints, load client registry)
 
