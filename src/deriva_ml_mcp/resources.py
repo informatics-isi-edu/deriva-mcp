@@ -435,7 +435,7 @@ multirun_config(
     )
     def get_catalog_schema() -> str:
         """Return the current catalog schema as JSON."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -477,7 +477,7 @@ multirun_config(
     )
     def get_catalog_vocabularies() -> str:
         """Return all vocabulary tables and terms as JSON."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -507,7 +507,7 @@ multirun_config(
     )
     def get_catalog_datasets() -> str:
         """Return all datasets as JSON."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -532,7 +532,7 @@ multirun_config(
     )
     def get_dataset_element_types() -> str:
         """Return all dataset element type tables."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -553,7 +553,7 @@ multirun_config(
     )
     def get_catalog_workflows() -> str:
         """Return all workflows as JSON."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -579,7 +579,7 @@ multirun_config(
     )
     def get_workflow_types() -> str:
         """Return all workflow type terms."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -600,7 +600,7 @@ multirun_config(
     )
     def get_catalog_features() -> str:
         """Return all feature names as JSON."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -622,7 +622,7 @@ multirun_config(
     )
     def get_catalog_tables() -> str:
         """Return all tables in the domain schemas with metadata."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -652,7 +652,7 @@ multirun_config(
     )
     def get_dataset_types() -> str:
         """Return all dataset type terms."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -682,7 +682,7 @@ multirun_config(
     )
     def get_dataset_details(dataset_rid: str) -> str:
         """Return detailed information about a dataset including children and parents."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -735,7 +735,7 @@ multirun_config(
     )
     def get_dataset_members(dataset_rid: str) -> str:
         """Return all dataset members grouped by table."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -764,7 +764,7 @@ multirun_config(
     )
     def get_dataset_versions(dataset_rid: str) -> str:
         """Return complete version history for a dataset."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -796,7 +796,7 @@ multirun_config(
     )
     def get_table_features(table_name: str) -> str:
         """Return features for a specific table."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -831,7 +831,7 @@ multirun_config(
         - value_columns: columns accepting direct values (with type)
         - required_fields: fields that must be provided (non-nullable)
         """
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -898,7 +898,7 @@ multirun_config(
         Each record includes the target object RID, the feature value(s), and
         the Execution RID that produced it (for provenance tracking).
         """
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -917,7 +917,7 @@ multirun_config(
     )
     def get_vocabulary_terms(vocab_name: str) -> str:
         """Return terms for a specific vocabulary."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -942,7 +942,7 @@ multirun_config(
     )
     def get_vocabulary_term(vocab_name: str, term_name: str) -> str:
         """Return details of a specific vocabulary term."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -965,7 +965,7 @@ multirun_config(
     )
     def get_table_schema(table_name: str) -> str:
         """Return the schema of a table with column details."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -998,7 +998,7 @@ multirun_config(
     )
     def get_table_assets(table_name: str) -> str:
         """Return all assets in an asset table."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1028,7 +1028,7 @@ multirun_config(
     )
     def get_workflow_details(workflow_rid: str) -> str:
         """Return details of a workflow."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1059,7 +1059,7 @@ multirun_config(
     )
     def get_table_annotations(table_name: str) -> str:
         """Return all display-related annotations for a table."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1076,7 +1076,7 @@ multirun_config(
     )
     def get_column_annotations(table_name: str, column_name: str) -> str:
         """Return all display-related annotations for a column."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1093,7 +1093,7 @@ multirun_config(
     )
     def get_table_foreign_keys(table_name: str) -> str:
         """Return all foreign keys related to a table."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1362,7 +1362,7 @@ multirun_config(
     )
     def get_asset_tables() -> str:
         """Return list of all asset tables."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1383,7 +1383,7 @@ multirun_config(
     )
     def get_catalog_assets() -> str:
         """Return summary of all asset tables."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1408,7 +1408,7 @@ multirun_config(
     )
     def get_asset_details(asset_rid: str) -> str:
         """Return detailed information about an asset."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1449,7 +1449,7 @@ multirun_config(
     )
     def get_catalog_executions() -> str:
         """Return recent executions."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1479,7 +1479,7 @@ multirun_config(
     )
     def get_execution_details(execution_rid: str) -> str:
         """Return detailed information about an execution."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1513,7 +1513,7 @@ multirun_config(
     )
     def get_catalog_info() -> str:
         """Return details about the active catalog."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1544,7 +1544,7 @@ multirun_config(
     )
     def get_catalog_users() -> str:
         """Return list of users with catalog access."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1573,7 +1573,7 @@ multirun_config(
     )
     def get_chaise_url(table_or_rid: str) -> str:
         """Return the Chaise web interface URL for a table or RID."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1601,7 +1601,7 @@ multirun_config(
     )
     def resolve_rid(rid: str) -> str:
         """Resolve a RID to its table and Chaise URL."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1628,7 +1628,7 @@ multirun_config(
     )
     def get_citation_url(rid: str) -> str:
         """Generate permanent and current citation URLs for a RID."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1723,7 +1723,7 @@ multirun_config(
     )
     def get_execution_inputs(execution_rid: str) -> str:
         """Return input datasets and assets for an execution."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1765,7 +1765,7 @@ multirun_config(
     )
     def get_experiment_details(execution_rid: str) -> str:
         """Return experiment summary for an execution."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1783,7 +1783,7 @@ multirun_config(
     )
     def get_catalog_experiments() -> str:
         """Return all experiments in the catalog."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1808,7 +1808,7 @@ multirun_config(
     )
     def get_storage_summary() -> str:
         """Return storage usage summary."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1826,7 +1826,7 @@ multirun_config(
     )
     def get_cache_stats() -> str:
         """Return cache size statistics."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
@@ -1844,7 +1844,7 @@ multirun_config(
     )
     def get_execution_dirs() -> str:
         """Return list of execution directories."""
-        ml = conn_manager.get_active_connection()
+        ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
