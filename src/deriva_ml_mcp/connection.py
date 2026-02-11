@@ -11,6 +11,15 @@ Multi-user isolation:
 - User identity is derived from credentials at connect time and stored
   on ConnectionInfo for use by other modules (background tasks, executions).
 
+HTTP transport fallback:
+- With streamable HTTP transport, each HTTP request gets a fresh async
+  context, so contextvar values set during connect_catalog are lost in
+  subsequent requests. To handle this, the ConnectionManager uses a
+  three-tier fallback when resolving the active connection:
+  1. ContextVar (works in stdio and same-request context)
+  2. Instance-level ``_last_active_key`` (survives across HTTP requests)
+  3. Sole connection (if exactly one connection exists, use it)
+
 When connecting to a catalog, an MCP workflow and execution are automatically
 created to track all operations performed through the MCP server.
 """
@@ -107,10 +116,17 @@ class ConnectionManager:
 
     In stdio mode (one process per client), there's only one user and
     one context, so this behaves identically to a simple instance variable.
+
+    For HTTP transport (streamable HTTP), each request gets a fresh async
+    context so contextvar values are lost between requests. To handle this,
+    the manager maintains a ``_last_active_key`` instance variable as a
+    fallback, and will also auto-resolve when exactly one connection exists.
+    See ``_resolve_active_key()`` for the full fallback chain.
     """
 
     def __init__(self) -> None:
         self._connections: dict[str, ConnectionInfo] = {}
+        self._last_active_key: str | None = None
 
     @property
     def _active_connection(self) -> str | None:
@@ -121,6 +137,8 @@ class ConnectionManager:
     def _active_connection(self, value: str | None) -> None:
         """Set the active connection key for the current request context."""
         _active_connection_var.set(value)
+        if value is not None:
+            self._last_active_key = value
 
     def _connection_key(self, hostname: str, catalog_id: str | int, user_id: str = "") -> str:
         """Generate a unique key for a connection.
@@ -128,6 +146,28 @@ class ConnectionManager:
         Includes user_id so two users on the same catalog get separate entries.
         """
         return f"{user_id}:{hostname}:{catalog_id}"
+
+    def _resolve_active_key(self) -> str | None:
+        """Resolve the active connection key with fallbacks for HTTP transport.
+
+        With streamable HTTP transport, each request gets a fresh async context
+        so the contextvar is lost. This method tries three strategies in order:
+
+        1. ContextVar (works in stdio and same-request context)
+        2. Last active key (instance var, survives across HTTP requests)
+        3. Sole connection (if exactly one exists)
+
+        Returns:
+            The resolved connection key, or None if no connection can be determined.
+        """
+        key = self._active_connection
+        if key and key in self._connections:
+            return key
+        if self._last_active_key and self._last_active_key in self._connections:
+            return self._last_active_key
+        if len(self._connections) == 1:
+            return next(iter(self._connections.keys()))
+        return None
 
     def _ensure_mcp_workflow_type(self, ml: DerivaML) -> None:
         """Ensure the 'DerivaML MCP' workflow type exists in the catalog.
@@ -288,7 +328,7 @@ class ConnectionManager:
             True if disconnected successfully.
         """
         if hostname is None and catalog_id is None:
-            key = self._active_connection
+            key = self._resolve_active_key()
         else:
             # Find the connection key for this user+host+catalog
             conn_info = self._find_connection(hostname or "", catalog_id or "")
@@ -321,6 +361,8 @@ class ConnectionManager:
             del self._connections[key]
             if self._active_connection == key:
                 self._active_connection = None
+            if self._last_active_key == key:
+                self._last_active_key = None
             logger.info(f"Disconnected from {key}")
             return True
         return False
@@ -331,8 +373,8 @@ class ConnectionManager:
         Used for disconnect when we don't have user_id handy.
         Prefers the active connection's user if available.
         """
-        # Try active connection first
-        active = self._active_connection
+        # Try active connection first (with fallback for HTTP transport)
+        active = self._resolve_active_key()
         if active and active in self._connections:
             info = self._connections[active]
             if info.hostname == hostname and str(info.catalog_id) == str(catalog_id):
@@ -347,11 +389,16 @@ class ConnectionManager:
     def get_active(self) -> DerivaML | None:
         """Get the active DerivaML instance.
 
+        Uses ``_resolve_active_key()`` to find the active connection,
+        falling back through instance-level and sole-connection strategies
+        when the contextvar is lost (e.g., across HTTP requests).
+
         Returns:
             Active DerivaML instance or None if no active connection.
         """
-        if self._active_connection and self._active_connection in self._connections:
-            return self._connections[self._active_connection].ml_instance
+        key = self._resolve_active_key()
+        if key:
+            return self._connections[key].ml_instance
         return None
 
     def get_active_or_raise(self) -> DerivaML:
@@ -373,11 +420,16 @@ class ConnectionManager:
     def get_active_execution(self) -> Any | None:
         """Get the active execution context.
 
+        Uses ``_resolve_active_key()`` to find the active connection,
+        falling back through instance-level and sole-connection strategies
+        when the contextvar is lost (e.g., across HTTP requests).
+
         Returns:
             Active Execution object or None if no active connection or no execution.
         """
-        if self._active_connection and self._active_connection in self._connections:
-            return self._connections[self._active_connection].execution
+        key = self._resolve_active_key()
+        if key:
+            return self._connections[key].execution
         return None
 
     def get_active_execution_or_raise(self) -> Any:
@@ -399,11 +451,16 @@ class ConnectionManager:
     def get_active_connection_info(self) -> ConnectionInfo | None:
         """Get the active connection info including workflow and execution.
 
+        Uses ``_resolve_active_key()`` to find the active connection,
+        falling back through instance-level and sole-connection strategies
+        when the contextvar is lost (e.g., across HTTP requests).
+
         Returns:
             ConnectionInfo or None if no active connection.
         """
-        if self._active_connection and self._active_connection in self._connections:
-            return self._connections[self._active_connection]
+        key = self._resolve_active_key()
+        if key:
+            return self._connections[key]
         return None
 
     def get_active_connection_info_or_raise(self) -> ConnectionInfo:
@@ -441,12 +498,13 @@ class ConnectionManager:
         Returns:
             List of connection information dictionaries.
         """
+        active_key = self._resolve_active_key()
         return [
             {
                 "hostname": info.hostname,
                 "catalog_id": info.catalog_id,
                 "domain_schemas": list(info.domain_schemas) if info.domain_schemas else None,
-                "is_active": key == self._active_connection,
+                "is_active": key == active_key,
                 "workflow_rid": info.workflow_rid,
                 "execution_rid": info.execution.execution_rid if info.execution else None,
             }

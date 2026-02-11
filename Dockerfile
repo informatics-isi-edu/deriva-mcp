@@ -54,23 +54,46 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Create entrypoint wrapper script that fixes localhost resolution for Docker networking.
-# When running in Docker with --add-host localhost:<webserver-ip>, Docker adds the custom
-# entry AFTER the default 127.0.0.1 localhost entry. Since /etc/hosts is resolved first-match,
-# the custom entry is ignored. This script comments out the default 127.0.0.1 localhost line
-# so that the custom --add-host entry takes effect, allowing the container to reach the
-# Deriva webserver when URLs use "localhost".
+#
+# Two mechanisms for remapping localhost to the Deriva webserver:
+#
+# 1. DERIVA_MCP_LOCALHOST_ALIAS (preferred for compose): Set to a Docker DNS name like
+#    "deriva-webserver". The entrypoint resolves it to an IP at startup and adds it to
+#    /etc/hosts as "localhost". No hardcoded IPs needed in compose files.
+#
+# 2. --add-host localhost:<ip> (for docker run): Docker adds the custom entry AFTER the
+#    default 127.0.0.1 localhost entry. Since /etc/hosts is resolved first-match, the
+#    entrypoint comments out the default entry so the custom one takes effect.
+#
+# Both approaches ensure that URLs referencing "localhost" reach the Deriva webserver.
 RUN printf '#!/bin/sh\n\
-# Fix localhost resolution: comment out default localhost entries so --add-host takes effect\n\
-# Cannot use sed -i on /etc/hosts (mounted file), so use cp to modify in place\n\
-cp /etc/hosts /tmp/hosts.tmp\n\
-sed -e "s/^127\\.0\\.0\\.1[[:space:]]\\+localhost/#&/" -e "s/^::1[[:space:]]\\+localhost/#&/" /tmp/hosts.tmp > /etc/hosts 2>/dev/null || true\n\
-rm -f /tmp/hosts.tmp\n\
+# Remap localhost to Deriva webserver for Docker networking\n\
+if [ -n "$DERIVA_MCP_LOCALHOST_ALIAS" ]; then\n\
+    # Resolve DNS name to IP and add as localhost\n\
+    ALIAS_IP=$(getent hosts "$DERIVA_MCP_LOCALHOST_ALIAS" 2>/dev/null | awk "{print \\$1}")\n\
+    if [ -n "$ALIAS_IP" ]; then\n\
+        cp /etc/hosts /tmp/hosts.tmp\n\
+        sed -e "s/^127\\.0\\.0\\.1[[:space:]]\\+localhost/#&/" -e "s/^::1[[:space:]]\\+localhost/#&/" /tmp/hosts.tmp > /etc/hosts 2>/dev/null || true\n\
+        echo "$ALIAS_IP localhost" >> /etc/hosts\n\
+        rm -f /tmp/hosts.tmp\n\
+    fi\n\
+else\n\
+    # Fix localhost resolution for --add-host: comment out default entries so custom one takes effect\n\
+    cp /etc/hosts /tmp/hosts.tmp\n\
+    sed -e "s/^127\\.0\\.0\\.1[[:space:]]\\+localhost/#&/" -e "s/^::1[[:space:]]\\+localhost/#&/" /tmp/hosts.tmp > /etc/hosts 2>/dev/null || true\n\
+    rm -f /tmp/hosts.tmp\n\
+fi\n\
 # Set default CA bundle for localhost with self-signed certificates if not already set\n\
 : "${REQUESTS_CA_BUNDLE:=$HOME/.deriva/allCAbundle-with-local.pem}"\n\
 export REQUESTS_CA_BUNDLE\n\
 # pip-system-certs/truststore ignores REQUESTS_CA_BUNDLE but respects SSL_CERT_FILE\n\
 : "${SSL_CERT_FILE:=$REQUESTS_CA_BUNDLE}"\n\
 export SSL_CERT_FILE\n\
+# Warn if credentials directory is not found (likely missing -e HOME=$HOME)\n\
+if [ ! -d "$HOME/.deriva" ]; then\n\
+    echo "WARNING: $HOME/.deriva not found. Credentials may not be mounted correctly." >&2\n\
+    echo "  Ensure you pass -e HOME=\\$HOME and -v \\$HOME/.deriva:\\$HOME/.deriva:ro" >&2\n\
+fi\n\
 exec "$@"\n\
 ' > /entrypoint.sh && chmod +x /entrypoint.sh
 

@@ -52,9 +52,11 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             connect_catalog("localhost", "10", domain_schema="isa", default_schema="isa")
         """
         try:
+            # Resolve hostname for Docker network environments
+            resolved_hostname = _resolve_hostname(hostname) or hostname
             # Convert single domain_schema to set for the new API
             domain_schemas = {domain_schema} if domain_schema else None
-            ml = conn_manager.connect(hostname, catalog_id, domain_schemas,
+            ml = conn_manager.connect(resolved_hostname, catalog_id, domain_schemas,
                                       default_schema=default_schema)
             conn_info = conn_manager.get_active_connection_info()
 

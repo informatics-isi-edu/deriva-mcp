@@ -335,14 +335,16 @@ docker-compose -f docker-compose.mcp.yaml down
 docker run -d --name deriva-mcp \
   -p 8000:8000 \
   --network deriva-localhost_internal_network \
-  --add-host localhost:172.28.3.15 \
   -e HOME=$HOME \
+  -e DERIVA_MCP_LOCALHOST_ALIAS=deriva-webserver \
   -v $HOME/.deriva:$HOME/.deriva:ro \
   -v $HOME/.bdbag:$HOME/.bdbag \
   -v $HOME/.deriva-ml:$HOME/.deriva-ml \
   ghcr.io/informatics-isi-edu/deriva-mcp:latest \
   deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 ```
+
+The `DERIVA_MCP_LOCALHOST_ALIAS` variable tells the entrypoint to resolve the Docker DNS name `deriva-webserver` to an IP and add it to `/etc/hosts` as `localhost`. This avoids hardcoding container IPs that change when the network is recreated.
 
 **Running locally (development):**
 
@@ -393,8 +395,8 @@ deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 #### Verifying the HTTP Server
 
 ```bash
-# Check server health
-curl -s http://localhost:8000/mcp
+# Check server health (uses /health endpoint, not /mcp which creates sessions)
+curl -s http://localhost:8000/health
 
 # View server logs
 docker-compose -f docker-compose.mcp.yaml logs -f
@@ -920,7 +922,7 @@ If your Deriva server is running directly on the host machine (not in Docker), u
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
+        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     }
@@ -930,7 +932,14 @@ If your Deriva server is running directly on the host machine (not in Docker), u
 
 #### Option B: Deriva Running in Docker (deriva-localhost)
 
-If your Deriva server is running in Docker (e.g., using deriva-localhost), the MCP container must join the same Docker network and map `localhost` to the webserver container's IP:
+If your Deriva server is running in Docker (e.g., using deriva-localhost), the MCP container must join the same Docker network and map `localhost` to the webserver container.
+
+First, find the webserver IP:
+```bash
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deriva-webserver
+```
+
+Then use it in the `--add-host` argument (replace `<WEBSERVER_IP>` with the actual IP):
 
 ```json
 {
@@ -940,17 +949,12 @@ If your Deriva server is running in Docker (e.g., using deriva-localhost), the M
       "command": "/bin/sh",
       "args": [
         "-c",
-        "docker run -i --rm --network deriva-localhost_internal_network --add-host localhost:172.28.3.15 -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml deriva-mcp:latest"
+        "docker run -i --rm --network deriva-localhost_internal_network --add-host localhost:<WEBSERVER_IP> -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
       ],
       "env": {}
     }
   }
 }
-```
-
-**Finding the webserver IP:**
-```bash
-docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deriva-webserver
 ```
 
 **Why this is needed:** The MCP container needs to download dataset assets from the Deriva server. When Deriva runs in Docker, URLs in the dataset bags reference `localhost`, which must resolve to the Deriva webserver container. The entrypoint script in the MCP image automatically adjusts `/etc/hosts` so that the `--add-host` mapping takes effect.
@@ -1073,7 +1077,7 @@ uv run ruff format src/
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.12+
 - MCP SDK 1.2.0+
 - DerivaML 0.1.0+
 - Docker (optional, for GitHub MCP local server)
