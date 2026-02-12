@@ -1532,8 +1532,10 @@ The `stratify_by_column` uses denormalized column naming: `{TableName}_{ColumnNa
 Use `denormalize_dataset` to discover available column names before stratifying.
 
 **IMPORTANT - Code Provenance:**
-If using a custom script instead of `split_dataset`, commit the script BEFORE running it
-to ensure valid code provenance. The `split_dataset` tool handles provenance automatically.
+For full provenance tracking, prefer the **script-based workflow** described in the
+`catalog-operations-workflow` prompt: generate a script, test with `--dry-run`, commit,
+then run. This ensures the execution record references a specific git commit.
+The interactive `split_dataset` MCP tool works but does not capture code provenance.
 
 ## Step 8: Version Management
 
@@ -3039,10 +3041,13 @@ Dry run behavior:
 - Does NOT upload results
 
 ### Production Workflow
-1. Debug with `dry_run=True`
-2. Remove `dry_run` when ready
-3. Bump version (`uv run bump-version patch`)
-4. Run full execution
+1. Generate a script for your catalog operation (dataset creation, ETL, feature loading, etc.)
+2. Test with `dry_run=True`
+3. Commit the script to the repository
+4. Bump version (`uv run bump-version patch`)
+5. Run for real (without `dry_run`)
+
+See the `catalog-operations-workflow` prompt for detailed guidance.
 
 ## Data Management
 
@@ -3113,6 +3118,225 @@ Before running an ML workflow:
 | Run notebook | `uv run deriva-ml-run-notebook <notebook> --host <HOST> --catalog <ID>` |
 | Test config | `python deriva_run.py dry_run=True` |
 | Run experiment | `python deriva_run.py +experiment=<name>` |
+"""
+
+    # =========================================================================
+    # Catalog Operations Script Workflow Prompt
+    # =========================================================================
+
+    @mcp.prompt(
+        name="catalog-operations-workflow",
+        description="ALWAYS use: When performing catalog operations (dataset creation, splitting, ETL, feature creation), generate a committed script for full provenance",
+    )
+    def catalog_operations_workflow_prompt() -> str:
+        """Guide for creating reproducible catalog operation scripts with full provenance."""
+        return """# Catalog Operations: Script-Based Workflow for Full Provenance
+
+**ALWAYS follow this workflow** when performing catalog operations that modify data,
+including dataset creation, dataset splitting, ETL pipelines, feature creation,
+data loading, and any other catalog mutations.
+
+## Why Scripts Instead of Interactive Tools?
+
+DerivaML tracks code provenance by recording the **git commit hash** of the code
+that produced each execution. When you run catalog operations interactively via
+MCP tools, the operations work correctly but:
+
+- There is **no committed code** to reference for provenance
+- The exact parameters and logic **cannot be reproduced** from the execution record alone
+- Other team members cannot **re-run or audit** the operation
+
+By generating a script, committing it, and then running it, every catalog operation
+has a permanent, versioned record of exactly what was done and why.
+
+---
+
+## The Workflow: Develop, Test, Commit, Run
+
+### Step 1: Generate the Script
+
+Create a Python script in the repository's `scripts/` directory (create the directory
+if it doesn't exist). The script should use the DerivaML Python API directly.
+
+**Script template:**
+```python
+#!/usr/bin/env python
+\"\"\"<Description of what this script does and why>.
+
+This script <creates datasets / splits data / loads features / performs ETL / etc.>
+for the <project name> catalog.
+
+Usage:
+    uv run python scripts/<script_name>.py [--dry-run] [--host HOST] [--catalog CATALOG_ID]
+\"\"\"
+
+import argparse
+from deriva_ml import DerivaML
+from deriva_ml.execution import ExecutionConfiguration, Workflow
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--host", default="localhost", help="Deriva hostname")
+    parser.add_argument("--catalog", required=True, help="Catalog ID")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Test without creating execution records")
+    args = parser.parse_args()
+
+    ml = DerivaML(args.host, args.catalog)
+
+    config = ExecutionConfiguration(
+        workflow=Workflow(
+            name="<Workflow Name>",
+            workflow_type="<Type>",
+            description="<What this workflow does>",
+        ),
+        description="<Execution description>",
+    )
+
+    with ml.create_execution(config, dry_run=args.dry_run) as execution:
+        # --- Your catalog operations here ---
+        pass
+
+    if not args.dry_run:
+        execution.upload_execution_outputs()
+        print(f"Execution RID: {execution.execution_rid}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### Step 2: Test with Dry Run
+
+Run the script with `--dry-run` to verify it works without creating execution records
+or modifying the catalog:
+
+```bash
+uv run python scripts/<script_name>.py --host localhost --catalog <ID> --dry-run
+```
+
+Fix any issues. Iterate until the script runs cleanly.
+
+### Step 3: Commit the Script
+
+**BEFORE running the script for real**, commit it to the repository:
+
+```bash
+git add scripts/<script_name>.py
+git commit -m "Add <description> script"
+```
+
+This ensures the execution record will reference a valid git commit.
+
+### Step 4: Run for Real
+
+Now run the script without `--dry-run`:
+
+```bash
+uv run python scripts/<script_name>.py --host localhost --catalog <ID>
+```
+
+The execution record in the catalog will capture:
+- The **git commit hash** of the script
+- The **repository URL**
+- All **inputs and outputs** of the execution
+
+---
+
+## Common Script Patterns
+
+### Dataset Creation
+```python
+with ml.create_execution(config, dry_run=args.dry_run) as execution:
+    ml.add_dataset_element_type("Image")
+    ds = execution.create_execution_dataset(
+        "My Dataset", ["Complete"], description="All images for experiment X"
+    )
+    ml.add_dataset_members(ds.rid, image_rids)
+
+execution.upload_execution_outputs()
+```
+
+### Dataset Splitting
+```python
+from deriva_ml.dataset.split import split_dataset
+
+result = split_dataset(
+    ml, source_dataset_rid,
+    test_size=0.2,
+    seed=42,
+    stratify_by_column="Image_Classification_Image_Class",
+    include_tables=["Image", "Image_Classification"],
+    training_types=["Labeled"],
+    testing_types=["Labeled"],
+)
+print(f"Training: {result['training']} ({result['train_count']} samples)")
+print(f"Testing:  {result['testing']} ({result['test_count']} samples)")
+```
+
+### Feature Creation and Population
+```python
+with ml.create_execution(config, dry_run=args.dry_run) as execution:
+    # Create vocabulary if needed
+    ml.create_vocabulary("Image_Quality", "Quality assessment labels")
+    ml.add_term("Image_Quality", "Good", "Image passes quality check")
+    ml.add_term("Image_Quality", "Poor", "Image fails quality check")
+
+    # Create feature
+    ml.create_feature("Image", "Image_Quality", description="Quality assessment")
+
+    # Populate feature values
+    for image_rid, quality_label in assessments:
+        ml.add_feature_value("Image", image_rid, "Image_Quality", quality_label)
+
+execution.upload_execution_outputs()
+```
+
+### ETL / Data Loading
+```python
+with ml.create_execution(config, dry_run=args.dry_run) as execution:
+    # Load data from external source
+    records = load_external_data("path/to/source")
+
+    # Insert into catalog
+    for batch in batched(records, 1000):
+        ml.insert_records("MyTable", batch)
+
+execution.upload_execution_outputs()
+```
+
+---
+
+## When MCP Tools Are Still Appropriate
+
+Not every catalog operation needs a script. Use MCP tools directly for:
+
+- **Exploratory work**: Querying data, inspecting schemas, browsing datasets
+- **One-time administrative tasks**: Renaming columns, updating descriptions, fixing metadata
+- **Read-only operations**: Downloading datasets, listing features, checking versions
+
+**Always use a script when:**
+
+- The operation creates **new data** (datasets, features, records)
+- The operation should be **reproducible** by others
+- The operation is part of a **pipeline** that may need to be re-run
+- You need **full provenance** tracking for the operation
+
+---
+
+## Suggesting This Workflow
+
+When a user asks to perform a catalog operation interactively (e.g., "split this dataset",
+"create a feature for image quality", "load this CSV into the catalog"), **suggest the
+script-based approach**:
+
+> For full provenance tracking, I recommend creating a script that we can commit
+> to the repository before running. This ensures the operation is reproducible and
+> the execution record references the exact code used. Shall I generate the script?
+
+If the user prefers the interactive approach, proceed with MCP tools but note that
+provenance will be limited to the execution record without a code reference.
 """
 
     @mcp.prompt(

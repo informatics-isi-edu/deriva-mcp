@@ -426,6 +426,22 @@ If there are uncommitted changes, the execution record won't have a valid code r
 2. Use `dry_run=true` during debugging to test without creating execution records
 3. Tag versions with semantic versioning before significant model runs
 
+**Script-based workflow for catalog operations:**
+
+For operations that modify catalog data (dataset creation, splitting, ETL, feature creation,
+data loading), prefer generating a **committed script** over using interactive MCP tools:
+
+1. Generate a Python script in `scripts/` using the DerivaML Python API
+2. Test with `--dry-run` to verify correctness
+3. Commit the script to the repository
+4. Run for real — the execution record captures the git commit hash
+
+This ensures every catalog mutation has a permanent, versioned code reference.
+See the `catalog-operations-workflow` prompt for templates and detailed guidance.
+
+MCP tools are still appropriate for read-only exploration, one-time admin tasks, and
+queries — anything that doesn't need reproducibility tracking.
+
 **Dry run mode:**
 - `dry_run=true` downloads input datasets/assets but skips execution record creation
 - Useful for testing data loading, configuration, and model initialization
@@ -471,11 +487,12 @@ split_dataset("1-ABC", test_size=0.2, dry_run=True)
 # Returns counts and strategy without modifying catalog
 ```
 
-**Code provenance for split scripts:**
+**Code provenance for splits:**
 
-If a dataset split is generated via a script (instead of the `split_dataset` tool), the script
-MUST be committed to the repository BEFORE running it. This ensures valid code provenance.
-The `split_dataset` tool handles provenance automatically within an execution context.
+For full provenance tracking, prefer the script-based workflow: generate a split script,
+test with `--dry-run`, commit, then run. The interactive `split_dataset` MCP tool creates
+execution records but cannot capture code provenance since there is no committed script.
+See the `catalog-operations-workflow` prompt for the recommended workflow.
 
 ## Restructuring Assets for ML Frameworks
 
