@@ -3830,8 +3830,8 @@ Before querying, explore what data is available:
 # Get details about a specific table - use the resource
 # deriva-ml://table/Image/schema
 
-# See the full schema structure
-get_schema_description()
+# See the full schema structure (includes all tables, columns, FKs, features)
+# deriva-ml://catalog/schema
 ```
 
 ## Step 2: Simple Queries
@@ -5287,9 +5287,8 @@ Before `create_table()`, check existing tables:
 # Read schema resource for all tables with descriptions
 deriva-ml://catalog/schema
 
-# Get specific table details - use the resources
+# Get specific table details (columns, FKs, keys, annotations, features)
 # deriva-ml://table/<table_name>/schema
-get_table_columns("<table_name>")
 ```
 
 **Search for semantic matches**:
@@ -5561,7 +5560,7 @@ User: "That's exactly what I need, use that"
 | Entity Type | Resource for Discovery | Key Semantic Fields |
 |-------------|------------------------|---------------------|
 | Tables | `deriva-ml://catalog/tables` | name, description, columns |
-| Table Details | `deriva-ml://table/{table}/schema`, `get_table_columns()` | column names, types, descriptions |
+| Table Details | `deriva-ml://table/{table}/schema` | column names, types, descriptions, FKs, keys, annotations |
 | Vocabularies | `deriva-ml://catalog/vocabularies` | all vocabs with terms |
 | Vocab Terms | `deriva-ml://vocabulary/{name}` | term name, synonyms, description |
 | Term Lookup | `deriva-ml://vocabulary/{vocab}/{term}` | find by name or synonym |

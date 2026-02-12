@@ -526,40 +526,6 @@ class TestSchemaWorkflow:
         assert "IntTestSubject" in table_names
 
     @pytest.mark.asyncio
-    async def test_get_table_columns(self, int_schema_tools):
-        """get_table_columns returns column details for a created table."""
-        # Create table
-        await int_schema_tools["create_table"](
-            table_name="IntTestColumnCheck",
-            columns=[
-                {"name": "Label", "type": "text", "nullok": False, "comment": "A label"},
-                {"name": "Score", "type": "float8"},
-            ],
-            comment="Table for column check",
-        )
-
-        # Get columns
-        result = await int_schema_tools["get_table_columns"](
-            table_name="IntTestColumnCheck",
-        )
-        columns = parse_json_result(result)
-        assert isinstance(columns, list)
-
-        col_names = [c["name"] for c in columns]
-        assert "Label" in col_names
-        assert "Score" in col_names
-
-        label_col = next(c for c in columns if c["name"] == "Label")
-        assert label_col["nullok"] is False
-
-    @pytest.mark.asyncio
-    async def test_get_schema_description(self, int_schema_tools):
-        """get_schema_description returns the full catalog schema structure."""
-        result = await int_schema_tools["get_schema_description"]()
-        data = parse_json_result(result)
-        assert "schemas" in data or "domain_schema" in data
-
-    @pytest.mark.asyncio
     async def test_add_column_to_table(self, int_schema_tools):
         """add_column adds a new column to an existing table."""
         # Create table first
@@ -582,12 +548,6 @@ class TestSchemaWorkflow:
         data = assert_success(result)
         assert data["status"] == "created"
         assert data["column_name"] == "Weight"
-
-        # Verify column exists
-        cols_result = await int_schema_tools["get_table_columns"](table_name="IntTestAddCol")
-        columns = parse_json_result(cols_result)
-        col_names = [c["name"] for c in columns]
-        assert "Weight" in col_names
 
 
 # =============================================================================

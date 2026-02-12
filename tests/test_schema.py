@@ -1,13 +1,12 @@
 """Unit tests for schema manipulation tools.
 
-Tests cover all 15 schema tools:
+Tests cover schema tools:
 - create_table: create a standard table with columns and foreign keys
 - create_asset_table: create an asset table with file management columns
 - list_asset_executions: list executions associated with an asset
 - add_asset_type: add a term to the Asset_Type vocabulary
 - add_asset_type_to_asset: associate an asset type with an asset
 - remove_asset_type_from_asset: remove an asset type from an asset
-- get_schema_description: get full catalog schema description
 - set_table_description: update a table's comment/description
 - set_table_display_name: update a table's UI display name
 - set_row_name_pattern: set Handlebars row name pattern
@@ -15,7 +14,8 @@ Tests cover all 15 schema tools:
 - set_column_description: update a column's comment/description
 - set_column_display_name: update a column's UI display name
 - set_column_nullok: set whether a column allows NULL values
-- get_table_columns: list column details for a table
+
+Note: get_schema_description and get_table_columns were moved to resources.
 """
 
 from __future__ import annotations
@@ -678,77 +678,6 @@ class TestRemoveAssetTypeFromAsset:
 
 
 # =============================================================================
-# TestGetSchemaDescription
-# =============================================================================
-
-
-class TestGetSchemaDescription:
-    """Tests for the get_schema_description tool."""
-
-    @pytest.mark.asyncio
-    async def test_get_schema_description_success(self, schema_tools, mock_ml):
-        """get_schema_description returns the full schema structure."""
-        schema_info = {
-            "domain_schema": "test_schema",
-            "ml_schema": "deriva-ml",
-            "schemas": {
-                "test_schema": {
-                    "tables": {
-                        "Subject": {
-                            "columns": [{"name": "RID"}, {"name": "Name"}],
-                            "foreign_keys": [],
-                        }
-                    }
-                }
-            },
-        }
-        mock_ml.model.get_schema_description.return_value = schema_info
-
-        result = await schema_tools["get_schema_description"]()
-
-        data = parse_json_result(result)
-        assert data["domain_schema"] == "test_schema"
-        assert data["ml_schema"] == "deriva-ml"
-        assert "test_schema" in data["schemas"]
-        mock_ml.model.get_schema_description.assert_called_once_with(
-            include_system_columns=False
-        )
-
-    @pytest.mark.asyncio
-    async def test_get_schema_description_with_system_columns(
-        self, schema_tools, mock_ml
-    ):
-        """get_schema_description passes include_system_columns flag."""
-        mock_ml.model.get_schema_description.return_value = {"schemas": {}}
-
-        result = await schema_tools["get_schema_description"](
-            include_system_columns=True
-        )
-
-        parse_json_result(result)
-        mock_ml.model.get_schema_description.assert_called_once_with(
-            include_system_columns=True
-        )
-
-    @pytest.mark.asyncio
-    async def test_get_schema_description_error(self, schema_tools, mock_ml):
-        """When get_schema_description raises, the tool returns an error."""
-        mock_ml.model.get_schema_description.side_effect = RuntimeError("Schema error")
-
-        result = await schema_tools["get_schema_description"]()
-
-        data = assert_error(result, "Schema error")
-
-    @pytest.mark.asyncio
-    async def test_get_schema_description_no_connection(
-        self, schema_tools_disconnected
-    ):
-        """When disconnected, get_schema_description returns a connection error."""
-        result = await schema_tools_disconnected["get_schema_description"]()
-        assert_error(result, "No active catalog connection")
-
-
-# =============================================================================
 # TestSetTableDescription
 # =============================================================================
 
@@ -1272,114 +1201,15 @@ class TestSetColumnNullok:
 
 
 # =============================================================================
-# TestGetTableColumns
-# =============================================================================
-
-
-class TestGetTableColumns:
-    """Tests for the get_table_columns tool."""
-
-    @pytest.mark.asyncio
-    async def test_get_table_columns_user_only(self, schema_tools, mock_ml):
-        """get_table_columns without include_system returns only user columns."""
-        _setup_table_handle(mock_ml, "Subject")
-
-        user_cols = [
-            _make_mock_column("Name", "text", False, "Subject name", "Name", False),
-            _make_mock_column("Age", "int4", True, "Age in years", "Age", False),
-        ]
-
-        with patch(_TABLE_HANDLE_PATCH) as MockTableHandle:
-            mock_handle = MagicMock()
-            mock_handle.user_columns = user_cols
-            MockTableHandle.return_value = mock_handle
-
-            result = await schema_tools["get_table_columns"](table_name="Subject")
-
-        data = parse_json_result(result)
-        assert isinstance(data, list)
-        assert len(data) == 2
-
-        assert data[0]["name"] == "Name"
-        assert data[0]["type"] == "text"
-        assert data[0]["nullok"] is False
-        assert data[0]["description"] == "Subject name"
-        assert data[0]["display_name"] == "Name"
-        assert data[0]["is_system"] is False
-
-        assert data[1]["name"] == "Age"
-        assert data[1]["type"] == "int4"
-        assert data[1]["nullok"] is True
-
-    @pytest.mark.asyncio
-    async def test_get_table_columns_with_system(self, schema_tools, mock_ml):
-        """get_table_columns with include_system=True returns all columns."""
-        _setup_table_handle(mock_ml, "Subject")
-
-        all_cols = [
-            _make_mock_column("RID", "text", False, "Row ID", "RID", True),
-            _make_mock_column("RCT", "timestamptz", False, "Creation time", "RCT", True),
-            _make_mock_column("Name", "text", False, "Subject name", "Name", False),
-        ]
-
-        with patch(_TABLE_HANDLE_PATCH) as MockTableHandle:
-            mock_handle = MagicMock()
-            mock_handle.all_columns = iter(all_cols)
-            MockTableHandle.return_value = mock_handle
-
-            result = await schema_tools["get_table_columns"](
-                table_name="Subject", include_system=True
-            )
-
-        data = parse_json_result(result)
-        assert len(data) == 3
-        assert data[0]["name"] == "RID"
-        assert data[0]["is_system"] is True
-        assert data[2]["name"] == "Name"
-        assert data[2]["is_system"] is False
-
-    @pytest.mark.asyncio
-    async def test_get_table_columns_empty(self, schema_tools, mock_ml):
-        """get_table_columns on a table with no user columns returns empty list."""
-        _setup_table_handle(mock_ml, "Empty")
-
-        with patch(_TABLE_HANDLE_PATCH) as MockTableHandle:
-            mock_handle = MagicMock()
-            mock_handle.user_columns = []
-            MockTableHandle.return_value = mock_handle
-
-            result = await schema_tools["get_table_columns"](table_name="Empty")
-
-        data = parse_json_result(result)
-        assert isinstance(data, list)
-        assert len(data) == 0
-
-    @pytest.mark.asyncio
-    async def test_get_table_columns_error(self, schema_tools, mock_ml):
-        """When name_to_table raises, the tool returns an error."""
-        mock_ml.model.name_to_table.side_effect = RuntimeError("Table not found")
-
-        result = await schema_tools["get_table_columns"](table_name="Bad")
-
-        data = assert_error(result, "Table not found")
-
-    @pytest.mark.asyncio
-    async def test_get_table_columns_no_connection(self, schema_tools_disconnected):
-        """When disconnected, get_table_columns returns a connection error."""
-        result = await schema_tools_disconnected["get_table_columns"](table_name="X")
-        assert_error(result, "No active catalog connection")
-
-
-# =============================================================================
 # TestToolRegistration
 # =============================================================================
 
 
 class TestToolRegistration:
-    """Verify that all 15 schema tools are registered."""
+    """Verify that all schema tools are registered."""
 
     def test_all_tools_registered(self, schema_tools):
-        """All 15 schema tools should be captured by the fixture."""
+        """All schema tools should be captured by the fixture."""
         expected_tools = [
             "create_table",
             "create_asset_table",
@@ -1387,7 +1217,6 @@ class TestToolRegistration:
             "add_asset_type",
             "add_asset_type_to_asset",
             "remove_asset_type_from_asset",
-            "get_schema_description",
             "set_table_description",
             "set_table_display_name",
             "set_row_name_pattern",
@@ -1395,11 +1224,10 @@ class TestToolRegistration:
             "set_column_description",
             "set_column_display_name",
             "set_column_nullok",
-            "get_table_columns",
         ]
         for tool_name in expected_tools:
             assert tool_name in schema_tools, f"Missing tool: {tool_name}"
 
     def test_tool_count(self, schema_tools):
-        """There should be exactly 15 schema tools."""
-        assert len(schema_tools) == 15
+        """There should be exactly 13 schema tools."""
+        assert len(schema_tools) == 13

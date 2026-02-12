@@ -430,41 +430,20 @@ multirun_config(
     @mcp.resource(
         "deriva-ml://catalog/schema",
         name="Catalog Schema",
-        description="Current catalog schema structure in JSON format",
+        description="Complete catalog schema structure including all tables, columns, foreign keys, features, and relationships in both domain and ML schemas",
         mime_type="application/json",
     )
     def get_catalog_schema() -> str:
-        """Return the current catalog schema as JSON."""
+        """Return the full catalog schema using ml.model.get_schema_description()."""
         ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
         try:
-            schema_info = {
-                "hostname": ml.host_name,
-                "catalog_id": str(ml.catalog_id),
-                "domain_schemas": list(ml.domain_schemas),
-                "default_schema": ml.default_schema,
-                "ml_schema": ml.ml_schema,
-                "tables": [],
-            }
-
-            # Get tables from all domain schemas
-            for domain_schema in ml.domain_schemas:
-                domain = ml.model.schemas.get(domain_schema)
-                if domain:
-                    for table in domain.tables.values():
-                        table_info = {
-                            "name": table.name,
-                            "schema": domain_schema,
-                            "columns": [
-                                {"name": col.name, "type": str(col.type)}
-                                for col in table.columns
-                            ],
-                            "is_vocabulary": ml.model.is_vocabulary(table),
-                        }
-                        schema_info["tables"].append(table_info)
-
+            schema_info = ml.model.get_schema_description()
+            # Add connection metadata
+            schema_info["hostname"] = ml.host_name
+            schema_info["catalog_id"] = str(ml.catalog_id)
             return json.dumps(schema_info, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -960,33 +939,102 @@ multirun_config(
     @mcp.resource(
         "deriva-ml://table/{table_name}/schema",
         name="Table Schema",
-        description="Full schema of a table including all columns and their types",
+        description="Full schema of a table including columns, foreign keys, keys, annotations, and features",
         mime_type="application/json",
     )
     def get_table_schema(table_name: str) -> str:
-        """Return the schema of a table with column details."""
+        """Return the full schema of a table with columns, foreign keys, keys, annotations, and features."""
         ml = conn_manager.get_active_or_raise()
         if ml is None:
             return json.dumps({"error": "No active catalog connection"})
 
         try:
             table = ml.model.name_to_table(table_name)
+
+            # Columns with annotations
             columns = []
             for col in table.columns:
-                columns.append({
+                col_info = {
                     "name": col.name,
                     "type": str(col.type.typename),
                     "nullok": col.nullok,
                     "comment": col.comment or "",
+                }
+                if col.annotations:
+                    col_info["annotations"] = col.annotations
+                if col.default is not None:
+                    col_info["default"] = col.default
+                columns.append(col_info)
+
+            # Foreign keys (outbound)
+            foreign_keys = []
+            for fk in table.foreign_keys:
+                fk_info = {
+                    "columns": [c.name for c in fk.foreign_key_columns],
+                    "referenced_table": f"{fk.pk_table.schema.name}.{fk.pk_table.name}",
+                    "referenced_columns": [c.name for c in fk.referenced_columns],
+                    "constraint_name": fk.constraint_name,
+                }
+                if fk.annotations:
+                    fk_info["annotations"] = fk.annotations
+                if fk.comment:
+                    fk_info["comment"] = fk.comment
+                foreign_keys.append(fk_info)
+
+            # Referenced by (inbound foreign keys)
+            referenced_by = []
+            for fk in table.referenced_by:
+                referenced_by.append({
+                    "from_table": f"{fk.table.schema.name}.{fk.table.name}",
+                    "from_columns": [c.name for c in fk.foreign_key_columns],
+                    "to_columns": [c.name for c in fk.referenced_columns],
+                    "constraint_name": fk.constraint_name,
                 })
-            return json.dumps({
+
+            # Keys (unique constraints)
+            keys = []
+            for key in table.keys:
+                key_info = {
+                    "columns": [c.name for c in key.unique_columns],
+                    "constraint_name": key.constraint_name,
+                }
+                if key.annotations:
+                    key_info["annotations"] = key.annotations
+                if key.comment:
+                    key_info["comment"] = key.comment
+                keys.append(key_info)
+
+            # Features
+            features = []
+            schema_name = table.schema.name
+            if ml.model.is_domain_schema(schema_name):
+                try:
+                    for f in ml.model.find_features(table):
+                        features.append({
+                            "name": f.feature_name,
+                            "feature_table": f.feature_table.name,
+                        })
+                except Exception:
+                    pass  # Table may not support features
+
+            result = {
                 "name": table.name,
-                "schema": table.schema.name,
+                "schema": schema_name,
                 "comment": table.comment or "",
-                "columns": columns,
                 "is_vocabulary": ml.model.is_vocabulary(table),
                 "is_asset": ml.model.is_asset(table),
-            }, indent=2)
+                "is_association": bool(ml.model.is_association(table)),
+                "columns": columns,
+                "keys": keys,
+                "foreign_keys": foreign_keys,
+                "referenced_by": referenced_by,
+            }
+            if table.annotations:
+                result["annotations"] = table.annotations
+            if features:
+                result["features"] = features
+
+            return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 

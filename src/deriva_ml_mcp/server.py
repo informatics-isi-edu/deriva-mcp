@@ -92,15 +92,15 @@ Always call `connect_catalog` before using other tools. This establishes the con
 ## Common Workflows
 
 **Discovering available catalogs:**
-1. `list_catalog_registry` - Query a server to see all available catalogs and aliases
+1. Read `deriva-ml://registry/{hostname}` resource - See all available catalogs and aliases
 2. `connect_catalog` - Connect using catalog ID or alias name
 
 **Exploring a catalog:**
 1. `connect_catalog` - Connect to the catalog
-2. `list_tables` or `get_schema_description` - Understand the schema
-3. `list_datasets` - See available datasets
-4. `list_vocabularies` / `list_vocabulary_terms` - Explore controlled vocabularies
-5. `list_features` / `list_feature_values` - Examine feature definitions
+2. Read `deriva-ml://catalog/schema` resource - Understand the full schema (tables, columns, FKs, features)
+3. Read `deriva-ml://catalog/datasets` resource - See available datasets
+4. Read `deriva-ml://catalog/vocabularies` resource - Explore controlled vocabularies
+5. Read `deriva-ml://catalog/features` resource - Examine feature definitions
 
 **Creating a new catalog:**
 1. `create_catalog` - Create a new DerivaML catalog (optionally with an alias)
@@ -108,7 +108,7 @@ Always call `connect_catalog` before using other tools. This establishes the con
 
 **Managing catalog aliases:**
 - `create_catalog_alias` - Create an alias for a catalog (access by name instead of ID)
-- `get_catalog_alias` - Get alias metadata (target catalog, owner)
+- Read `deriva-ml://alias/{hostname}/{alias_name}` resource - Get alias metadata (target catalog, owner)
 - `update_catalog_alias` - Change alias target or owner
 - `delete_catalog_alias` - Remove an alias (catalog is not deleted)
 
@@ -137,9 +137,9 @@ Executions require a workflow, and workflows require a workflow type. The hierar
 - **Execution** → instance of a workflow run
 
 Before creating an execution:
-1. `list_workflow_types()` - See available workflow types
-2. `find_workflows()` - Search for existing workflows by type or description
-3. `lookup_workflow()` - Check if workflow exists by URL/checksum
+1. Read `deriva-ml://catalog/workflow-types` resource - See available workflow types
+2. Read `deriva-ml://catalog/workflows` resource - Search for existing workflows
+3. `lookup_workflow_by_url()` - Check if workflow exists by URL
 4. `create_workflow()` - Create new workflow if needed (or let `create_execution` create it)
 5. `add_workflow_type()` - Add new workflow type if needed
 
@@ -212,8 +212,8 @@ DatasetSpecConfig(rid="28EA")  # ERROR: missing required 'version'
 ```
 
 **Finding the correct version:**
-- Use `lookup_dataset(rid)` to get dataset info including `current_version`
-- If no specific version is needed, use the `current_version` from the lookup result
+- Read `deriva-ml://dataset/{dataset_rid}` resource to get dataset info including `current_version`
+- If no specific version is needed, use the `current_version` from the resource result
 
 **Important: Dataset versions capture catalog state at creation time.**
 - A dataset version represents a snapshot of the data at the time the version was created
@@ -344,17 +344,20 @@ Use `list_parent_executions` and `list_nested_executions` to navigate this hiera
 
 ## Discovering Execution Outputs
 
-After running experiments, use MCP tools to discover generated assets:
+After running experiments, use MCP resources and tools to discover generated assets:
 
-```python
-# Find all prediction probability files
-find_assets(pattern="prediction_probabilities", limit=20)
+```
+# Browse all assets in a specific table
+Read resource: deriva-ml://table/{asset_table}/assets
 
-# Find model weights from a specific execution
-list_asset_executions(rid="<EXECUTION_RID>")
+# Get details about a specific asset including provenance
+Read resource: deriva-ml://asset/{asset_rid}
 
-# Get assets produced by an execution
-lookup_experiment(rid="<EXECUTION_RID>")  # Returns input/output assets
+# Find executions that created/used an asset
+list_asset_executions(asset_rid="<ASSET_RID>", asset_role="Output")
+
+# Get experiment details including inputs and outputs
+Read resource: deriva-ml://experiment/{execution_rid}
 ```
 
 This is useful for:

@@ -344,37 +344,6 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             logger.error(f"Failed to remove asset type from asset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    @mcp.tool()
-    async def get_schema_description(include_system_columns: bool = False) -> str:
-        """Get a complete description of the catalog schema structure.
-
-        Returns the full data model including all tables, columns, foreign keys,
-        and relationships in both the domain and ML schemas. Use this to understand
-        how data is organized before querying or creating new structures.
-
-        Args:
-            include_system_columns: Include RID, RCT, RMT, RCB, RMB columns (default: False).
-
-        Returns:
-            JSON with complete schema structure:
-            - domain_schema: Name of the domain schema
-            - ml_schema: Name of the ML schema (deriva-ml)
-            - schemas: Dict of schema definitions, each containing:
-              - tables: Dict of table definitions with columns, foreign_keys, features
-
-        Example:
-            get_schema_description() -> full catalog structure for understanding data model
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            schema_info = ml.model.get_schema_description(
-                include_system_columns=include_system_columns
-            )
-            return json.dumps(schema_info)
-        except Exception as e:
-            logger.error(f"Failed to get schema description: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
     # -------------------------------------------------------------------------
     # Table Manipulation Tools
     # -------------------------------------------------------------------------
@@ -666,49 +635,3 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             logger.error(f"Failed to set column nullok: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    @mcp.tool()
-    async def get_table_columns(
-        table_name: str,
-        include_system: bool = False,
-    ) -> str:
-        """Get detailed information about all columns in a table.
-
-        Args:
-            table_name: Name of the table to describe.
-            include_system: Include system columns (RID, RCT, etc.) (default: False).
-
-        Returns:
-            JSON array of column details: {name, type, nullok, description,
-            display_name, is_system}.
-
-        Example:
-            get_table_columns("Subject") -> all user columns
-            get_table_columns("Subject", include_system=True) -> all columns
-        """
-        try:
-            from deriva_ml.model.handles import TableHandle
-
-            ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-            handle = TableHandle(table)
-
-            if include_system:
-                columns = list(handle.all_columns)
-            else:
-                columns = handle.user_columns
-
-            result = []
-            for col in columns:
-                result.append({
-                    "name": col.name,
-                    "type": col._column.type.typename,
-                    "nullok": col.nullok,
-                    "description": col.description,
-                    "display_name": col.get_display_name(),
-                    "is_system": col.is_system_column,
-                })
-
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to get table columns: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
