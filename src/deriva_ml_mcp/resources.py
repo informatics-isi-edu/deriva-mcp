@@ -469,7 +469,7 @@ multirun_config(
                 if schema:
                     for table in schema.tables.values():
                         if ml.model.is_vocabulary(table):
-                            terms = ml.list_vocabulary_terms(table.name)
+                            terms = ml.list_vocabulary_terms(table)
                             vocabularies[table.name] = [
                                 {"name": t.name, "description": t.description}
                                 for t in terms
