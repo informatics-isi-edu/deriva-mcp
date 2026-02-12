@@ -2,6 +2,14 @@
 
 ## Summary
 
+The OAuth architecture referenced in this document is formally defined
+in:
+
+[ADR-0001: Narrow OAuth 2.1 Authorization Server Profile](https://github.com/informatics-isi-edu/credenza/blob/auth_server_refactor/docs/ADR-0001-narrow-oauth-profile.md)
+
+Detailed Credenza-side implementation sequencing is governed by the
+[OAuth AS Expansion Workplan](https://github.com/informatics-isi-edu/credenza/blob/auth_server_refactor/docs/workplan-ADR-0001.md) (Phased Implementation).
+
 This plan covers two workstreams for adding authenticated HTTP transport
 to the `deriva-mcp` DerivaML MCP server, and running it in the
 `deriva-docker` Docker Compose stack.
@@ -44,28 +52,26 @@ existing session brokering:
 
 Credenza already supports multiple OIDC identity providers (Keycloak, Okta, Cognito, Globus) via `oidc_idp_profiles.json`. The design preserves this -- no new endpoints are IDP-specific. The diagram below shows Keycloak because that is the IDP in the deriva-docker stack, but any configured IDP works identically.
 
-```
-+--------------+     +--------------+     +--------------+     +--------------+
-|  MCP Client  |---->|   Traefik    |---->|  deriva-mcp  |---->|   DERIVA     |
-|  (Claude)    |     |   /mcp/*     |     |  (FastMCP)   |     |  (ermrest,   |
-|              |     |              |     | RS: RFC 9728 |     |   hatrac)    |
-+------+-------+     +--------------+     +------+-------+     +------+-------+
-       |                                    |    ^    |              ^
-       |                                    |    |    | uses deriva  |
-       |                                    |    |    |    token     |
-       |             +--------------+       |    |    +--------------+
-       +------------>|  Credenza    |<------+    |
-        OAuth 2.1    |   Narrow     |  introspect (RFC 7662)
-      AuthCode+PKCE  |     AS       |  token exchange (RFC 8693)
-                     |              |------------+
-                     +------+-------+  returns deriva-scoped token
-                            |
-                     +------v-------+
-                     |  OIDC IDP    |
-                     |  (Keycloak,  |
-                     |  Okta, etc.) |
-                     +--------------+
-```
+    +--------------+     +--------------+     +--------------+     +--------------+
+    |  MCP Client  |---->|   Traefik    |---->|  deriva-mcp  |---->|   DERIVA     |
+    |  (Claude)    |     |   /mcp/*     |     |  (FastMCP)   |     |  (ermrest,   |
+    |              |     |              |     | RS: RFC 9728 |     |   hatrac)    |
+    +------+-------+     +--------------+     +------+-------+     +------+-------+
+           |                                    |    ^    |              ^
+           |                                    |    |    | uses deriva  |
+           |                                    |    |    |    token     |
+           |             +--------------+       |    |    +--------------+
+           +------------>|  Credenza    |<------+    |
+            OAuth 2.1    |   Narrow     |  introspect (RFC 7662)
+          AuthCode+PKCE  |     AS       |  token exchange (RFC 8693)
+                         |              |------------+
+                         +------+-------+  returns deriva-scoped token
+                                |
+                         +------v-------+
+                         |  OIDC IDP    |
+                         |  (Keycloak,  |
+                         |  Okta, etc.) |
+                         +--------------+
 
 **Key roles:**
 - **MCP Client** (Claude Code, Claude Desktop): Discovers auth via RFC 9728, obtains tokens via OAuth 2.1 through Credenza
@@ -166,9 +172,25 @@ The existing `ghcr.io/informatics-isi-edu/deriva-mcp:latest` image should work a
 
 ## Workstream 2: OIDC Authentication
 
-This is the complex workstream. It has two halves: the MCP server side (Resource Server) and the Credenza side (narrow OAuth AS).
+This workstream implements the OAuth 2.1 Authorization Server surface
+described in ADR-0001. All Credenza changes described below map directly
+to the phased implementation model defined in the OAuth AS Expansion
+Workplan:
 
-### 2A: MCP Server — Resource Server (deriva-mcp changes)
+-   Phase 0 --- Session model refactor
+-   Phase 1 --- Authorization code infrastructure (atomic single-use
+    codes, PKCE enforcement)
+-   Phase 2 --- `/authorize` + `/token`
+-   Phase 3 --- Device flow compliance
+-   Phase 4 --- Token exchange hardening
+-   Phase 5 --- Storage backend atomicity guarantees
+
+The detailed tasks remain below; this note clarifies sequencing only.
+
+This is the complex workstream. It has two halves: the MCP server side
+(Resource Server) and the Credenza side (narrow OAuth AS).
+
+### 2A: MCP Server --- Resource Server (deriva-mcp changes)
 
 **FastMCP provides almost everything out of the box.** Key findings:
 
@@ -181,7 +203,7 @@ This is the complex workstream. It has two halves: the MCP server side (Resource
 
 **Implementation in `server.py`:**
 
-```python
+``` python
 from fastmcp.server.auth.providers.introspection import IntrospectionTokenVerifier
 
 credenza_base = os.environ["CREDENZA_BASE_URL"]  # e.g. https://hostname/authn
@@ -254,24 +276,7 @@ The new OAuth endpoints need caller authentication:
 - Returns the authenticated `client_id` to the endpoint handler (or 401 on failure)
 - Can be applied to any endpoint via decorator
 
-**Implementation approach:**
-1. **New config file:** `client_auth.json` — registry of OAuth clients (resource servers, MCP clients) with their credentials and allowed grant types. Separate from `service_auth.json` which is for M2M token issuance policy.
-2. **New module:** `credenza/api/auth/oauth_client_auth.py` — parsing logic can be extracted from `ClientSecretAdapter._parse_client_secret_post()` and `_parse_basic()` (same HTTP Basic and POST body parsing, but decoupled from the service adapter pattern).
-3. **Decorator:** `@require_oauth_client_auth` that authenticates the caller and injects `client_id` into the request context.
 
-**Example config (`client_auth.json`):**
-```json
-{
-  "clients": {
-    "deriva-mcp": {
-      "client_secret": "REDACTED",
-      "allowed_grant_types": ["urn:ietf:params:oauth:grant-type:token-exchange"],
-      "allowed_endpoints": ["introspect", "token"],
-      "description": "DerivaML MCP Server (resource server)"
-    }
-  }
-}
-```
 
 **Note:** Public clients (MCP desktop/CLI apps using authorization_code + PKCE) do NOT use client_secret — they authenticate via PKCE code_verifier only. The client_secret auth is specifically for confidential clients like the MCP resource server calling introspection and token exchange.
 
@@ -294,7 +299,6 @@ Must return JSON with at minimum:
   "response_types_supported": ["code"],
   "grant_types_supported": [
     "authorization_code",
-    "refresh_token",
     "urn:ietf:params:oauth:grant-type:device_code",
     "urn:ietf:params:oauth:grant-type:token-exchange"
   ],
@@ -341,12 +345,10 @@ Credenza already does token introspection -- `GET /session` with a bearer token 
 
 **New standard endpoint needed:**
 
-```
-POST /introspect
-Content-Type: application/x-www-form-urlencoded
+    POST /introspect
+    Content-Type: application/x-www-form-urlencoded
 
-token=<opaque_token>&resource=mcp:deriva-ml
-```
+    token=<opaque_token>&resource=mcp:deriva-ml
 
 Response (RFC 7662 format):
 ```json
@@ -361,7 +363,8 @@ Response (RFC 7662 format):
   "client_id": "mcp-client",
   "token_type": "Bearer",
   "groups": ["admin", "curator"],
-  "email": "user@example.com"
+  "email": "user@example.com",
+  ...
 }
 ```
 
@@ -411,10 +414,10 @@ Implementation:
 2. Verify the subject token is bound to an allowed source resource according to configured exchange policy (default-deny; no hard-coded resource prefixes).
 3. Verify the requested `resource` is an allowed target (e.g., `deriva:*`)
 4. Check authorization: does this user/principal have access to the requested resource?
-5. Mint a new opaque session token with `resource=[deriva:ermrest]` (reuse existing `service_flow.issue()`)
+5. Mint a new opaque session token with `resource=[deriva:ermrest]`
 6. The DERIVA service validates this new token via `GET /session?resource=deriva:ermrest` (existing flow, unchanged)
 
-#### 2B.5 OAuth Authorization Code Flow (NEW — genuine new logic)
+#### 2B.5 OAuth Authorization Code Flow (NEW --- genuine new logic)
 
 This is the one piece of the facade that is NOT a thin wrapper over existing logic. Desktop MCP clients like Claude Desktop need the standard OAuth authorization code flow (open browser, authenticate, receive code at redirect_uri, exchange code for token). CLI clients like Claude Code can use the existing device flow instead (2B.2 adds `resource` support), but desktop clients cannot.
 
@@ -481,11 +484,8 @@ Can be done immediately; no Credenza changes needed. Auth is disabled (env var n
 
 ### Phase 2: Credenza OAuth AS Surface
 
-1. OAuth client authentication layer — client registry config + reusable decorator (2B.0, prerequisite for steps 3-5)
-2. RFC 8414 metadata endpoint (`/.well-known/oauth-authorization-server`)
-3. RFC 7662 introspection endpoint (`POST /introspect`) — protected by client auth
-4. Extend `resource` parameter to login and device flows (RFC 8707)
-5. `/authorize` endpoint and unified `/token` endpoint (authorization_code, device_code polling, and token-exchange) — `/token` protected by client auth where required
+Detailed Credenza-side implementation sequencing is governed by the
+[OAuth AS Expansion Workplan](https://github.com/informatics-isi-edu/credenza/blob/auth_server_refactor/docs/workplan-ADR-0001.md) (Phased Implementation).
 
 ### Phase 3: MCP Server Auth Activation
 
@@ -503,9 +503,9 @@ Can be done immediately; no Credenza changes needed. Auth is disabled (env var n
 
 ### Phase 5: Polish
 
-1. Dynamic Client Registration (RFC 7591) if needed
-2. Error handling and edge cases
-3. Documentation
+1.  Dynamic Client Registration (RFC 7591) if needed
+2.  Error handling and edge cases
+3.  Documentation
 
 ---
 
@@ -518,7 +518,7 @@ This is a critical design area. Credenza currently has three distinct session mo
 | Flow                           | Session TTL                                | Refresh Tokens                                | offline_access             | Max Lifetime                           | Refresh Behavior                            |
 |--------------------------------|--------------------------------------------|-----------------------------------------------|----------------------------|----------------------------------------|---------------------------------------------|
 | Browser (`/login`)             | 2100s (35 min), extended on `PUT /session` | Explicitly stripped (`login_flow.py:136-137`) | Not requested              | Until idle timeout                     | None -- session just expires                |
-| Device (`/device/*`)           | Up to refresh expiry                       | Yes                                           | Yes (requested by default) | 14 days (`MAX_REFRESH_TOKEN_LIFETIME`) | Background worker refreshes upstream tokens |
+| Device (`/device/*`)           | Up to refresh expiry (or 14 days)          | Yes                                           | Yes (requested by default) | 14 days (`MAX_REFRESH_TOKEN_LIFETIME`) | Background worker refreshes upstream tokens |
 | Service/M2M (`/service/token`) | Default 1800s (30 min)                     | No                                            | N/A                        | Clamped by `max_ttl_seconds` policy    | None -- fixed TTL, no extension             |
 
 **Considerations for MCP sessions:**
