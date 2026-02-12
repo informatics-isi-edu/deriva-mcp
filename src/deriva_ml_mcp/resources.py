@@ -461,7 +461,7 @@ multirun_config(
                                 {"name": col.name, "type": str(col.type)}
                                 for col in table.columns
                             ],
-                            "is_vocabulary": hasattr(table, "is_vocabulary") and table.is_vocabulary,
+                            "is_vocabulary": ml.model.is_vocabulary(table),
                         }
                         schema_info["tables"].append(table_info)
 

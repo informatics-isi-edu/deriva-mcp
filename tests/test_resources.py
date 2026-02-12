@@ -232,17 +232,22 @@ class TestConfigTemplates:
 class TestCatalogSchema:
     """Tests for the catalog schema resource."""
 
-    def test_success(self, captured_resources, mock_ml):
-        mock_table = _make_table(name="Subject", schema_name="test_schema")
-        mock_table.is_vocabulary = False
+    def _setup_schema(self, mock_ml, tables: dict[str, MagicMock] | None = None):
+        """Helper to set up schema mocks for catalog schema tests."""
+        if tables is None:
+            tables = {"Subject": _make_table(name="Subject", schema_name="test_schema")}
 
         mock_schema = MagicMock()
-        mock_schema.tables = {"Subject": mock_table}
+        mock_schema.tables = tables
 
         mock_ml.model.schemas = {"test_schema": mock_schema}
         mock_ml.domain_schemas = {"test_schema"}
         mock_ml.default_schema = "test_schema"
         mock_ml.ml_schema = "deriva-ml"
+
+    def test_success(self, captured_resources, mock_ml):
+        self._setup_schema(mock_ml)
+        mock_ml.model.is_vocabulary.return_value = False
 
         result = captured_resources["deriva-ml://catalog/schema"]()
         data = json.loads(result)
@@ -252,6 +257,45 @@ class TestCatalogSchema:
         assert "test_schema" in data["domain_schemas"]
         assert len(data["tables"]) == 1
         assert data["tables"][0]["name"] == "Subject"
+
+    def test_is_vocabulary_uses_model_method(self, captured_resources, mock_ml):
+        """Verify is_vocabulary is determined via ml.model.is_vocabulary(table),
+        not by accessing an attribute on the table object directly.
+        Regression test for serialization bug where table.is_vocabulary returned
+        a method reference instead of a boolean."""
+        table = _make_table(name="Diagnosis", schema_name="test_schema")
+        self._setup_schema(mock_ml, tables={"Diagnosis": table})
+        mock_ml.model.is_vocabulary.return_value = True
+
+        result = captured_resources["deriva-ml://catalog/schema"]()
+        data = json.loads(result)
+
+        assert data["tables"][0]["is_vocabulary"] is True
+        mock_ml.model.is_vocabulary.assert_called_with(table)
+
+    def test_is_vocabulary_false(self, captured_resources, mock_ml):
+        """Verify non-vocabulary tables have is_vocabulary=False."""
+        self._setup_schema(mock_ml)
+        mock_ml.model.is_vocabulary.return_value = False
+
+        result = captured_resources["deriva-ml://catalog/schema"]()
+        data = json.loads(result)
+
+        assert data["tables"][0]["is_vocabulary"] is False
+
+    def test_result_is_json_serializable(self, captured_resources, mock_ml):
+        """Ensure the schema result is fully JSON-serializable.
+        Regression test: the old code used table.is_vocabulary (a method reference)
+        which caused 'Object of type method is not JSON serializable'."""
+        self._setup_schema(mock_ml)
+        # Don't configure model.is_vocabulary — MagicMock returns a MagicMock by default.
+        # The resource code must call ml.model.is_vocabulary(table), not table.is_vocabulary.
+        mock_ml.model.is_vocabulary.return_value = False
+
+        result = captured_resources["deriva-ml://catalog/schema"]()
+        # This would raise json.JSONDecodeError if the result contains non-serializable objects
+        data = json.loads(result)
+        assert "error" not in data
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
