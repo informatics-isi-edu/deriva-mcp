@@ -691,6 +691,14 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         The bag captures the exact catalog state at the version's snapshot time,
         ensuring reproducibility regardless of later catalog changes.
 
+        The export follows foreign key paths from member tables to include related
+        data, but stops at dataset element type boundaries. If a path crosses into
+        another element type (a table with a Dataset_X association) that has no
+        members in this dataset, the path is truncated there. For example, a
+        dataset with only CGM records will not traverse through Observation into
+        Image tables — those would only be included as explicit dataset members.
+        Non-element-type tables (e.g., Device) are always traversed normally.
+
         Use this for standalone processing outside an execution context. For
         tracked ML workflows, use download_execution_dataset instead.
 

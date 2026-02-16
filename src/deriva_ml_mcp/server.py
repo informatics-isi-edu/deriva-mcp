@@ -242,6 +242,20 @@ Use `download_dataset(dataset_rid, version)` to export a dataset as a BDBag for 
 - **Checksummed**: All files have cryptographic checksums for integrity verification
 - **Portable**: Can be shared, archived, or transferred to other systems
 
+**Path traversal and element-type boundaries:**
+
+When exporting a bag, DerivaML follows foreign key paths from each member table to include
+related data (vocabulary terms, referenced records, etc.). However, paths are truncated at
+**dataset element type boundaries** — tables that have their own `Dataset_X` association table
+(e.g., `Image`, `Subject`, `Observation`). If a path from one element type crosses into another
+element type that has no members in this dataset, the export stops at that boundary.
+
+For example, if a dataset contains only `CGM_Blood_Glucose` records and `CGM_Blood_Glucose`
+has a FK to `Observation` (itself a dataset element type), the export will NOT traverse through
+`Observation` into `Image`, `Image_Diagnosis`, etc. Those tables would only be included if
+`Observation` or `Image` records were explicit members of the dataset. Non-element-type tables
+(e.g., `Device`) are always traversed normally.
+
 **Materialization:**
 
 When `materialize=True` (the default), the bag fetches all referenced asset files from Hatrac storage.

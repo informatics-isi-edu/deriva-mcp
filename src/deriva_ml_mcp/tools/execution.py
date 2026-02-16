@@ -170,7 +170,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 "dry_run": dry_run,
             })
         except Exception as e:
-            logger.error(f"Failed to create execution: {e}")
+            logger.error(f"Failed to create execution: {e}", exc_info=True)
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
