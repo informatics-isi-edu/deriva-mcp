@@ -234,7 +234,8 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     @mcp.tool()
     async def add_dataset_members(
         dataset_rid: str,
-        member_rids: list[str],
+        member_rids: list[str] | None = None,
+        members_by_table: dict[str, list[str]] | None = None,
     ) -> str:
         """Add records as dataset elements. Auto-increments minor version.
 
@@ -242,30 +243,56 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         Use add_dataset_element_type() to register a table, or list_dataset_element_types()
         to see which tables are already registered.
 
-        Adding members automatically increments the dataset's minor version for change tracking.
+        Accepts members in two forms:
 
-        This tool accepts a list of RIDs and automatically resolves each RID to
-        determine which table it belongs to. For better performance with large
-        numbers of members, use the Python API directly with a dict mapping
-        table names to RID lists (skips RID resolution).
+        **List of RIDs** (member_rids): Each RID is auto-resolved to its table.
+        Simpler but slower for large numbers.
+
+        **Dict by table name** (members_by_table): Maps table names to RID lists.
+        Faster (skips RID resolution) and lets you add members of different types
+        in one call. Recommended when you know the table names.
+
+        Exactly one of member_rids or members_by_table must be provided.
 
         Args:
             dataset_rid: The RID of the dataset to add members to.
-            member_rids: List of RIDs to add (e.g., ["2-ABC", "2-DEF", "2-GHI"]).
+            member_rids: List of RIDs to add (e.g., ["2-ABC", "2-DEF"]).
+                Auto-resolves each RID to its table.
+            members_by_table: Dict mapping table names to RID lists
+                (e.g., {"Subject": ["2-ABC"], "Observation": ["2-DEF", "2-GHI"]}).
+                Faster than member_rids for large datasets.
 
         Returns:
             JSON with status, added_count, dataset_rid.
 
         Example:
-            add_dataset_members("1-ABC", ["2-DEF", "2-GHI"]) -> adds 2 Image records
+            add_dataset_members("1-ABC", member_rids=["2-DEF", "2-GHI"])
+            add_dataset_members("1-ABC", members_by_table={"Subject": ["2-DEF"], "Image": ["2-GHI"]})
         """
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
-            dataset.add_dataset_members(members=member_rids)
+
+            if members_by_table and member_rids:
+                return json.dumps({
+                    "status": "error",
+                    "message": "Provide either member_rids or members_by_table, not both.",
+                })
+            if members_by_table:
+                dataset.add_dataset_members(members=members_by_table)
+                total = sum(len(v) for v in members_by_table.values())
+            elif member_rids:
+                dataset.add_dataset_members(members=member_rids)
+                total = len(member_rids)
+            else:
+                return json.dumps({
+                    "status": "error",
+                    "message": "Provide either member_rids or members_by_table.",
+                })
+
             return json.dumps({
                 "status": "success",
-                "added_count": len(member_rids),
+                "added_count": total,
                 "dataset_rid": dataset_rid,
             })
         except Exception as e:
@@ -691,13 +718,15 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         The bag captures the exact catalog state at the version's snapshot time,
         ensuring reproducibility regardless of later catalog changes.
 
-        The export follows foreign key paths from member tables to include related
-        data, but stops at dataset element type boundaries. If a path crosses into
-        another element type (a table with a Dataset_X association) that has no
-        members in this dataset, the path is truncated there. For example, a
-        dataset with only CGM records will not traverse through Observation into
-        Image tables — those would only be included as explicit dataset members.
-        Non-element-type tables (e.g., Device) are always traversed normally.
+        The export follows foreign key paths from member tables to include all
+        FK-reachable data. Starting from each member element type, the export
+        traverses all FK-connected tables (both incoming and outgoing foreign keys),
+        with vocabulary tables acting as natural path terminators. Only paths starting
+        from element types that have members in this dataset are included.
+
+        If any query fails during export (e.g., due to server-side timeout on deep
+        joins), the export raises an error. The error message will suggest adding
+        the affected records as direct dataset members to avoid the deep join.
 
         Use this for standalone processing outside an execution context. For
         tracked ML workflows, use download_execution_dataset instead.
@@ -712,14 +741,27 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
         Returns:
             JSON with bag attributes: dataset_rid, version, description,
-            dataset_types, execution_rid, and bag_path (local filesystem path).
+            dataset_types, execution_rid, bag_path (local filesystem path),
+            and bag_tables (dict of table names to row counts).
         """
         try:
             from deriva_ml.dataset.aux_classes import DatasetSpec
+            from deriva_ml.model.deriva_ml_database import DerivaMLDatabase
 
             ml = conn_manager.get_active_or_raise()
             spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
             bag = ml.download_dataset_bag(spec)
+
+            # Build table inventory with row counts
+            db = DerivaMLDatabase(bag.model)
+            bag_tables = {}
+            for table_name in bag.model.list_tables():
+                try:
+                    rows = list(db.get_table_as_dict(table_name))
+                    if rows:
+                        bag_tables[table_name] = len(rows)
+                except Exception:
+                    bag_tables[table_name] = -1  # error reading
 
             return json.dumps({
                 "status": "downloaded",
@@ -729,9 +771,103 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "dataset_types": bag.dataset_types,
                 "execution_rid": bag.execution_rid,
                 "bag_path": str(bag.model.bag_path),
+                "bag_tables": bag_tables,
             })
         except Exception as e:
             logger.error(f"Failed to download dataset: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def validate_dataset_bag(
+        dataset_rid: str,
+        version: str | None = None,
+    ) -> str:
+        """Download a dataset bag and cross-validate its contents against the live catalog.
+
+        For each member element type in the dataset, queries the catalog to find
+        all records reachable from the dataset's members (via FK paths) and compares
+        them to what's in the bag. Returns a structured pass/fail report.
+
+        This is useful for verifying that a dataset bag contains all expected data
+        before using it for ML workflows.
+
+        Args:
+            dataset_rid: RID of the dataset to validate.
+            version: Semantic version to validate (e.g., "1.0.0").
+                If not specified, uses the dataset's current version.
+
+        Returns:
+            JSON with validation results per table: expected count, bag count,
+            missing RIDs, extra RIDs, and pass/fail status.
+        """
+        try:
+            from deriva_ml.dataset.aux_classes import DatasetSpec
+            from deriva_ml.model.deriva_ml_database import DerivaMLDatabase
+
+            ml = conn_manager.get_active_or_raise()
+            dataset = ml.lookup_dataset(dataset_rid)
+
+            if version is None:
+                version = str(dataset.current_version)
+
+            # Download the bag
+            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=False)
+            bag = ml.download_dataset_bag(spec)
+            db = DerivaMLDatabase(bag.model)
+
+            # Get dataset members from catalog
+            members = dataset.list_dataset_members()
+
+            # Build validation results
+            results = []
+            for table_name, member_records in members.items():
+                if not member_records:
+                    continue
+                catalog_rids = {m["RID"] for m in member_records}
+
+                try:
+                    bag_rows = list(db.get_table_as_dict(table_name))
+                    bag_rids = {r["RID"] for r in bag_rows}
+                except Exception:
+                    bag_rids = set()
+
+                missing = catalog_rids - bag_rids
+                extra = bag_rids - catalog_rids
+                status = "PASS" if not missing else "FAIL"
+
+                results.append({
+                    "table": table_name,
+                    "catalog_count": len(catalog_rids),
+                    "bag_count": len(bag_rids),
+                    "missing_count": len(missing),
+                    "extra_count": len(extra),
+                    "status": status,
+                    "missing_rids": list(missing)[:10] if missing else [],
+                })
+
+            # Full bag inventory
+            bag_inventory = {}
+            for table_name in bag.model.list_tables():
+                try:
+                    rows = list(db.get_table_as_dict(table_name))
+                    if rows:
+                        bag_inventory[table_name] = len(rows)
+                except Exception:
+                    bag_inventory[table_name] = -1
+
+            passed = sum(1 for r in results if r["status"] == "PASS")
+            failed = sum(1 for r in results if r["status"] == "FAIL")
+
+            return json.dumps({
+                "status": "success",
+                "dataset_rid": dataset_rid,
+                "version": version,
+                "checks": results,
+                "bag_inventory": bag_inventory,
+                "summary": f"{passed} passed, {failed} failed out of {len(results)} checks",
+            })
+        except Exception as e:
+            logger.error(f"Failed to validate dataset bag: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()

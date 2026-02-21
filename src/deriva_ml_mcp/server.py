@@ -242,19 +242,27 @@ Use `download_dataset(dataset_rid, version)` to export a dataset as a BDBag for 
 - **Checksummed**: All files have cryptographic checksums for integrity verification
 - **Portable**: Can be shared, archived, or transferred to other systems
 
-**Path traversal and element-type boundaries:**
+**FK path traversal in bag exports:**
 
-When exporting a bag, DerivaML follows foreign key paths from each member table to include
-related data (vocabulary terms, referenced records, etc.). However, paths are truncated at
-**dataset element type boundaries** — tables that have their own `Dataset_X` association table
-(e.g., `Image`, `Subject`, `Observation`). If a path from one element type crosses into another
-element type that has no members in this dataset, the export stops at that boundary.
+When exporting a bag, DerivaML follows **all** foreign key paths from each member element type
+to include related data. Paths traverse freely across element-type boundaries — if `Subject`
+members have FK paths to `Image`, those `Image` records are included even if `Image` has no
+explicit members in the dataset.
 
-For example, if a dataset contains only `CGM_Blood_Glucose` records and `CGM_Blood_Glucose`
-has a FK to `Observation` (itself a dataset element type), the export will NOT traverse through
-`Observation` into `Image`, `Image_Diagnosis`, etc. Those tables would only be included if
-`Observation` or `Image` records were explicit members of the dataset. Non-element-type tables
-(e.g., `Device`) are always traversed normally.
+**What gets included:**
+- All tables reachable via FK paths from member element types
+- Feature tables for any reachable element types (e.g., `Image_Classification` for `Image`)
+- Vocabulary terms are exported separately (not via FK paths)
+
+**What can go wrong:**
+- Deep multi-table FK joins may exceed server query time limits
+- If a query fails, `download_dataset_bag()` raises a `DerivaMLException` with guidance
+- **Fix**: Add the desired records as direct dataset members to use simpler association paths
+  (register the table as an element type with `add_dataset_element_type()` first)
+
+**Example:** A dataset with `Subject` members will automatically include FK-reachable `Image`
+records via the `Subject → Image` path. If the join is too large, add `Image` RIDs as explicit
+members instead.
 
 **Materialization:**
 

@@ -768,6 +768,112 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
+        "deriva-ml://dataset/{dataset_rid}/bag-preview",
+        name="Dataset Bag Preview",
+        description="Preview what tables and FK paths would be included in a bag export for this dataset, without downloading",
+        mime_type="application/json",
+    )
+    def get_dataset_bag_preview(dataset_rid: str) -> str:
+        """Preview bag export paths and tables for a dataset."""
+        ml = conn_manager.get_active_or_raise()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            from deriva_ml.dataset.catalog_graph import CatalogGraph
+
+            ds = ml.lookup_dataset(dataset_rid)
+            members = ds.list_dataset_members()
+            member_counts = {k: len(v) for k, v in members.items() if v}
+
+            # Get the paths that would be used for export
+            graph = CatalogGraph(ml)
+            paths = graph._collect_paths(dataset_rid=dataset_rid)
+
+            # Format paths as readable strings
+            path_strs = []
+            for path in sorted(paths, key=lambda p: len(p)):
+                names = [t.name for t in path]
+                path_strs.append(" -> ".join(names))
+
+            # Get all element types
+            element_types = [
+                {"name": t.name, "schema": t.schema.name}
+                for t in ml.model.list_dataset_element_types()
+            ]
+
+            # Identify which element types have members
+            member_element_types = list(member_counts.keys())
+
+            return json.dumps({
+                "dataset_rid": dataset_rid,
+                "description": ds.description,
+                "current_version": str(ds.current_version),
+                "member_counts": member_counts,
+                "member_element_types": member_element_types,
+                "all_element_types": element_types,
+                "export_paths": path_strs,
+                "total_paths": len(path_strs),
+                "note": (
+                    "Paths show FK traversal from Dataset through association tables "
+                    "to member element types and all FK-reachable tables. Vocabulary "
+                    "table endpoints are excluded (exported separately in full)."
+                ),
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://catalog/element-type-paths",
+        name="Element Type FK Paths",
+        description="FK paths from each dataset element type showing what tables are reachable in bag exports",
+        mime_type="application/json",
+    )
+    def get_element_type_paths() -> str:
+        """Show FK paths from each element type for understanding bag export coverage."""
+        ml = conn_manager.get_active_or_raise()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            from deriva_ml.dataset.catalog_graph import CatalogGraph
+
+            element_types = list(ml.model.list_dataset_element_types())
+            graph = CatalogGraph(ml)
+
+            # Get all paths (unfiltered by dataset membership)
+            all_paths = graph._collect_paths()
+
+            # Group paths by their starting element type (3rd element, after Dataset and association)
+            paths_by_element = {}
+            for path in all_paths:
+                if len(path) >= 3:
+                    start_table = path[2].name  # Element type table
+                    if start_table not in paths_by_element:
+                        paths_by_element[start_table] = []
+                    names = [t.name for t in path]
+                    paths_by_element[start_table].append(" -> ".join(names))
+
+            # Sort paths within each group
+            for key in paths_by_element:
+                paths_by_element[key] = sorted(paths_by_element[key], key=len)
+
+            return json.dumps({
+                "element_types": [
+                    {"name": t.name, "schema": t.schema.name}
+                    for t in element_types
+                ],
+                "paths_by_element_type": paths_by_element,
+                "note": (
+                    "Shows all FK paths starting from each element type. When a dataset "
+                    "has members of a given element type, all these paths will be followed "
+                    "during bag export. Vocabulary endpoints are excluded (exported separately)."
+                ),
+            }, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
         "deriva-ml://table/{table_name}/features",
         name="Table Features",
         description="Features defined for a specific table",

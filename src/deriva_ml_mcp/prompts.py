@@ -1351,6 +1351,57 @@ add_dataset_element_type("Image")
 This is a one-time setup per table. Once registered, records from that table can be added
 to any dataset using `add_dataset_members()`.
 
+## Understanding FK Traversal in Bag Exports
+
+When you download a dataset as a BDBag, the export follows **all foreign key paths** from
+member element types to include related data. This is important to understand:
+
+- **All FK-reachable tables are included**: Starting from each member element type, the export
+  traverses all FK-connected tables (both incoming and outgoing foreign keys).
+- **Vocabulary tables are exported separately**: Paths ending in vocabulary tables are excluded
+  from FK traversal (they're exported in full as standalone queries).
+- **Only member element types start paths**: If an element type has no members in the dataset,
+  no paths start from it.
+
+### Example: Subject → Observation → Image
+
+If your catalog has `Subject → Observation → Image` FK relationships:
+- A dataset with **Subject members** will include all FK-reachable data: Observations
+  linked to those subjects, Images linked to those observations, etc.
+- If the export query for a deep FK join times out, the export will **raise an error**
+  suggesting you add the affected records as direct dataset members.
+
+### When to Add Multiple Element Types as Members
+
+Add records from intermediate tables as explicit members when:
+1. **Deep FK joins time out**: Server query limits may be exceeded for paths traversing
+   many tables. Adding intermediate tables as members creates shorter, faster join paths.
+2. **You need precise control**: Explicit members guarantee specific records are included.
+3. **Performance matters**: Direct association paths are faster than deep FK traversal.
+
+```
+# Example: Add both Subject and Observation members
+add_dataset_members("<dataset-rid>",
+    members_by_table={
+        "Subject": ["<subj-1>", "<subj-2>"],
+        "Observation": ["<obs-1>", "<obs-2>", "<obs-3>"]
+    })
+```
+
+### Validating Bag Contents
+
+After creating a dataset, validate the bag contains all expected data:
+```
+# Preview what will be exported (without downloading)
+# deriva-ml://dataset/<rid>/bag-preview
+
+# Download and validate
+validate_dataset_bag("<dataset-rid>")
+
+# Or download and inspect manually
+download_dataset("<dataset-rid>", "<version>")
+```
+
 ## Understanding Nested Datasets
 
 **Nested Datasets** create parent-child relationships, useful for:
@@ -1435,16 +1486,28 @@ add_dataset_element_type("Subject")
 
 ## Step 4: Add Dataset Members
 
-Add records to the dataset:
+Add records to the dataset. Two forms are supported:
 
 ```
-# Add records by their RIDs
-add_dataset_members("<dataset-rid>", [
+# Simple: Add records by RIDs (auto-resolves table names)
+add_dataset_members("<dataset-rid>", member_rids=[
     "<image-rid-1>",
     "<image-rid-2>",
     "<image-rid-3>"
 ])
+
+# Advanced: Add by table name (faster, supports multiple types in one call)
+add_dataset_members("<dataset-rid>", members_by_table={
+    "Subject": ["<subj-1>", "<subj-2>"],
+    "Observation": ["<obs-1>", "<obs-2>", "<obs-3>"],
+    "Image": ["<img-1>"]
+})
 ```
+
+The `members_by_table` form is recommended when:
+- Adding members of different types in one call
+- Working with large numbers of members (skips RID resolution)
+- You already know which table each RID belongs to
 
 Adding members automatically increments the minor version.
 
@@ -1619,6 +1682,10 @@ list_dataset_children("1-XYZ")
 - Use `restructure_assets` after downloading to organize files for ML frameworks (e.g., PyTorch ImageFolder)
 - Pin versions for reproducible training
 - Use `download_dataset` to get local copies for ML training
+- **Use `validate_dataset_bag` to verify bag contents** after creating a dataset
+- **Use `members_by_table` for multi-type membership** — adds Subject + Observation + Image in one call
+- **Preview bag exports** with `deriva-ml://dataset/<rid>/bag-preview` before downloading
+- If bag export fails with timeout, add affected records as direct dataset members
 
 ## Provenance Tracking
 
@@ -3258,6 +3325,37 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
 execution.upload_execution_outputs()
 ```
 
+### Dataset Creation with Multiple Element Types
+
+When your data spans multiple related tables (e.g., Subject → Observation → Image),
+add members from each table to ensure the bag export includes all related data.
+The bag export follows FK paths from member element types, but deep multi-table
+joins can time out on large catalogs. Adding intermediate tables as explicit
+members creates shorter, faster join paths.
+
+```python
+with ml.create_execution(config, dry_run=args.dry_run) as execution:
+    # Register all element types
+    ml.add_dataset_element_type("Subject")
+    ml.add_dataset_element_type("Observation")
+
+    ds = execution.create_execution_dataset(
+        "Subject Study Dataset", ["Complete"],
+        description="10 subjects with all observations"
+    )
+
+    # Add members by table name (faster than flat RID list)
+    ds.add_dataset_members(
+        members={"Subject": subject_rids, "Observation": obs_rids},
+        description="Subjects and their observations"
+    )
+
+execution.upload_execution_outputs()
+
+# Validate the bag contains all expected data
+bag = ds.download_dataset_bag(version=str(ds.current_version), materialize=False)
+```
+
 ### Dataset Splitting
 ```python
 from deriva_ml.dataset.split import split_dataset
@@ -4737,6 +4835,151 @@ get_execution_working_dir()
 - Check DerivaML documentation: `deriva-ml://docs/overview`
 - Review execution logs in the execution metadata
 - Contact support with execution RID for tracking
+"""
+
+    @mcp.prompt(
+        name="debug-bag-contents",
+        description="Step-by-step guide for diagnosing missing data in dataset bag exports",
+    )
+    def debug_bag_contents_prompt() -> str:
+        """Guide for debugging missing data in bag exports."""
+        return """# Debugging Missing Data in Dataset Bag Exports
+
+When a downloaded dataset bag is missing expected tables or records, follow these
+diagnostic steps to identify and fix the issue.
+
+## Step 1: Check Dataset Members
+
+First, verify what members the dataset has:
+
+```
+# View dataset details and member counts
+# Read resource: deriva-ml://dataset/<dataset-rid>
+
+# List all members grouped by table
+list_dataset_members("<dataset-rid>")
+```
+
+**Key question**: Are all the tables you expect represented as members?
+
+## Step 2: Check Element Type Registration
+
+Tables must be registered as dataset element types before their records can be
+added as members:
+
+```
+# View registered element types
+# Read resource: deriva-ml://catalog/dataset-element-types
+
+# Register a missing type
+add_dataset_element_type("Image")
+```
+
+## Step 3: Preview Bag Export Paths
+
+Before downloading, preview what FK paths will be followed:
+
+```
+# Read resource: deriva-ml://dataset/<dataset-rid>/bag-preview
+```
+
+This shows:
+- Which element types have members
+- All FK paths that will be followed during export
+- Total number of export paths
+
+**Key question**: Do the paths reach all the tables you expect?
+
+## Step 4: Understand FK Path Traversal
+
+The bag export follows **all FK-reachable tables** from member element types:
+
+1. **Starting points**: Only element types with members in the dataset
+2. **FK direction**: Both incoming and outgoing foreign keys are followed
+3. **Vocabulary endpoints**: Removed from path-based queries (exported separately in full)
+4. **No element-type boundary truncation**: Paths cross into other element types freely
+
+### Common Scenarios
+
+**Scenario: Images missing from Subject-only dataset**
+- If your dataset only has Subject members, Images linked via `Image.Subject` FK
+  will be included via FK traversal.
+- If the query for the deep FK join times out, the export raises an error.
+- **Fix**: Add Image records as direct dataset members.
+
+**Scenario: Observation data missing**
+- If Observation is registered as an element type but has no members, no paths
+  start from Observation's association table.
+- **Fix**: Add Observation RIDs as explicit members:
+  ```
+  add_dataset_members("<dataset-rid>", members_by_table={
+      "Subject": [...],
+      "Observation": [...]
+  })
+  ```
+
+**Scenario: Vocabulary terms missing**
+- Vocabulary tables are exported in full by a separate mechanism, not via FK paths.
+- If vocab terms are missing, check `_export_vocabulary()` behavior.
+
+## Step 5: Download and Validate
+
+Use `validate_dataset_bag` to automatically cross-check bag vs catalog:
+
+```
+validate_dataset_bag("<dataset-rid>")
+```
+
+This returns:
+- Per-table comparison: catalog count vs bag count
+- Missing and extra RIDs
+- Full bag inventory with row counts
+
+## Step 6: Check FK Paths for All Element Types
+
+View all FK paths in the catalog to understand the full traversal graph:
+
+```
+# Read resource: deriva-ml://catalog/element-type-paths
+```
+
+This shows paths grouped by element type, helping you understand what data
+is reachable from each type.
+
+## Step 7: Fix Common Issues
+
+### Deep join timeouts
+```
+# Error: "Dataset bag export failed: N queries timed out"
+# Fix: Add intermediate table records as direct members
+add_dataset_members("<dataset-rid>", members_by_table={
+    "Subject": subject_rids,
+    "Observation": obs_rids  # Shorter join paths
+})
+```
+
+### Missing element type registration
+```
+# Error: "RID table: Image not part of dataset_table"
+# Fix: Register the table first
+add_dataset_element_type("Image")
+```
+
+### Stale version
+```
+# Recent catalog changes not in bag?
+# Increment version to capture current state
+increment_dataset_version("<dataset-rid>", description="Include recent changes")
+# Then re-download with the new version
+```
+
+## Quick Diagnostic Checklist
+
+1. [ ] Element types registered for all tables you need
+2. [ ] Members added for all relevant tables
+3. [ ] Dataset version incremented after adding members
+4. [ ] Bag preview shows paths to expected tables
+5. [ ] `validate_dataset_bag` shows all checks passing
 """
 
     @mcp.prompt(
