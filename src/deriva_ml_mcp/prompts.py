@@ -2078,21 +2078,22 @@ Create `configs/assets.py` for pre-trained weights or other files.
 
 ```python
 from hydra_zen import store
+from deriva_ml.asset.aux_classes import AssetSpecConfig
 from deriva_ml.execution import with_description
 
 asset_store = store(group="assets")
 
-# Pre-trained weights - describe source and architecture
+# Pre-trained weights - use cache=True for large files to avoid re-downloading
 asset_store(
     with_description(
-        ["2-XYZ"],
+        [AssetSpecConfig(rid="2-XYZ", cache=True)],
         "Model weights (model.pt) from extended training: 50 epochs, "
         "64→128 channels, dropout 0.25. Use for inference or fine-tuning."
     ),
     name="pretrained_weights",
 )
 
-# Classification probabilities from evaluation
+# Classification probabilities from evaluation (small, no caching needed)
 asset_store(
     with_description(
         ["2-ABC"],
@@ -2711,9 +2712,11 @@ the right configurations for their tasks.
 
 ```python
 # LISTS → with_description()
+from deriva_ml.asset.aux_classes import AssetSpecConfig
 from deriva_ml.execution import with_description
 
-asset_store(with_description(["RID1", "RID2"], "Description here"), name="my_assets")
+asset_store(with_description([AssetSpecConfig(rid="RID1", cache=True)], "Cached weights"), name="my_weights")
+asset_store(with_description(["RID1", "RID2"], "Small outputs"), name="my_outputs")
 dataset_store(with_description([DatasetSpecConfig(...)], "Description"), name="my_dataset")
 
 # BUILDS → zen_meta
@@ -2802,21 +2805,22 @@ Use `with_description()` for asset lists:
 
 ```python
 from hydra_zen import store
+from deriva_ml.asset.aux_classes import AssetSpecConfig
 from deriva_ml.execution import with_description
 
 asset_store = store(group="assets")
 
-# Model weights
+# Model weights - use cache=True for large files
 asset_store(
     with_description(
-        ["3WMG"],
+        [AssetSpecConfig(rid="3WMG", cache=True)],
         "Model weights (cifar10_cnn_weights.pt) from cifar10_quick: "
         "3 epochs, 32→64 channels, batch 128. Source: execution 3WKE."
     ),
     name="quick_weights",
 )
 
-# Probability outputs
+# Probability outputs (small, no caching needed)
 asset_store(
     with_description(
         ["3WNA"],
@@ -2826,12 +2830,12 @@ asset_store(
     name="quick_probabilities",
 )
 
-# Multiple related assets
+# Mixed: cached weights + uncached outputs
 asset_store(
     with_description(
-        ["3WMG", "3WNA", "3WN8"],
+        [AssetSpecConfig(rid="3WMG", cache=True), "3WNA", "3WN8"],
         "Complete outputs from cifar10_quick experiment: "
-        "weights, probabilities, and training log."
+        "weights (cached), probabilities, and training log."
     ),
     name="quick_complete",
 )
@@ -2842,6 +2846,11 @@ asset_store(
     name="default_asset",
 )
 ```
+
+**Asset caching:** Use `AssetSpecConfig(rid=..., cache=True)` for large, reusable assets
+like model weights. Cached assets are stored by MD5 checksum in `cache_dir/assets/` and
+symlinked into execution directories, avoiding repeated downloads. Plain RID strings
+(no caching) are appropriate for small or execution-specific outputs.
 
 ## Step 4: Add Descriptions to Model Configs
 
@@ -5605,7 +5614,7 @@ description = (
     "| RID2 | 0.01 | Fast convergence, slight instability |\\n\\n"
     "Use with `roc_analysis` notebook to compare performance."
 )
-with_description(["RID1", "RID2"], description)
+with_description([AssetSpecConfig(rid="RID1", cache=True), "RID2"], description)
 ```
 
 **For model configs** (`zen_meta`):
@@ -6079,7 +6088,7 @@ Update configs after ANY of these operations:
 | Operation | Config File to Update | Config Type |
 |-----------|----------------------|-------------|
 | Create dataset | `configs/datasets.py` | DatasetSpecConfig |
-| Create asset group | `configs/assets.py` | Asset RID list |
+| Create asset group | `configs/assets.py` | Asset RID list or AssetSpecConfig(cache=True) |
 | Run execution with outputs | `configs/assets.py` | Output asset RIDs |
 | Create workflow | `configs/workflow.py` | Workflow config |
 | Define new model variant | `configs/<model>.py` | Model builds() |
@@ -6181,15 +6190,15 @@ datasets_store(
 **Template for asset groups:**
 ```python
 from hydra_zen import store
+from deriva_ml.asset.aux_classes import AssetSpecConfig
 from deriva_ml.execution import asset_store, with_description
 
 # [EXISTING CONFIGS...]
 
-# NEW: {asset_group_name}
-# Created by execution {execution_rid}
+# NEW: {asset_group_name} - large model weights, cached
 asset_store(
     with_description(
-        ["{asset_rid_1}", "{asset_rid_2}"],
+        [AssetSpecConfig(rid="{weight_rid}", cache=True)],
         '''{description}
 
 Source: Execution {execution_rid}
@@ -6199,7 +6208,21 @@ Source: Execution {execution_rid}
     ),
     name="{config_name}",
 )
+
+# NEW: {output_group_name} - small outputs, no caching
+asset_store(
+    with_description(
+        ["{output_rid_1}", "{output_rid_2}"],
+        "Evaluation outputs from {experiment}.",
+    ),
+    name="{output_config_name}",
+)
 ```
+
+**When to use `cache=True`:**
+- Model weight files (typically 1-4GB) — always cache
+- Pre-computed embeddings or large intermediates — cache if reused
+- Small outputs (metrics CSV, predictions) — no caching needed
 
 **Naming conventions for assets:**
 - Include model or purpose: `resnet50_weights_v1`
@@ -6341,14 +6364,16 @@ configuration for future use (e.g., for inference or analysis).
 
 Add to `configs/assets.py`:
 ```python
+from deriva_ml.asset.aux_classes import AssetSpecConfig
+
 # CIFAR-10 quick experiment outputs
 # Execution: 3-XYZ, Model: cifar10_quick, Dataset: cifar10_small
 asset_store(
     with_description(
-        ['4-ABC', '4-DEF'],
+        [AssetSpecConfig(rid='4-ABC', cache=True), '4-DEF'],
         '''CIFAR-10 Quick Experiment Outputs
 
-Model weights and predictions from quick training run.
+Model weights (cached) and predictions from quick training run.
 - Epochs: 3
 - Learning rate: 0.001
 - Test accuracy: 72.5%

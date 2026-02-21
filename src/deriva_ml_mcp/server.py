@@ -279,6 +279,39 @@ access to the same dataset version very fast. The cache key is `{dataset_rid}_{c
 The cache location can be configured via the `cache_dir` argument when creating a DerivaML instance.
 If not specified, bags are cached in a default location within the user's home directory.
 
+**Asset Caching:**
+
+Individual execution assets (e.g., model weights) can be cached using `AssetSpec(cache=True)`:
+
+```python
+from deriva_ml.asset.aux_classes import AssetSpec
+
+config = ExecutionConfiguration(
+    assets=[
+        AssetSpec(rid="6-EPNR", cache=True),   # cached by MD5
+        "6-EP56",                                # not cached
+    ]
+)
+```
+
+Cached assets are stored in `cache_dir/assets/{rid}_{md5}/` and symlinked into execution
+directories. The MD5 checksum is compared against the catalog record to detect stale caches.
+Use `cache=True` for large, immutable assets like pre-trained model weights.
+
+For hydra-zen configs, use `AssetSpecConfig(rid=..., cache=True)`:
+
+```python
+from deriva_ml.asset.aux_classes import AssetSpecConfig
+
+asset_store(
+    with_description(
+        [AssetSpecConfig(rid="6-EPNR", cache=True)],
+        "MAE weights for OCT. ~3.7GB.",
+    ),
+    name="retfound_mae_oct_weights",
+)
+```
+
 **MINID support:**
 
 Bags can be registered with a MINID (Minimal Viable Identifier) for permanent, citable references.
