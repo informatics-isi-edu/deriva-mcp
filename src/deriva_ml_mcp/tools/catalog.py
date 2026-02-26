@@ -477,7 +477,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         include_tables: list[str] | None = None,
         include_associations: bool = True,
         include_vocabularies: bool = True,
-        table_concurrency: int = 2,
+        table_concurrency: int = 1,
     ) -> str:
         """Create an ML workspace by cloning data reachable from a root RID.
 

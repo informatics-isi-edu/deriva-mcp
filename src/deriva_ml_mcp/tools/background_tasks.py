@@ -112,7 +112,7 @@ def _clone_catalog_task(
     include_tables: list[str] | None = None,
     include_associations: bool = True,
     include_vocabularies: bool = True,
-    table_concurrency: int = 2,
+    table_concurrency: int = 1,
 ) -> dict[str, Any]:
     """Execute catalog clone operation with progress tracking.
 
@@ -282,7 +282,7 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         include_tables: list[str] | None = None,
         include_associations: bool = True,
         include_vocabularies: bool = True,
-        table_concurrency: int = 2,
+        table_concurrency: int = 1,
     ) -> str:
         """Create an ML workspace by cloning data reachable from a root RID.
 
