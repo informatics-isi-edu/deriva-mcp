@@ -477,6 +477,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         include_tables: list[str] | None = None,
         include_associations: bool = True,
         include_vocabularies: bool = True,
+        table_concurrency: int = 2,
     ) -> str:
         """Create an ML workspace by cloning data reachable from a root RID.
 
@@ -520,6 +521,8 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             include_tables: Additional tables to include.
             include_associations: If True, auto-include association tables.
             include_vocabularies: If True, auto-include vocabulary tables.
+            table_concurrency: Max concurrent table copies during fill phase.
+                Lower values reduce server load. Default: 2.
 
         Returns:
             JSON with status, source info, destination info, and
@@ -567,6 +570,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 prune_hidden_fkeys=prune_hidden_fkeys,
                 truncate_oversized=truncate_oversized,
                 reinitialize_dataset_versions=reinitialize_dataset_versions,
+                table_concurrency=table_concurrency,
             )
 
             # Build response from CloneCatalogResult

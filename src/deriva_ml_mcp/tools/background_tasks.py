@@ -112,6 +112,7 @@ def _clone_catalog_task(
     include_tables: list[str] | None = None,
     include_associations: bool = True,
     include_vocabularies: bool = True,
+    table_concurrency: int = 2,
 ) -> dict[str, Any]:
     """Execute catalog clone operation with progress tracking.
 
@@ -173,6 +174,7 @@ def _clone_catalog_task(
         prune_hidden_fkeys=prune_hidden_fkeys,
         truncate_oversized=truncate_oversized,
         reinitialize_dataset_versions=reinitialize_dataset_versions,
+        table_concurrency=table_concurrency,
         progress_callback=progress_callback,
     )
 
@@ -280,6 +282,7 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
         include_tables: list[str] | None = None,
         include_associations: bool = True,
         include_vocabularies: bool = True,
+        table_concurrency: int = 2,
     ) -> str:
         """Create an ML workspace by cloning data reachable from a root RID.
 
@@ -312,6 +315,8 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
             include_tables: Additional tables to include.
             include_associations: Include association tables.
             include_vocabularies: Include vocabulary tables.
+            table_concurrency: Max concurrent table copies during fill phase.
+                Lower values reduce server load. Default: 2.
 
         Returns:
             JSON with task_id and status. Use get_task_status(task_id) to check progress.
@@ -361,6 +366,7 @@ def register_background_task_tools(mcp: FastMCP, conn_manager: ConnectionManager
                 "include_tables": include_tables,
                 "include_associations": include_associations,
                 "include_vocabularies": include_vocabularies,
+                "table_concurrency": table_concurrency,
             }
 
             # Create the background task
