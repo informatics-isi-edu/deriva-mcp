@@ -36,10 +36,13 @@ def register_resources(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     )
     def get_server_version() -> str:
         """Return the DerivaML MCP server version."""
-        return json.dumps({
-            "name": "deriva-mcp",
-            "version": __version__,
-        }, indent=2)
+        return json.dumps(
+            {
+                "name": "deriva-mcp",
+                "version": __version__,
+            },
+            indent=2,
+        )
 
     # =========================================================================
     # Static Resources - Configuration Templates
@@ -470,10 +473,7 @@ multirun_config(
                     for table in schema.tables.values():
                         if ml.model.is_vocabulary(table):
                             terms = ml.list_vocabulary_terms(table)
-                            vocabularies[table.name] = [
-                                {"name": t.name, "description": t.description}
-                                for t in terms
-                            ]
+                            vocabularies[table.name] = [{"name": t.name, "description": t.description} for t in terms]
             return json.dumps(vocabularies, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -493,12 +493,14 @@ multirun_config(
         try:
             datasets = []
             for ds in ml.find_datasets():
-                datasets.append({
-                    "rid": ds.dataset_rid,
-                    "description": ds.description,
-                    "types": ds.dataset_types,
-                    "version": str(ds.current_version),
-                })
+                datasets.append(
+                    {
+                        "rid": ds.dataset_rid,
+                        "description": ds.description,
+                        "types": ds.dataset_types,
+                        "version": str(ds.current_version),
+                    }
+                )
             return json.dumps(datasets, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -517,10 +519,9 @@ multirun_config(
 
         try:
             tables = list(ml.list_dataset_element_types())
-            return json.dumps([
-                {"name": t.name, "schema": t.schema.name, "comment": t.comment or ""}
-                for t in tables
-            ], indent=2)
+            return json.dumps(
+                [{"name": t.name, "schema": t.schema.name, "comment": t.comment or ""} for t in tables], indent=2
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -539,13 +540,15 @@ multirun_config(
         try:
             workflows = []
             for wf in ml.find_workflows():
-                workflows.append({
-                    "rid": wf.rid,
-                    "name": wf.name,
-                    "url": wf.url,
-                    "workflow_type": wf.workflow_type,
-                    "description": wf.description,
-                })
+                workflows.append(
+                    {
+                        "rid": wf.rid,
+                        "name": wf.name,
+                        "url": wf.url,
+                        "workflow_type": wf.workflow_type,
+                        "description": wf.description,
+                    }
+                )
             return json.dumps(workflows, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -564,10 +567,7 @@ multirun_config(
 
         try:
             terms = ml.list_vocabulary_terms("Workflow_Type")
-            return json.dumps([
-                {"name": t.name, "description": t.description, "rid": t.rid}
-                for t in terms
-            ], indent=2)
+            return json.dumps([{"name": t.name, "description": t.description, "rid": t.rid} for t in terms], indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -585,10 +585,7 @@ multirun_config(
 
         try:
             terms = ml.list_vocabulary_terms("Feature_Name")
-            features = [
-                {"name": t.name, "description": t.description}
-                for t in terms
-            ]
+            features = [{"name": t.name, "description": t.description} for t in terms]
             return json.dumps(features, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -611,14 +608,16 @@ multirun_config(
                 if domain_schema not in ml.model.schemas:
                     continue
                 for table in ml.model.schemas[domain_schema].tables.values():
-                    tables.append({
-                        "name": table.name,
-                        "schema": domain_schema,
-                        "comment": table.comment or "",
-                        "is_vocabulary": ml.model.is_vocabulary(table),
-                        "is_asset": ml.model.is_asset(table),
-                        "column_count": len(list(table.columns)),
-                    })
+                    tables.append(
+                        {
+                            "name": table.name,
+                            "schema": domain_schema,
+                            "comment": table.comment or "",
+                            "is_vocabulary": ml.model.is_vocabulary(table),
+                            "is_asset": ml.model.is_asset(table),
+                            "column_count": len(list(table.columns)),
+                        }
+                    )
             return json.dumps(tables, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -637,15 +636,18 @@ multirun_config(
 
         try:
             terms = ml.list_vocabulary_terms("Dataset_Type")
-            return json.dumps([
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "synonyms": list(t.synonyms) if t.synonyms else [],
-                    "rid": t.rid,
-                }
-                for t in terms
-            ], indent=2)
+            return json.dumps(
+                [
+                    {
+                        "name": t.name,
+                        "description": t.description,
+                        "synonyms": list(t.synonyms) if t.synonyms else [],
+                        "rid": t.rid,
+                    }
+                    for t in terms
+                ],
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -672,37 +674,40 @@ multirun_config(
             children = ds.list_dataset_children()
             parents = ds.list_dataset_parents()
 
-            return json.dumps({
-                "rid": ds.dataset_rid,
-                "description": ds.description,
-                "types": ds.dataset_types,
-                "current_version": str(ds.current_version),
-                "member_counts": {k: len(v) for k, v in members.items()},
-                "children": [
-                    {
-                        "rid": c.dataset_rid,
-                        "description": c.description,
-                        "types": c.dataset_types,
-                    }
-                    for c in children
-                ],
-                "parents": [
-                    {
-                        "rid": p.dataset_rid,
-                        "description": p.description,
-                        "types": p.dataset_types,
-                    }
-                    for p in parents
-                ],
-                "version_history": [
-                    {
-                        "version": str(h.version) if h.version else None,
-                        "description": h.description,
-                        "snapshot": h.snapshot,
-                    }
-                    for h in history
-                ],
-            }, indent=2)
+            return json.dumps(
+                {
+                    "rid": ds.dataset_rid,
+                    "description": ds.description,
+                    "types": ds.dataset_types,
+                    "current_version": str(ds.current_version),
+                    "member_counts": {k: len(v) for k, v in members.items()},
+                    "children": [
+                        {
+                            "rid": c.dataset_rid,
+                            "description": c.description,
+                            "types": c.dataset_types,
+                        }
+                        for c in children
+                    ],
+                    "parents": [
+                        {
+                            "rid": p.dataset_rid,
+                            "description": p.description,
+                            "types": p.dataset_types,
+                        }
+                        for p in parents
+                    ],
+                    "version_history": [
+                        {
+                            "version": str(h.version) if h.version else None,
+                            "description": h.description,
+                            "snapshot": h.snapshot,
+                        }
+                        for h in history
+                    ],
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -722,16 +727,18 @@ multirun_config(
             ds = ml.lookup_dataset(dataset_rid)
             members = ds.list_dataset_members()
 
-            return json.dumps({
-                "dataset_rid": ds.dataset_rid,
-                "description": ds.description,
-                "current_version": str(ds.current_version),
-                "members": {
-                    table_name: [{"RID": m["RID"]} for m in items]
-                    for table_name, items in members.items()
+            return json.dumps(
+                {
+                    "dataset_rid": ds.dataset_rid,
+                    "description": ds.description,
+                    "current_version": str(ds.current_version),
+                    "members": {
+                        table_name: [{"RID": m["RID"]} for m in items] for table_name, items in members.items()
+                    },
+                    "member_counts": {k: len(v) for k, v in members.items()},
                 },
-                "member_counts": {k: len(v) for k, v in members.items()},
-            }, indent=2)
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -751,19 +758,22 @@ multirun_config(
             ds = ml.lookup_dataset(dataset_rid)
             history = ds.dataset_history()
 
-            return json.dumps({
-                "dataset_rid": ds.dataset_rid,
-                "description": ds.description,
-                "current_version": str(ds.current_version),
-                "versions": [
-                    {
-                        "version": str(h.version) if h.version else None,
-                        "description": h.description,
-                        "snapshot": h.snapshot,
-                    }
-                    for h in history
-                ],
-            }, indent=2)
+            return json.dumps(
+                {
+                    "dataset_rid": ds.dataset_rid,
+                    "description": ds.description,
+                    "current_version": str(ds.current_version),
+                    "versions": [
+                        {
+                            "version": str(h.version) if h.version else None,
+                            "description": h.description,
+                            "snapshot": h.snapshot,
+                        }
+                        for h in history
+                    ],
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -797,29 +807,29 @@ multirun_config(
                 path_strs.append(" -> ".join(names))
 
             # Get all element types
-            element_types = [
-                {"name": t.name, "schema": t.schema.name}
-                for t in ml.model.list_dataset_element_types()
-            ]
+            element_types = [{"name": t.name, "schema": t.schema.name} for t in ml.model.list_dataset_element_types()]
 
             # Identify which element types have members
             member_element_types = list(member_counts.keys())
 
-            return json.dumps({
-                "dataset_rid": dataset_rid,
-                "description": ds.description,
-                "current_version": str(ds.current_version),
-                "member_counts": member_counts,
-                "member_element_types": member_element_types,
-                "all_element_types": element_types,
-                "export_paths": path_strs,
-                "total_paths": len(path_strs),
-                "note": (
-                    "Paths show FK traversal from Dataset through association tables "
-                    "to member element types and all FK-reachable tables. Vocabulary "
-                    "table endpoints are excluded (exported separately in full)."
-                ),
-            }, indent=2)
+            return json.dumps(
+                {
+                    "dataset_rid": dataset_rid,
+                    "description": ds.description,
+                    "current_version": str(ds.current_version),
+                    "member_counts": member_counts,
+                    "member_element_types": member_element_types,
+                    "all_element_types": element_types,
+                    "export_paths": path_strs,
+                    "total_paths": len(path_strs),
+                    "note": (
+                        "Paths show FK traversal from Dataset through association tables "
+                        "to member element types and all FK-reachable tables. Vocabulary "
+                        "table endpoints are excluded (exported separately in full)."
+                    ),
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -858,18 +868,18 @@ multirun_config(
             for key in paths_by_element:
                 paths_by_element[key] = sorted(paths_by_element[key], key=len)
 
-            return json.dumps({
-                "element_types": [
-                    {"name": t.name, "schema": t.schema.name}
-                    for t in element_types
-                ],
-                "paths_by_element_type": paths_by_element,
-                "note": (
-                    "Shows all FK paths starting from each element type. When a dataset "
-                    "has members of a given element type, all these paths will be followed "
-                    "during bag export. Vocabulary endpoints are excluded (exported separately)."
-                ),
-            }, indent=2)
+            return json.dumps(
+                {
+                    "element_types": [{"name": t.name, "schema": t.schema.name} for t in element_types],
+                    "paths_by_element_type": paths_by_element,
+                    "note": (
+                        "Shows all FK paths starting from each element type. When a dataset "
+                        "has members of a given element type, all these paths will be followed "
+                        "during bag export. Vocabulary endpoints are excluded (exported separately)."
+                    ),
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -887,17 +897,20 @@ multirun_config(
 
         try:
             features = list(ml.find_features(table_name))
-            return json.dumps([
-                {
-                    "name": f.feature_name,
-                    "target_table": f.target_table.name,
-                    "feature_table": f.feature_table.name,
-                    "asset_columns": [c.name for c in f.asset_columns],
-                    "term_columns": [c.name for c in f.term_columns],
-                    "value_columns": [c.name for c in f.value_columns],
-                }
-                for f in features
-            ], indent=2)
+            return json.dumps(
+                [
+                    {
+                        "name": f.feature_name,
+                        "target_table": f.target_table.name,
+                        "feature_table": f.feature_table.name,
+                        "asset_columns": [c.name for c in f.asset_columns],
+                        "term_columns": [c.name for c in f.term_columns],
+                        "value_columns": [c.name for c in f.value_columns],
+                    }
+                    for f in features
+                ],
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -957,17 +970,20 @@ multirun_config(
             required_fields.extend([c for c, info in asset_cols.items() if info["required"]])
             required_fields.extend([c for c, info in value_cols.items() if info["required"]])
 
-            return json.dumps({
-                "feature_name": feature.feature_name,
-                "target_table": feature.target_table.name,
-                "target_column": feature.target_table.name,
-                "feature_table": feature.feature_table.name,
-                "term_columns": term_cols,
-                "asset_columns": asset_cols,
-                "value_columns": value_cols,
-                "required_fields": required_fields,
-                "optional": feature.optional,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "feature_name": feature.feature_name,
+                    "target_table": feature.target_table.name,
+                    "target_column": feature.target_table.name,
+                    "feature_table": feature.feature_table.name,
+                    "term_columns": term_cols,
+                    "asset_columns": asset_cols,
+                    "value_columns": value_cols,
+                    "required_fields": required_fields,
+                    "optional": feature.optional,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -989,7 +1005,55 @@ multirun_config(
 
         try:
             values = ml.list_feature_values(table_name, feature_name)
-            result = [dict(v) for v in values]
+            result = [v.model_dump(mode="json") for v in values]
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://table/{table_name}/feature-values",
+        name="Table Feature Values",
+        description="All feature values for a table, grouped by feature name",
+        mime_type="application/json",
+    )
+    def get_table_feature_values(table_name: str) -> str:
+        """Return all feature values for a table, grouped by feature name.
+
+        Fetches every feature defined on the table and returns all their values
+        in a single response. Useful for exploring what annotations exist.
+        """
+        ml = conn_manager.get_active_or_raise()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            features = ml.fetch_table_features(table_name)
+            result = {fname: [r.model_dump(mode="json") for r in records] for fname, records in features.items()}
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva-ml://table/{table_name}/feature-values/newest",
+        name="Table Feature Values (Newest)",
+        description="Feature values for a table, deduplicated to newest per target object",
+        mime_type="application/json",
+    )
+    def get_table_feature_values_newest(table_name: str) -> str:
+        """Return feature values deduplicated to one per target object per feature.
+
+        When an object has multiple values for the same feature (e.g., labels from
+        different annotators), this selects the most recently created value (by RCT).
+        """
+        ml = conn_manager.get_active_or_raise()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            from deriva_ml.feature import FeatureRecord
+
+            features = ml.fetch_table_features(table_name, selector=FeatureRecord.select_newest)
+            result = {fname: [r.model_dump(mode="json") for r in records] for fname, records in features.items()}
             return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1008,14 +1072,17 @@ multirun_config(
 
         try:
             terms = ml.list_vocabulary_terms(vocab_name)
-            return json.dumps([
-                {
-                    "name": t.name,
-                    "description": t.description,
-                    "synonyms": getattr(t, "synonyms", []),
-                }
-                for t in terms
-            ], indent=2)
+            return json.dumps(
+                [
+                    {
+                        "name": t.name,
+                        "description": t.description,
+                        "synonyms": getattr(t, "synonyms", []),
+                    }
+                    for t in terms
+                ],
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1033,12 +1100,15 @@ multirun_config(
 
         try:
             term = ml.lookup_term(vocab_name, term_name)
-            return json.dumps({
-                "name": term.name,
-                "description": term.description,
-                "synonyms": list(term.synonyms) if term.synonyms else [],
-                "rid": term.rid,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "name": term.name,
+                    "description": term.description,
+                    "synonyms": list(term.synonyms) if term.synonyms else [],
+                    "rid": term.rid,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1090,12 +1160,14 @@ multirun_config(
             # Referenced by (inbound foreign keys)
             referenced_by = []
             for fk in table.referenced_by:
-                referenced_by.append({
-                    "from_table": f"{fk.table.schema.name}.{fk.table.name}",
-                    "from_columns": [c.name for c in fk.foreign_key_columns],
-                    "to_columns": [c.name for c in fk.referenced_columns],
-                    "constraint_name": fk.constraint_name,
-                })
+                referenced_by.append(
+                    {
+                        "from_table": f"{fk.table.schema.name}.{fk.table.name}",
+                        "from_columns": [c.name for c in fk.foreign_key_columns],
+                        "to_columns": [c.name for c in fk.referenced_columns],
+                        "constraint_name": fk.constraint_name,
+                    }
+                )
 
             # Keys (unique constraints)
             keys = []
@@ -1116,10 +1188,12 @@ multirun_config(
             if ml.model.is_domain_schema(schema_name):
                 try:
                     for f in ml.model.find_features(table):
-                        features.append({
-                            "name": f.feature_name,
-                            "feature_table": f.feature_table.name,
-                        })
+                        features.append(
+                            {
+                                "name": f.feature_name,
+                                "feature_table": f.feature_table.name,
+                            }
+                        )
                 except Exception:
                     pass  # Table may not support features
 
@@ -1160,16 +1234,18 @@ multirun_config(
             assets = ml.list_assets(table_name)
             result = []
             for asset in assets:
-                result.append({
-                    "asset_rid": asset.asset_rid,
-                    "filename": asset.filename,
-                    "url": asset.url,
-                    "length": asset.length,
-                    "md5": asset.md5,
-                    "asset_types": asset.asset_types,
-                    "asset_table": asset.asset_table,
-                    "description": asset.description,
-                })
+                result.append(
+                    {
+                        "asset_rid": asset.asset_rid,
+                        "filename": asset.filename,
+                        "url": asset.url,
+                        "length": asset.length,
+                        "md5": asset.md5,
+                        "asset_types": asset.asset_types,
+                        "asset_table": asset.asset_table,
+                        "description": asset.description,
+                    }
+                )
             return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1188,16 +1264,19 @@ multirun_config(
 
         try:
             workflow = ml.lookup_workflow(workflow_rid)
-            return json.dumps({
-                "rid": workflow.rid,
-                "name": workflow.name,
-                "workflow_type": workflow.workflow_type,
-                "description": workflow.description,
-                "url": workflow.url,
-                "checksum": workflow.checksum,
-                "version": workflow.version,
-                "is_notebook": workflow.is_notebook,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "rid": workflow.rid,
+                    "name": workflow.name,
+                    "workflow_type": workflow.workflow_type,
+                    "description": workflow.description,
+                    "url": workflow.url,
+                    "checksum": workflow.checksum,
+                    "version": workflow.version,
+                    "is_notebook": workflow.is_notebook,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1264,84 +1343,84 @@ multirun_config(
     )
     def get_annotation_contexts_doc() -> str:
         """Return documentation about annotation contexts."""
-        return json.dumps({
-            "visible_columns_contexts": {
-                "description": "Contexts control which columns appear in different UI views",
-                "contexts": {
-                    "*": {
-                        "description": "Default fallback for all contexts",
-                        "usage": "Used when a specific context is not defined"
+        return json.dumps(
+            {
+                "visible_columns_contexts": {
+                    "description": "Contexts control which columns appear in different UI views",
+                    "contexts": {
+                        "*": {
+                            "description": "Default fallback for all contexts",
+                            "usage": "Used when a specific context is not defined",
+                        },
+                        "compact": {
+                            "description": "Main list/table view",
+                            "usage": "Record lists, search results, related entity tables",
+                        },
+                        "compact/brief": {
+                            "description": "Abbreviated compact view",
+                            "usage": "Tooltips, hover previews, inline entity display",
+                        },
+                        "compact/brief/inline": {
+                            "description": "Minimal inline display",
+                            "usage": "Foreign key cell values in tables",
+                        },
+                        "compact/select": {
+                            "description": "Selection/picker modal",
+                            "usage": "Foreign key picker dialogs, record selection",
+                        },
+                        "detailed": {
+                            "description": "Full single-record view",
+                            "usage": "Individual record page showing all details",
+                        },
+                        "entry": {
+                            "description": "Data entry forms (create and edit)",
+                            "usage": "Both new record creation and editing existing records",
+                        },
+                        "entry/create": {
+                            "description": "Create form only",
+                            "usage": "New record creation (overrides entry)",
+                        },
+                        "entry/edit": {
+                            "description": "Edit form only",
+                            "usage": "Editing existing records (overrides entry)",
+                        },
+                        "export": {"description": "Data export", "usage": "CSV/JSON export column selection"},
+                        "filter": {
+                            "description": "Faceted search sidebar",
+                            "usage": "Search facets (uses different format than other contexts)",
+                        },
                     },
-                    "compact": {
-                        "description": "Main list/table view",
-                        "usage": "Record lists, search results, related entity tables"
+                },
+                "visible_foreign_keys_contexts": {
+                    "description": "Contexts control which related tables appear in record views",
+                    "contexts": {
+                        "*": "Default for all contexts",
+                        "compact": "Related tables shown in list views",
+                        "detailed": "Related tables shown in single record view",
+                        "entry": "Related tables in data entry (rarely used)",
                     },
-                    "compact/brief": {
-                        "description": "Abbreviated compact view",
-                        "usage": "Tooltips, hover previews, inline entity display"
+                },
+                "table_display_contexts": {
+                    "description": "Contexts for table-level display settings",
+                    "contexts": {
+                        "*": "Default row name pattern for all contexts",
+                        "compact": "Row name in list views",
+                        "detailed": "Row name in record view header",
+                        "row_name": "Special context for row_markdown_pattern",
                     },
-                    "compact/brief/inline": {
-                        "description": "Minimal inline display",
-                        "usage": "Foreign key cell values in tables"
-                    },
-                    "compact/select": {
-                        "description": "Selection/picker modal",
-                        "usage": "Foreign key picker dialogs, record selection"
-                    },
-                    "detailed": {
-                        "description": "Full single-record view",
-                        "usage": "Individual record page showing all details"
-                    },
-                    "entry": {
-                        "description": "Data entry forms (create and edit)",
-                        "usage": "Both new record creation and editing existing records"
-                    },
-                    "entry/create": {
-                        "description": "Create form only",
-                        "usage": "New record creation (overrides entry)"
-                    },
-                    "entry/edit": {
-                        "description": "Edit form only",
-                        "usage": "Editing existing records (overrides entry)"
-                    },
-                    "export": {
-                        "description": "Data export",
-                        "usage": "CSV/JSON export column selection"
-                    },
-                    "filter": {
-                        "description": "Faceted search sidebar",
-                        "usage": "Search facets (uses different format than other contexts)"
+                },
+                "column_display_contexts": {
+                    "description": "Contexts for column-level display formatting",
+                    "contexts": {
+                        "*": "Default formatting for all contexts",
+                        "compact": "Formatting in list/table cells",
+                        "detailed": "Formatting in single record view",
+                        "entry": "Formatting in data entry forms",
                     },
                 },
             },
-            "visible_foreign_keys_contexts": {
-                "description": "Contexts control which related tables appear in record views",
-                "contexts": {
-                    "*": "Default for all contexts",
-                    "compact": "Related tables shown in list views",
-                    "detailed": "Related tables shown in single record view",
-                    "entry": "Related tables in data entry (rarely used)",
-                },
-            },
-            "table_display_contexts": {
-                "description": "Contexts for table-level display settings",
-                "contexts": {
-                    "*": "Default row name pattern for all contexts",
-                    "compact": "Row name in list views",
-                    "detailed": "Row name in record view header",
-                    "row_name": "Special context for row_markdown_pattern",
-                },
-            },
-            "column_display_contexts": {
-                "description": "Contexts for column-level display formatting",
-                "contexts": {
-                    "*": "Default formatting for all contexts",
-                    "compact": "Formatting in list/table cells",
-                    "detailed": "Formatting in single record view",
-                    "entry": "Formatting in data entry forms",
-                },
-            },
-        }, indent=2)
+            indent=2,
+        )
 
     # =========================================================================
     # Documentation Resources - Fetched from GitHub
@@ -1522,10 +1601,9 @@ multirun_config(
 
         try:
             tables = ml.list_asset_tables()
-            return json.dumps([
-                {"name": t.name, "schema": t.schema.name, "comment": t.comment or ""}
-                for t in tables
-            ], indent=2)
+            return json.dumps(
+                [{"name": t.name, "schema": t.schema.name, "comment": t.comment or ""} for t in tables], indent=2
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1573,25 +1651,30 @@ multirun_config(
             # Convert ExecutionRecord objects to dicts for JSON serialization
             execution_list = []
             for exe in executions:
-                execution_list.append({
-                    "execution_rid": exe.execution_rid,
-                    "workflow_rid": exe.workflow_rid,
-                    "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
-                    "description": exe.description,
-                })
+                execution_list.append(
+                    {
+                        "execution_rid": exe.execution_rid,
+                        "workflow_rid": exe.workflow_rid,
+                        "status": exe.status.value if hasattr(exe.status, "value") else str(exe.status),
+                        "description": exe.description,
+                    }
+                )
 
-            return json.dumps({
-                "rid": asset.asset_rid,
-                "table": asset.asset_table,
-                "filename": asset.filename,
-                "url": asset.url,
-                "length": asset.length,
-                "md5": asset.md5,
-                "description": asset.description,
-                "types": asset.asset_types,
-                "executions": execution_list,
-                "chaise_url": asset.get_chaise_url(),
-            }, indent=2)
+            return json.dumps(
+                {
+                    "rid": asset.asset_rid,
+                    "table": asset.asset_table,
+                    "filename": asset.filename,
+                    "url": asset.url,
+                    "length": asset.length,
+                    "md5": asset.md5,
+                    "description": asset.description,
+                    "types": asset.asset_types,
+                    "executions": execution_list,
+                    "chaise_url": asset.get_chaise_url(),
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1614,13 +1697,15 @@ multirun_config(
 
             result = []
             for exe in executions:
-                result.append({
-                    "rid": exe.get("RID"),
-                    "workflow": exe.get("Workflow"),
-                    "status": exe.get("Status"),
-                    "description": exe.get("Description", ""),
-                    "created": exe.get("RCT"),
-                })
+                result.append(
+                    {
+                        "rid": exe.get("RID"),
+                        "workflow": exe.get("Workflow"),
+                        "status": exe.get("Status"),
+                        "description": exe.get("Description", ""),
+                        "created": exe.get("RCT"),
+                    }
+                )
             return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1644,14 +1729,17 @@ multirun_config(
             nested = exe.list_nested_executions()
             parents = exe.list_parent_executions()
 
-            return json.dumps({
-                "rid": exe.execution_rid,
-                "workflow_rid": exe.workflow_rid,
-                "status": exe.status.value if hasattr(exe.status, 'value') else str(exe.status),
-                "description": exe.configuration.description if exe.configuration else "",
-                "nested_executions": [n["Nested_Execution"] for n in nested],
-                "parent_executions": [p["Execution"] for p in parents],
-            }, indent=2)
+            return json.dumps(
+                {
+                    "rid": exe.execution_rid,
+                    "workflow_rid": exe.workflow_rid,
+                    "status": exe.status.value if hasattr(exe.status, "value") else str(exe.status),
+                    "description": exe.configuration.description if exe.configuration else "",
+                    "nested_executions": [n["Nested_Execution"] for n in nested],
+                    "parent_executions": [p["Execution"] for p in parents],
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1683,9 +1771,7 @@ multirun_config(
             }
             if conn_info:
                 result["workflow_rid"] = conn_info.workflow_rid
-                result["execution_rid"] = (
-                    conn_info.execution.execution_rid if conn_info.execution else None
-                )
+                result["execution_rid"] = conn_info.execution.execution_rid if conn_info.execution else None
             return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1765,12 +1851,15 @@ multirun_config(
             table_name = result.table.name
             base_url = f"https://{ml.host_name}/chaise/record/#{ml.catalog_id}"
             url = f"{base_url}/{schema_name}:{table_name}/RID={result.rid}"
-            return json.dumps({
-                "rid": rid,
-                "schema": schema_name,
-                "table": table_name,
-                "url": url,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "rid": rid,
+                    "schema": schema_name,
+                    "table": table_name,
+                    "url": url,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1790,11 +1879,14 @@ multirun_config(
             # Get both permanent (with snapshot) and current URLs
             permanent_url = ml.cite(rid, current=False)
             current_url = ml.cite(rid, current=True)
-            return json.dumps({
-                "rid": rid,
-                "permanent_url": permanent_url,
-                "current_url": current_url,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "rid": rid,
+                    "permanent_url": permanent_url,
+                    "current_url": current_url,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1822,25 +1914,32 @@ multirun_config(
                 if entry.get("deleted_on"):
                     continue
                 if entry.get("is_catalog"):
-                    catalogs.append({
-                        "id": entry["id"],
-                        "name": entry.get("name"),
-                        "description": entry.get("description"),
-                        "is_persistent": entry.get("is_persistent"),
-                    })
+                    catalogs.append(
+                        {
+                            "id": entry["id"],
+                            "name": entry.get("name"),
+                            "description": entry.get("description"),
+                            "is_persistent": entry.get("is_persistent"),
+                        }
+                    )
                 elif entry.get("alias_target"):
-                    aliases.append({
-                        "id": entry["id"],
-                        "alias_target": entry["alias_target"],
-                        "name": entry.get("name"),
-                        "description": entry.get("description"),
-                    })
+                    aliases.append(
+                        {
+                            "id": entry["id"],
+                            "alias_target": entry["alias_target"],
+                            "name": entry.get("name"),
+                            "description": entry.get("description"),
+                        }
+                    )
 
-            return json.dumps({
-                "hostname": hostname,
-                "catalogs": catalogs,
-                "aliases": aliases,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "hostname": hostname,
+                    "catalogs": catalogs,
+                    "aliases": aliases,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1858,10 +1957,13 @@ multirun_config(
             server = DerivaServer("https", hostname, credentials=get_credential(hostname))
             alias = server.connect_ermrest_alias(alias_name)
             metadata = alias.retrieve()
-            return json.dumps({
-                "hostname": hostname,
-                **metadata,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "hostname": hostname,
+                    **metadata,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1887,27 +1989,34 @@ multirun_config(
             # Get input datasets
             input_datasets = []
             for ds in execution.list_input_datasets():
-                input_datasets.append({
-                    "rid": ds.dataset_rid,
-                    "description": ds.description,
-                    "types": ds.dataset_types,
-                    "version": str(ds.current_version) if ds.current_version else None,
-                })
+                input_datasets.append(
+                    {
+                        "rid": ds.dataset_rid,
+                        "description": ds.description,
+                        "types": ds.dataset_types,
+                        "version": str(ds.current_version) if ds.current_version else None,
+                    }
+                )
 
             # Get input assets
             input_assets = []
             for asset in execution.list_input_assets():
-                input_assets.append({
-                    "rid": asset.rid,
-                    "table": asset.table_name,
-                    "filename": asset.filename,
-                })
+                input_assets.append(
+                    {
+                        "rid": asset.rid,
+                        "table": asset.table_name,
+                        "filename": asset.filename,
+                    }
+                )
 
-            return json.dumps({
-                "execution_rid": execution_rid,
-                "input_datasets": input_datasets,
-                "input_assets": input_assets,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "execution_rid": execution_rid,
+                    "input_datasets": input_datasets,
+                    "input_assets": input_assets,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1947,10 +2056,13 @@ multirun_config(
             for exp in experiments[:50]:  # Limit to 50
                 result.append(exp.summary())
 
-            return json.dumps({
-                "count": len(result),
-                "experiments": result,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "count": len(result),
+                    "experiments": result,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -2007,12 +2119,15 @@ multirun_config(
 
             # Convert datetime to ISO format
             for d in dirs:
-                if 'modified' in d:
-                    d['modified'] = d['modified'].isoformat()
+                if "modified" in d:
+                    d["modified"] = d["modified"].isoformat()
 
-            return json.dumps({
-                "count": len(dirs),
-                "execution_dirs": dirs,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "count": len(dirs),
+                    "execution_dirs": dirs,
+                },
+                indent=2,
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})

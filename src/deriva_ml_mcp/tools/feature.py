@@ -110,11 +110,13 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 metadata=metadata or [],
                 comment=comment,
             )
-            return json.dumps({
-                "status": "created",
-                "feature_name": feature_name,
-                "target_table": table_name,
-            })
+            return json.dumps(
+                {
+                    "status": "created",
+                    "feature_name": feature_name,
+                    "target_table": table_name,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create feature: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -137,15 +139,19 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             success = ml.delete_feature(table_name, feature_name)
             if success:
-                return json.dumps({
-                    "status": "deleted",
-                    "feature_name": feature_name,
-                    "table_name": table_name,
-                })
-            return json.dumps({
-                "status": "not_found",
-                "message": f"Feature '{feature_name}' not found in table '{table_name}'",
-            })
+                return json.dumps(
+                    {
+                        "status": "deleted",
+                        "feature_name": feature_name,
+                        "table_name": table_name,
+                    }
+                )
+            return json.dumps(
+                {
+                    "status": "not_found",
+                    "message": f"Feature '{feature_name}' not found in table '{table_name}'",
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to delete feature: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -202,10 +208,12 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     exe_rid = mcp_execution.execution_rid
 
             if not exe_rid:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution. Connect to a catalog or use create_execution first.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution. Connect to a catalog or use create_execution first.",
+                    }
+                )
 
             # Look up the feature to get its structure
             feature = ml.lookup_feature(table_name, feature_name)
@@ -221,10 +229,12 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 value_column = next(iter(feature.value_columns)).name
 
             if not value_column:
-                return json.dumps({
-                    "status": "error",
-                    "message": f"Feature '{feature_name}' has no value columns. Use add_feature_value_record for complex features.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Feature '{feature_name}' has no value columns. Use add_feature_value_record for complex features.",
+                    }
+                )
 
             # Build the record dict
             record_dict = {
@@ -239,14 +249,16 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
             result = list(path.insert([record_dict]))
 
-            return json.dumps({
-                "status": "added",
-                "target_rid": target_rid,
-                "feature_name": feature_name,
-                value_column: value,
-                "execution_rid": exe_rid,
-                "rid": result[0].get("RID") if result else None,
-            })
+            return json.dumps(
+                {
+                    "status": "added",
+                    "target_rid": target_rid,
+                    "feature_name": feature_name,
+                    value_column: value,
+                    "execution_rid": exe_rid,
+                    "rid": result[0].get("RID") if result else None,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add feature value: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -313,10 +325,12 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     exe_rid = mcp_execution.execution_rid
 
             if not exe_rid:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution. Connect to a catalog or use create_execution first.",
-                })
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "No active execution. Connect to a catalog or use create_execution first.",
+                    }
+                )
 
             # Look up the feature
             feature = ml.lookup_feature(table_name, feature_name)
@@ -336,14 +350,131 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
             result = list(path.insert([record_dict]))
 
-            return json.dumps({
-                "status": "added",
-                "target_rid": target_rid,
-                "feature_name": feature_name,
-                "values": values,
-                "execution_rid": exe_rid,
-                "rid": result[0].get("RID") if result else None,
-            })
+            return json.dumps(
+                {
+                    "status": "added",
+                    "target_rid": target_rid,
+                    "feature_name": feature_name,
+                    "values": values,
+                    "execution_rid": exe_rid,
+                    "rid": result[0].get("RID") if result else None,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to add feature value record: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def fetch_table_features(
+        table_name: str,
+        feature_name: str | None = None,
+        selector: str | None = None,
+        workflow: str | None = None,
+    ) -> str:
+        """Fetch all feature values for a table, grouped by feature name.
+
+        Returns a dictionary mapping feature names to lists of feature value records.
+        Useful for retrieving all annotations on a table at once — for example, getting
+        all classification labels and quality scores for images in a single call.
+
+        **Resolving multiple values per object:**
+
+        When the same object has multiple values for a feature (e.g., labels from
+        different annotators or model runs), use ``selector`` or ``workflow`` to
+        pick one value per object:
+
+        - **selector="newest"**: Picks the value with the most recent creation time
+          (RCT). Good for getting the latest annotation regardless of source.
+        - **workflow**: Filters to values produced by a specific workflow, then picks
+          the newest. Pass a Workflow RID (e.g., "2-ABC1") or a Workflow_Type name
+          (e.g., "Training"). Auto-detected.
+
+        ``selector`` and ``workflow`` are mutually exclusive.
+
+        Args:
+            table_name: Table to fetch features for (e.g., "Image", "Subject").
+            feature_name: If provided, only fetch this specific feature.
+                If not provided, fetches all features on the table.
+            selector: Built-in selector name. Currently supported: "newest".
+                Picks one value per target object using the most recent RCT.
+            workflow: Workflow RID or Workflow_Type name. Filters values to those
+                produced by executions of the matching workflow, then picks the
+                newest per target object. Mutually exclusive with selector.
+
+        Returns:
+            JSON dict mapping feature names to lists of feature value records.
+            Each record includes target RID, feature values, Execution RID,
+            RCT (creation time), and Feature_Name.
+
+        Examples:
+            # Get all features for Image table
+            fetch_table_features("Image")
+
+            # Get just Classification, deduplicated to newest per image
+            fetch_table_features("Image", feature_name="Classification", selector="newest")
+
+            # Get values from Training workflow only
+            fetch_table_features("Image", feature_name="Classification", workflow="Training")
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+
+            if selector and workflow:
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": "Cannot specify both 'selector' and 'workflow'. They are mutually exclusive.",
+                    }
+                )
+
+            # Resolve selector callable
+            from deriva_ml.feature import FeatureRecord
+
+            selector_fn = None
+            if selector == "newest":
+                selector_fn = FeatureRecord.select_newest
+            elif selector is not None:
+                return json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Unknown selector '{selector}'. Supported: 'newest'.",
+                    }
+                )
+
+            if workflow:
+                # Fetch without selector, then apply select_by_workflow per group
+                features = ml.fetch_table_features(table_name, feature_name=feature_name)
+                result = {}
+                for fname, records in features.items():
+                    if not records:
+                        result[fname] = []
+                        continue
+                    # Group by target column and apply select_by_workflow
+                    feat = ml.lookup_feature(table_name, fname)
+                    target_col = feat.target_table.name
+                    from collections import defaultdict
+
+                    grouped: dict[str, list] = defaultdict(list)
+                    for rec in records:
+                        target_rid = getattr(rec, target_col, None)
+                        if target_rid is not None:
+                            grouped[target_rid].append(rec)
+                    selected = []
+                    for group in grouped.values():
+                        try:
+                            selected.append(ml.select_by_workflow(group, workflow))
+                        except Exception:
+                            pass  # Skip targets with no matching workflow records
+                    result[fname] = [r.model_dump(mode="json") for r in selected]
+            else:
+                features = ml.fetch_table_features(
+                    table_name,
+                    feature_name=feature_name,
+                    selector=selector_fn,
+                )
+                result = {fname: [r.model_dump(mode="json") for r in records] for fname, records in features.items()}
+
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            logger.error(f"Failed to fetch table features: {e}")
             return json.dumps({"status": "error", "message": str(e)})
