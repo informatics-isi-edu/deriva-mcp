@@ -1212,6 +1212,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         source_dataset_rid: str,
         test_size: float = 0.2,
         train_size: float | None = None,
+        val_size: float | None = None,
         seed: int = 42,
         shuffle: bool = True,
         stratify_by_column: str | None = None,
@@ -1219,18 +1220,20 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         include_tables: list[str] | None = None,
         training_types: list[str] | None = None,
         testing_types: list[str] | None = None,
+        validation_types: list[str] | None = None,
         split_description: str = "",
         dry_run: bool = False,
     ) -> str:
-        """Split a dataset into training and testing subsets.
+        """Split a dataset into training, testing, and optionally validation subsets.
 
         Creates a new dataset hierarchy with full provenance tracking:
         - Split (parent, type: "Split")
           - Training (child, type: "Training" + training_types)
+          - Validation (child, type: "Validation" + validation_types)  # if val_size
           - Testing (child, type: "Testing" + testing_types)
 
         The API follows scikit-learn's train_test_split conventions for
-        test_size, train_size, shuffle, and seed parameters.
+        test_size, train_size, val_size, shuffle, and seed parameters.
 
         **Splitting strategies:**
 
@@ -1255,12 +1258,15 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             test_size: Test set size as a fraction (0-1) or absolute count.
                 Default: 0.2 (20% of data).
             train_size: Train set size as a fraction (0-1) or absolute count.
-                Default: None (complement of test_size).
+                Default: None (complement of test_size and val_size).
+            val_size: Validation set size as a fraction (0-1) or absolute
+                count. Default: None (no validation split, two-way only).
+                When provided, creates a three-way train/val/test split.
             seed: Random seed for reproducibility. Default: 42.
             shuffle: Whether to shuffle before splitting. Default: True.
             stratify_by_column: Column name in the denormalized DataFrame
                 for stratified splitting. Maintains class distribution
-                across train/test sets. Requires include_tables.
+                across all partitions. Requires include_tables.
                 Example: "Image_Classification_Image_Class".
             element_table: Element table to split (e.g., "Image"). If not
                 specified, auto-detected from the dataset's members.
@@ -1271,20 +1277,27 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 beyond "Training". Example: ["Labeled"].
             testing_types: Additional dataset types for the testing set
                 beyond "Testing". Example: ["Labeled"].
+            validation_types: Additional dataset types for the validation
+                set beyond "Validation". Example: ["Labeled"].
+                Ignored when val_size is None.
             split_description: Description for the parent Split dataset.
             dry_run: If True, return what would happen without modifying
                 the catalog. Useful for previewing split sizes.
 
         Returns:
             JSON with split results including:
-            - split: RID and version of the parent Split dataset
-            - training: RID, version, and member count of the Training dataset
-            - testing: RID, version, and member count of the Testing dataset
+            - split: RID, version, and count of the parent Split dataset
+            - training: RID, version, and count of the Training dataset
+            - validation: RID, version, and count of the Validation dataset (if val_size)
+            - testing: RID, version, and count of the Testing dataset
             - source: RID of the source dataset
 
         Example:
             # Random 80/20 split
             split_dataset("28D0", test_size=0.2, seed=42)
+
+            # Three-way train/val/test split
+            split_dataset("28D0", test_size=0.2, val_size=0.1, seed=42)
 
             # Stratified split maintaining class balance
             split_dataset("28D0", test_size=0.2,
@@ -1308,6 +1321,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 source_dataset_rid=source_dataset_rid,
                 test_size=test_size,
                 train_size=train_size,
+                val_size=val_size,
                 seed=seed,
                 shuffle=shuffle,
                 stratify_by_column=stratify_by_column,
@@ -1315,11 +1329,12 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 include_tables=include_tables,
                 training_types=training_types,
                 testing_types=testing_types,
+                validation_types=validation_types,
                 split_description=split_description,
                 dry_run=dry_run,
             )
 
-            return json.dumps({"status": "success", **result})
+            return json.dumps({"status": "success", **result.model_dump()})
         except Exception as e:
             logger.error(f"Failed to split dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})

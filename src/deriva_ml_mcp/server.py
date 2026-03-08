@@ -504,12 +504,25 @@ queries — anything that doesn't need reproducibility tracking.
 
 ## Dataset Splits for Evaluation
 
-**Use the `split_dataset` tool to create train/test splits.** It follows scikit-learn conventions
-and handles provenance tracking automatically.
+**Use the `split_dataset` tool to create train/test (and optionally validation) splits.**
+It follows scikit-learn conventions and handles provenance tracking automatically.
 
-**Simple random split:**
+**Simple random split (two-way):**
 ```python
 split_dataset("1-ABC", test_size=0.2, seed=42)
+```
+
+**Three-way train/val/test split:**
+```python
+split_dataset("1-ABC", test_size=0.2, val_size=0.1, seed=42)
+```
+
+When `val_size` is provided, creates three child datasets:
+```
+Split (parent, type: "Split")
+├── Training (type: "Training")
+├── Validation (type: "Validation")
+└── Testing (type: "Testing")
 ```
 
 **Stratified split (maintains class distribution):**
@@ -521,24 +534,26 @@ split_dataset("1-ABC", test_size=0.2,
 
 The `stratify_by_column` uses the denormalized column name format `{TableName}_{ColumnName}`.
 Use `denormalize_dataset` first to discover available column names.
+Stratification works with both two-way and three-way splits.
 
-**When creating train/test splits, consider whether ground truth labels are needed:**
+**When creating splits, consider whether ground truth labels are needed:**
 
-- **Unlabeled test splits**: Test partition has no ground truth labels. Use for training pipelines where test evaluation isn't needed during training.
-- **Labeled test splits**: Both train and test partitions have ground truth labels. Required for:
-  - Computing accuracy metrics on test set
+- **Unlabeled splits**: Partitions have no ground truth labels. Use for training pipelines where evaluation isn't needed.
+- **Labeled splits**: All partitions have ground truth labels. Required for:
+  - Computing accuracy metrics on test/validation sets
   - Generating ROC curves or other evaluation metrics
   - Comparing model predictions to ground truth
 
-**Pattern:** Use `training_types=["Labeled"]` and `testing_types=["Labeled"]` when both splits need ground truth labels:
+**Pattern:** Use `*_types=["Labeled"]` when partitions need ground truth labels:
 ```python
-split_dataset("1-ABC", test_size=0.2, seed=42,
-              training_types=["Labeled"], testing_types=["Labeled"])
+split_dataset("1-ABC", test_size=0.2, val_size=0.1, seed=42,
+              training_types=["Labeled"], validation_types=["Labeled"],
+              testing_types=["Labeled"])
 ```
 
 **Dry run to preview split plan:**
 ```python
-split_dataset("1-ABC", test_size=0.2, dry_run=True)
+split_dataset("1-ABC", test_size=0.2, val_size=0.1, dry_run=True)
 # Returns counts and strategy without modifying catalog
 ```
 

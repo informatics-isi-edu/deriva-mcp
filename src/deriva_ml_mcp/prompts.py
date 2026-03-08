@@ -71,8 +71,8 @@ config = ExecutionConfiguration(
 
 # Use context manager - automatically starts/stops timing
 with ml.create_execution(config) as exe:
-    # Download input data
-    exe.download_execution_dataset("1-ABC")
+    # Input datasets from config are automatically downloaded
+    # Access them via exe.execution_datasets
 
     # Run your ML code here...
 
@@ -80,7 +80,7 @@ with ml.create_execution(config) as exe:
     model_path = exe.asset_file_path("Model", "model.pt")
     # Write model to model_path...
 
-    metrics_path = exe.asset_file_path("Execution_Metadata", "metrics.json")
+    metrics_path = exe.asset_file_path("Execution_Asset", "metrics.json")
     # Write metrics to metrics_path...
 
 # IMPORTANT: Upload AFTER exiting the context manager
@@ -131,13 +131,13 @@ Use `add_workflow_type()` to create a new type if needed.
 
 ### Step 2: Do Your ML Work
 
-- **Download input data**: Use `download_execution_dataset(dataset_rid)` to get data as a DatasetBag
+- **Download input data**: Use `download_execution_dataset(dataset_rid, version)` to get data as a DatasetBag
 - **Process/train/infer**: Run your ML code
 - **Register outputs**: For each output file, call `asset_file_path()`:
 
 ```
 asset_file_path(
-    asset_name="<asset-table>",  # e.g., "Model", "Execution_Metadata"
+    asset_name="<asset-table>",  # e.g., "Model", "Execution_Asset"
     file_name="<path-or-name>",  # Existing file path OR new filename
     asset_types=["<type>"]       # Optional: from Asset_Type vocabulary
 )
@@ -158,7 +158,7 @@ upload_execution_outputs()
 create_execution("CIFAR-10 ResNet", "Training", "Train ResNet50 on CIFAR-10", ["1-ABC"])
 
 # 2. Get training data
-download_execution_dataset("1-ABC")
+download_execution_dataset("1-ABC", version="1.0.0")
 
 # 3. [Run training code here...]
 
@@ -166,7 +166,7 @@ download_execution_dataset("1-ABC")
 asset_file_path("Model", "/tmp/model.pt", ["Trained Model"])
 
 # 5. Register metrics
-asset_file_path("Execution_Metadata", "metrics.json")
+asset_file_path("Execution_Asset", "metrics.json")
 
 # 6. Upload everything
 upload_execution_outputs()
@@ -1547,15 +1547,19 @@ create_dataset_type_term("Augmented", "Data created through augmentation")
 create_dataset(description="...", dataset_types=["Training", "Labeled"])
 ```
 
-## Step 7: Split Dataset into Train/Test (Optional)
+## Step 7: Split Dataset into Train/Test/Validation (Optional)
 
-**Use `split_dataset` to create train/test splits automatically.** This is the preferred
-method - it handles execution context, provenance, dataset hierarchy, and versioning.
+**Use `split_dataset` to create train/test (and optionally validation) splits automatically.**
+This is the preferred method - it handles execution context, provenance, dataset hierarchy,
+and versioning.
 
 **MCP Tool (recommended):**
 ```
 # Simple random 80/20 split
 split_dataset("<source-dataset-rid>", test_size=0.2, seed=42)
+
+# Three-way train/val/test split
+split_dataset("<source-dataset-rid>", test_size=0.2, val_size=0.1, seed=42)
 
 # Stratified split preserving class distribution
 split_dataset("<source-dataset-rid>",
@@ -1564,35 +1568,40 @@ split_dataset("<source-dataset-rid>",
               stratify_by_column="Image_Classification_Image_Class",
               include_tables=["Image", "Image_Classification"])
 
-# Labeled split (both train and test have ground truth)
+# Labeled split (all partitions have ground truth)
 split_dataset("<source-dataset-rid>",
               test_size=0.2,
+              val_size=0.1,
               seed=42,
               training_types=["Labeled"],
+              validation_types=["Labeled"],
               testing_types=["Labeled"])
 
 # Preview without modifying catalog
-split_dataset("<source-dataset-rid>", test_size=0.2, dry_run=True)
+split_dataset("<source-dataset-rid>", test_size=0.2, val_size=0.1, dry_run=True)
 ```
 
 **Python API:**
 ```python
 from deriva_ml.dataset.split import split_dataset
 
-result = split_dataset(ml, "<source-dataset-rid>", test_size=0.2, seed=42)
-print(f"Training: {result['training']} ({result['train_count']} samples)")
-print(f"Testing:  {result['testing']} ({result['test_count']} samples)")
+result = split_dataset(ml, "<source-dataset-rid>", test_size=0.2, val_size=0.1, seed=42)
+print(f"Training:   {result.training.rid} ({result.training.count} samples)")
+print(f"Validation: {result.validation.rid} ({result.validation.count} samples)")
+print(f"Testing:    {result.testing.rid} ({result.testing.count} samples)")
 ```
 
-`split_dataset` creates a three-level dataset hierarchy:
+`split_dataset` creates a dataset hierarchy:
 ```
 Split (parent, type: "Split")
 ├── Training (child, type: "Training")
+├── Validation (child, type: "Validation")  # only if val_size provided
 └── Testing (child, type: "Testing")
 ```
 
 The `stratify_by_column` uses denormalized column naming: `{TableName}_{ColumnName}`.
 Use `denormalize_dataset` to discover available column names before stratifying.
+Stratification works with both two-way and three-way splits.
 
 **IMPORTANT - Code Provenance:**
 For full provenance tracking, prefer the **script-based workflow** described in the
@@ -1631,16 +1640,18 @@ with ml.create_execution(config) as exe:
     complete_ds = exe.create_execution_dataset("Complete Image Set", ["Complete"])
 
     # Add all images
-    ml.add_dataset_members(complete_ds.rid, ["2-D01", "2-D02", "2-D03", ..., "2-D100"])
+    complete_ds.add_dataset_members(["2-D01", "2-D02", "2-D03", ..., "2-D100"])
 
 # Upload AFTER exiting context manager
 exe.upload_execution_outputs()
 
-# Split into train/test (creates its own execution for provenance)
-result = split_dataset(ml, complete_ds.rid, test_size=0.2, seed=42,
-                       training_types=["Labeled"], testing_types=["Labeled"])
-print(f"Training: {result['training']} ({result['train_count']} samples)")
-print(f"Testing:  {result['testing']} ({result['test_count']} samples)")
+# Split into train/val/test (creates its own execution for provenance)
+result = split_dataset(ml, complete_ds.rid, test_size=0.2, val_size=0.1, seed=42,
+                       training_types=["Labeled"], validation_types=["Labeled"],
+                       testing_types=["Labeled"])
+print(f"Training:   {result.training.rid} ({result.training.count} samples)")
+print(f"Validation: {result.validation.rid} ({result.validation.count} samples)")
+print(f"Testing:    {result.testing.rid} ({result.testing.count} samples)")
 ```
 
 **MCP Tools:**
@@ -1661,10 +1672,11 @@ add_dataset_members("1-ABC", ["2-D01", "2-D02", "2-D03", ..., "2-D100"])
 # 5. Upload outputs
 upload_execution_outputs()
 
-# 6. Split into train/test (uses split_dataset tool)
-split_dataset("1-ABC", test_size=0.2, seed=42,
-              training_types=["Labeled"], testing_types=["Labeled"])
-# Returns: {"split": "1-XYZ", "training": "1-DEF", "testing": "1-GHI", ...}
+# 6. Split into train/val/test (uses split_dataset tool)
+split_dataset("1-ABC", test_size=0.2, val_size=0.1, seed=42,
+              training_types=["Labeled"], validation_types=["Labeled"],
+              testing_types=["Labeled"])
+# Returns: {"split": {...}, "training": {...}, "validation": {...}, "testing": {...}}
 
 # 7. Verify
 list_dataset_children("1-XYZ")
@@ -1676,7 +1688,8 @@ list_dataset_children("1-XYZ")
 - **Always provide descriptive `description` values** - explains what the dataset contains and its purpose
 - Read `deriva-ml://catalog/datasets` resource to find existing datasets
 - Use semantic versioning: patch=metadata, minor=elements, major=breaking
-- **Use `split_dataset` for train/test splits** - handles provenance, hierarchy, and versioning automatically
+- **Use `split_dataset` for train/test/validation splits** - handles provenance, hierarchy, and versioning automatically
+- Use `val_size` to create a three-way train/val/test split
 - Use `stratify_by_column` to preserve class distribution across splits
 - Use `dry_run=True` to preview split sizes before modifying the catalog
 - Use `restructure_assets` after downloading to organize files for ML frameworks (e.g., PyTorch ImageFolder)
@@ -2293,7 +2306,7 @@ def train_model(
     model_path = execution.asset_file_path("Model", "model.pt")
     torch.save(model.state_dict(), model_path)
 
-    metrics_path = execution.asset_file_path("Execution_Metadata", "metrics.json")
+    metrics_path = execution.asset_file_path("Execution_Asset", "metrics.json")
     save_metrics(metrics_path)
 ```
 
@@ -3329,7 +3342,7 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
     ds = execution.create_execution_dataset(
         "My Dataset", ["Complete"], description="All images for experiment X"
     )
-    ml.add_dataset_members(ds.rid, image_rids)
+    ds.add_dataset_members(image_rids)
 
 execution.upload_execution_outputs()
 ```
@@ -3372,14 +3385,17 @@ from deriva_ml.dataset.split import split_dataset
 result = split_dataset(
     ml, source_dataset_rid,
     test_size=0.2,
+    val_size=0.1,
     seed=42,
     stratify_by_column="Image_Classification_Image_Class",
     include_tables=["Image", "Image_Classification"],
     training_types=["Labeled"],
+    validation_types=["Labeled"],
     testing_types=["Labeled"],
 )
-print(f"Training: {result['training']} ({result['train_count']} samples)")
-print(f"Testing:  {result['testing']} ({result['test_count']} samples)")
+print(f"Training:   {result.training.rid} ({result.training.count} samples)")
+print(f"Validation: {result.validation.rid} ({result.validation.count} samples)")
+print(f"Testing:    {result.testing.rid} ({result.testing.count} samples)")
 ```
 
 ### Feature Creation and Population
@@ -3391,11 +3407,11 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
     ml.add_term("Image_Quality", "Poor", "Image fails quality check")
 
     # Create feature
-    ml.create_feature("Image", "Image_Quality", description="Quality assessment")
+    ml.create_feature("Image", "Image_Quality", comment="Quality assessment")
 
     # Populate feature values
     for image_rid, quality_label in assessments:
-        ml.add_feature_value("Image", image_rid, "Image_Quality", quality_label)
+        ml.add_feature_value("Image", "Image_Quality", image_rid, quality_label)
 
 execution.upload_execution_outputs()
 ```
@@ -6116,8 +6132,8 @@ Execution completed:
   Execution RID: 3-XYZ
   Output assets:
     - Model weights: RID 4-DEF (Model type)
-    - Predictions: RID 4-GHI (Execution_Metadata type)
-    - Metrics: RID 4-JKL (Execution_Metadata type)
+    - Predictions: RID 4-GHI (Execution_Asset type)
+    - Metrics: RID 4-JKL (Execution_Asset type)
 ```
 
 ### For Workflows:
