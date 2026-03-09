@@ -3356,6 +3356,46 @@ Example: `uv run deriva-ml-run +experiment=cifar10_quick` loads base defaults, t
 
 For the full project structure, `base.py` template, and setup walkthrough, read `references/workflow.md`.
 
+## Update Experiments.md
+
+After adding or modifying experiment or multirun configs, regenerate `Experiments.md` in the project root. This file is a human-readable summary of all defined experiments — it should always reflect the current state of the config code.
+
+1. **Read the config source** — `experiments.py`, `multiruns.py`, and any model config files they reference
+2. **Extract each experiment's** name, config group overrides, key parameters (epochs, lr, batch size, architecture), and purpose
+3. **Extract each multirun's** name, overrides, sweep ranges, and description
+4. **Write `Experiments.md`** with a quick-reference table, a multiruns table, and a detail section per experiment
+
+Include `Experiments.md` in the same commit as the config changes — it should travel with the code it describes.
+
+### Format
+
+```markdown
+# Experiments
+
+Human-readable registry of all defined experiments and multiruns.
+Generated from `src/configs/experiments.py` and `src/configs/multiruns.py`.
+
+## Experiments
+
+| Experiment | Model Config | Dataset | Description |
+|------------|-------------|---------|-------------|
+| `name` | `model_config_name` | `dataset_name` | Brief purpose |
+
+## Multiruns
+
+| Multirun | Overrides | Description |
+|----------|----------|-------------|
+| `name` | override summary | Brief purpose |
+
+## Experiment Details
+
+### `experiment_name`
+
+- **Config group overrides**: `model_config=X`, `datasets=Y`
+- **Parameters**: epochs, channels, batch size, learning rate, etc.
+- **Purpose**: Why this experiment exists
+```
+
 ## Related Skills
 
 - **`write-hydra-config`** — Exact Python API patterns for each config type
