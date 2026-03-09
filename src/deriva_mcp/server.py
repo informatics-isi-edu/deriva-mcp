@@ -34,10 +34,10 @@ from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from deriva_ml_mcp.connection import ConnectionManager
-from deriva_ml_mcp.prompts import register_prompts
-from deriva_ml_mcp.resources import register_resources
-from deriva_ml_mcp.tools import (
+from deriva_mcp.connection import ConnectionManager
+from deriva_mcp.prompts import register_prompts
+from deriva_mcp.resources import register_resources
+from deriva_mcp.tools import (
     register_annotation_tools,
     register_background_task_tools,
     register_catalog_tools,
@@ -830,7 +830,7 @@ def create_server(host: str = "127.0.0.1", port: int = 8000) -> FastMCP:
         Returns basic server status without creating an MCP session.
         Use this endpoint for Docker/Kubernetes health probes instead of /mcp.
         """
-        from deriva_ml_mcp import __version__
+        from deriva_mcp import __version__
 
         return JSONResponse({
             "status": "ok",
@@ -925,7 +925,7 @@ def main() -> None:
     """Run the DerivaML MCP server."""
     import atexit
 
-    from deriva_ml_mcp.tasks import TaskPersistence, init_task_manager
+    from deriva_mcp.tasks import TaskPersistence, init_task_manager
 
     args = parse_args()
 
@@ -968,7 +968,7 @@ def main() -> None:
     def shutdown_task_manager() -> None:
         logger.info("Shutting down background task manager")
         try:
-            from deriva_ml_mcp.tasks import get_task_manager
+            from deriva_mcp.tasks import get_task_manager
 
             task_manager = get_task_manager()
             task_manager.shutdown(wait=False)  # Don't block on pending tasks

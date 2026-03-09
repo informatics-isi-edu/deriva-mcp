@@ -46,8 +46,8 @@ class TestBumpVersion:
             return result
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
         ):
             result = devtools["bump_version"](
                 bump_type="patch",
@@ -86,8 +86,8 @@ class TestBumpVersion:
             return result
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
         ):
             result = devtools["bump_version"](
                 bump_type="minor",
@@ -124,8 +124,8 @@ class TestBumpVersion:
             return result
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
         ):
             result = devtools["bump_version"](
                 bump_type="major",
@@ -147,7 +147,7 @@ class TestBumpVersion:
 
     def test_bump_uv_not_found(self, devtools):
         """When uv is not on PATH, return an error."""
-        with patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value=None):
+        with patch("deriva_mcp.tools.devtools.shutil.which", return_value=None):
             result = devtools["bump_version"](bump_type="patch")
 
         data = assert_error(result)
@@ -158,7 +158,7 @@ class TestBumpVersion:
         """When project_path does not exist, return an error."""
         bad_path = str(tmp_path / "nonexistent")
 
-        with patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"):
+        with patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"):
             result = devtools["bump_version"](
                 bump_type="patch",
                 project_path=bad_path,
@@ -173,7 +173,7 @@ class TestBumpVersion:
         project_dir.mkdir()
         # No .venv created
 
-        with patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"):
+        with patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"):
             result = devtools["bump_version"](
                 bump_type="patch",
                 project_path=str(project_dir),
@@ -189,9 +189,9 @@ class TestBumpVersion:
         (project_dir / ".venv").mkdir()
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
             patch(
-                "deriva_ml_mcp.tools.devtools.subprocess.run",
+                "deriva_mcp.tools.devtools.subprocess.run",
                 side_effect=subprocess.CalledProcessError(128, "git"),
             ),
         ):
@@ -233,8 +233,8 @@ class TestBumpVersion:
             return result
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
         ):
             result = devtools["bump_version"](
                 bump_type="patch",
@@ -269,8 +269,8 @@ class TestBumpVersion:
             return result
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
         ):
             result = devtools["bump_version"](
                 bump_type="patch",
@@ -303,8 +303,8 @@ class TestBumpVersion:
             return result
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
         ):
             result = devtools["bump_version"](
                 bump_type="patch",
@@ -336,8 +336,8 @@ class TestBumpVersion:
             return result
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
         ):
             result = devtools["bump_version"](
                 bump_type="patch",
@@ -376,8 +376,8 @@ class TestBumpVersion:
             return result
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run),
         ):
             result = devtools["bump_version"](
                 bump_type="patch",
@@ -414,7 +414,7 @@ class TestGetCurrentVersion:
                 return result
             return result
 
-        with patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
+        with patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
             result = devtools["get_current_version"]()
 
         data = assert_success(result)
@@ -442,7 +442,7 @@ class TestGetCurrentVersion:
                 return result
             return result
 
-        with patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
+        with patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
             result = devtools["get_current_version"]()
 
         data = assert_success(result)
@@ -470,7 +470,7 @@ class TestGetCurrentVersion:
                 return result
             return result
 
-        with patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
+        with patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
             result = devtools["get_current_version"]()
 
         data = assert_success(result)
@@ -496,7 +496,7 @@ class TestGetCurrentVersion:
                 return result
             return result
 
-        with patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
+        with patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
             result = devtools["get_current_version"]()
 
         data = assert_success(result)
@@ -507,7 +507,7 @@ class TestGetCurrentVersion:
     def test_get_version_not_git_repo(self, devtools):
         """When not inside a git repo, return an error."""
         with patch(
-            "deriva_ml_mcp.tools.devtools.subprocess.run",
+            "deriva_mcp.tools.devtools.subprocess.run",
             side_effect=subprocess.CalledProcessError(128, "git"),
         ):
             result = devtools["get_current_version"]()
@@ -527,7 +527,7 @@ class TestGetCurrentVersion:
             # git describe --tags --long --dirty fails if no tags
             raise subprocess.CalledProcessError(128, "git")
 
-        with patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
+        with patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
             result = devtools["get_current_version"]()
 
         data = assert_error(result)
@@ -553,7 +553,7 @@ class TestGetCurrentVersion:
                 raise subprocess.CalledProcessError(128, "git")
             return result
 
-        with patch("deriva_ml_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
+        with patch("deriva_mcp.tools.devtools.subprocess.run", side_effect=mock_subprocess_run):
             result = devtools["get_current_version"]()
 
         data = assert_success(result)
@@ -580,8 +580,8 @@ class TestInstallJupyterKernel:
         mock_result.stderr = ""
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", return_value=mock_result),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", return_value=mock_result),
         ):
             result = devtools["install_jupyter_kernel"](
                 project_path=str(project_dir),
@@ -605,9 +605,9 @@ class TestInstallJupyterKernel:
         mock_result.stderr = ""
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", return_value=mock_result),
-            patch("deriva_ml_mcp.tools.devtools.Path.cwd", return_value=mock_cwd),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", return_value=mock_result),
+            patch("deriva_mcp.tools.devtools.Path.cwd", return_value=mock_cwd),
         ):
             result = devtools["install_jupyter_kernel"]()
 
@@ -616,7 +616,7 @@ class TestInstallJupyterKernel:
 
     def test_install_uv_not_found(self, devtools):
         """When uv is not on PATH, return an error."""
-        with patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value=None):
+        with patch("deriva_mcp.tools.devtools.shutil.which", return_value=None):
             result = devtools["install_jupyter_kernel"]()
 
         data = assert_error(result)
@@ -627,7 +627,7 @@ class TestInstallJupyterKernel:
         """When project_path does not exist, return an error."""
         bad_path = str(tmp_path / "nonexistent")
 
-        with patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"):
+        with patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"):
             result = devtools["install_jupyter_kernel"](project_path=bad_path)
 
         data = assert_error(result)
@@ -638,7 +638,7 @@ class TestInstallJupyterKernel:
         project_dir = tmp_path / "myproject"
         project_dir.mkdir()
 
-        with patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"):
+        with patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"):
             result = devtools["install_jupyter_kernel"](project_path=str(project_dir))
 
         data = assert_error(result)
@@ -656,8 +656,8 @@ class TestInstallJupyterKernel:
         mock_result.stderr = "ERROR: kernel installation failed"
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
-            patch("deriva_ml_mcp.tools.devtools.subprocess.run", return_value=mock_result),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.subprocess.run", return_value=mock_result),
         ):
             result = devtools["install_jupyter_kernel"](
                 project_path=str(project_dir),
@@ -674,9 +674,9 @@ class TestInstallJupyterKernel:
         (project_dir / ".venv").mkdir()
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
             patch(
-                "deriva_ml_mcp.tools.devtools.subprocess.run",
+                "deriva_mcp.tools.devtools.subprocess.run",
                 side_effect=subprocess.TimeoutExpired(["uv"], 60),
             ),
         ):
@@ -694,9 +694,9 @@ class TestInstallJupyterKernel:
         (project_dir / ".venv").mkdir()
 
         with (
-            patch("deriva_ml_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
+            patch("deriva_mcp.tools.devtools.shutil.which", return_value="/usr/bin/uv"),
             patch(
-                "deriva_ml_mcp.tools.devtools.subprocess.run",
+                "deriva_mcp.tools.devtools.subprocess.run",
                 side_effect=OSError("Cannot execute"),
             ),
         ):
@@ -1063,7 +1063,7 @@ class TestRunNotebook:
         with (
             patch("deriva_ml.execution.Workflow", mock_workflow_cls),
             patch("papermill.execute_notebook", side_effect=Exception("Cell execution error")),
-            patch("deriva_ml_mcp.tools.devtools._find_kernel_for_venv", return_value="python3"),
+            patch("deriva_mcp.tools.devtools._find_kernel_for_venv", return_value="python3"),
         ):
             result = devtools["run_notebook"](
                 notebook_path=str(nb_path),

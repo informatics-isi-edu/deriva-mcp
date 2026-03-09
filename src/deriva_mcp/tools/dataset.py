@@ -47,7 +47,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
-    from deriva_ml_mcp.connection import ConnectionManager
+    from deriva_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-mcp")
 

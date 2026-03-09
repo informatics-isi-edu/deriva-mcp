@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from deriva_ml import DerivaMLException
-from deriva_ml_mcp import __version__
+from deriva_mcp import __version__
 
 
 # =============================================================================
@@ -1193,8 +1193,8 @@ class TestCitationUrl:
 class TestRegistryResource:
     """Tests for the registry resource."""
 
-    @patch("deriva_ml_mcp.resources.DerivaServer", create=True)
-    @patch("deriva_ml_mcp.resources.get_credential", create=True)
+    @patch("deriva_mcp.resources.DerivaServer", create=True)
+    @patch("deriva_mcp.resources.get_credential", create=True)
     def test_success(self, mock_get_cred, mock_server_cls, captured_resources):
         """The registry resource uses local imports, so we patch at the resources module."""
         # We need to patch in the scope where they are imported
@@ -1347,7 +1347,7 @@ class TestDocResources:
     @pytest.mark.parametrize("uri,repo,path", DOC_URIS_AND_FETCH_ARGS)
     def test_calls_fetch_doc(self, captured_resources, uri, repo, path):
         """Each doc resource calls fetch_doc with the right repo and path."""
-        with patch("deriva_ml_mcp.resources.fetch_doc", return_value="# Mock Doc Content") as mock_fetch:
+        with patch("deriva_mcp.resources.fetch_doc", return_value="# Mock Doc Content") as mock_fetch:
             result = captured_resources[uri]()
             mock_fetch.assert_called_once_with(repo, path)
             assert result == "# Mock Doc Content"
@@ -1355,7 +1355,7 @@ class TestDocResources:
     @pytest.mark.parametrize("uri,repo,path", DOC_URIS_AND_FETCH_ARGS)
     def test_no_connection_still_works(self, captured_resources_disconnected, uri, repo, path):
         """Doc resources do not require a connection."""
-        with patch("deriva_ml_mcp.resources.fetch_doc", return_value="# Doc") as mock_fetch:
+        with patch("deriva_mcp.resources.fetch_doc", return_value="# Doc") as mock_fetch:
             result = captured_resources_disconnected[uri]()
             mock_fetch.assert_called_once_with(repo, path)
             assert result == "# Doc"

@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Any
 
 from deriva.core import DerivaServer, get_credential
 
-from deriva_ml_mcp.tools.background_tasks import _resolve_hostname
+from deriva_mcp.tools.background_tasks import _resolve_hostname
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
-    from deriva_ml_mcp.connection import ConnectionManager
+    from deriva_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-mcp")
 

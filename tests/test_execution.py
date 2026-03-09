@@ -88,7 +88,7 @@ def _clear_active_execution(mock_conn_manager):
 @pytest.fixture
 def storage_tools_disconnected(disconnected_conn_manager):
     """Capture storage tools with no connection."""
-    from deriva_ml_mcp.tools.execution import register_storage_tools
+    from deriva_mcp.tools.execution import register_storage_tools
 
     mcp, tools = _create_tool_capture()
     register_storage_tools(mcp, disconnected_conn_manager)

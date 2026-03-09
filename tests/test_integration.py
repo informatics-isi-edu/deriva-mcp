@@ -62,7 +62,7 @@ pytestmark = [
 @pytest.fixture
 def int_catalog_tools(mcp_connection_manager):
     """Capture catalog tools with a real ConnectionManager."""
-    from deriva_ml_mcp.tools.catalog import register_catalog_tools
+    from deriva_mcp.tools.catalog import register_catalog_tools
 
     mcp, tools = _create_tool_capture()
     register_catalog_tools(mcp, mcp_connection_manager)
@@ -72,7 +72,7 @@ def int_catalog_tools(mcp_connection_manager):
 @pytest.fixture
 def int_vocab_tools(mcp_connection_manager):
     """Capture vocabulary tools with a real ConnectionManager."""
-    from deriva_ml_mcp.tools.vocabulary import register_vocabulary_tools
+    from deriva_mcp.tools.vocabulary import register_vocabulary_tools
 
     mcp, tools = _create_tool_capture()
     register_vocabulary_tools(mcp, mcp_connection_manager)
@@ -82,7 +82,7 @@ def int_vocab_tools(mcp_connection_manager):
 @pytest.fixture
 def int_schema_tools(mcp_connection_manager):
     """Capture schema tools with a real ConnectionManager."""
-    from deriva_ml_mcp.tools.schema import register_schema_tools
+    from deriva_mcp.tools.schema import register_schema_tools
 
     mcp, tools = _create_tool_capture()
     register_schema_tools(mcp, mcp_connection_manager)
@@ -92,7 +92,7 @@ def int_schema_tools(mcp_connection_manager):
 @pytest.fixture
 def int_dataset_tools(mcp_connection_manager):
     """Capture dataset tools with a real ConnectionManager."""
-    from deriva_ml_mcp.tools.dataset import register_dataset_tools
+    from deriva_mcp.tools.dataset import register_dataset_tools
 
     mcp, tools = _create_tool_capture()
     register_dataset_tools(mcp, mcp_connection_manager)
@@ -102,7 +102,7 @@ def int_dataset_tools(mcp_connection_manager):
 @pytest.fixture
 def int_execution_tools(mcp_connection_manager):
     """Capture execution tools with a real ConnectionManager."""
-    from deriva_ml_mcp.tools.execution import register_execution_tools
+    from deriva_mcp.tools.execution import register_execution_tools
 
     mcp, tools = _create_tool_capture()
     register_execution_tools(mcp, mcp_connection_manager)
@@ -112,7 +112,7 @@ def int_execution_tools(mcp_connection_manager):
 @pytest.fixture
 def int_feature_tools(mcp_connection_manager):
     """Capture feature tools with a real ConnectionManager."""
-    from deriva_ml_mcp.tools.feature import register_feature_tools
+    from deriva_mcp.tools.feature import register_feature_tools
 
     mcp, tools = _create_tool_capture()
     register_feature_tools(mcp, mcp_connection_manager)
@@ -122,7 +122,7 @@ def int_feature_tools(mcp_connection_manager):
 @pytest.fixture
 def int_data_tools(mcp_connection_manager):
     """Capture data tools with a real ConnectionManager."""
-    from deriva_ml_mcp.tools.data import register_data_tools
+    from deriva_mcp.tools.data import register_data_tools
 
     mcp, tools = _create_tool_capture()
     register_data_tools(mcp, mcp_connection_manager)
@@ -132,7 +132,7 @@ def int_data_tools(mcp_connection_manager):
 @pytest.fixture
 def int_workflow_tools(mcp_connection_manager):
     """Capture workflow tools with a real ConnectionManager."""
-    from deriva_ml_mcp.tools.workflow import register_workflow_tools
+    from deriva_mcp.tools.workflow import register_workflow_tools
 
     mcp, tools = _create_tool_capture()
     register_workflow_tools(mcp, mcp_connection_manager)
@@ -142,7 +142,7 @@ def int_workflow_tools(mcp_connection_manager):
 @pytest.fixture
 def int_resources(mcp_connection_manager):
     """Capture resources with a real ConnectionManager."""
-    from deriva_ml_mcp.resources import register_resources
+    from deriva_mcp.resources import register_resources
 
     mcp, resources = _create_resource_capture()
     register_resources(mcp, mcp_connection_manager)
@@ -157,7 +157,7 @@ def int_resources(mcp_connection_manager):
 @pytest.fixture
 def populated_connection_manager(catalog_manager, tmp_path):
     """Create a ConnectionManager pre-connected to a populated catalog."""
-    from deriva_ml_mcp.connection import ConnectionManager
+    from deriva_mcp.connection import ConnectionManager
 
     catalog_manager.reset()
     catalog_manager.ensure_populated(tmp_path)
@@ -174,7 +174,7 @@ def populated_connection_manager(catalog_manager, tmp_path):
 @pytest.fixture
 def populated_data_tools(populated_connection_manager):
     """Capture data tools with a populated catalog."""
-    from deriva_ml_mcp.tools.data import register_data_tools
+    from deriva_mcp.tools.data import register_data_tools
 
     mcp, tools = _create_tool_capture()
     register_data_tools(mcp, populated_connection_manager)
@@ -184,7 +184,7 @@ def populated_data_tools(populated_connection_manager):
 @pytest.fixture
 def populated_dataset_tools(populated_connection_manager):
     """Capture dataset tools with a populated catalog."""
-    from deriva_ml_mcp.tools.dataset import register_dataset_tools
+    from deriva_mcp.tools.dataset import register_dataset_tools
 
     mcp, tools = _create_tool_capture()
     register_dataset_tools(mcp, populated_connection_manager)
@@ -194,7 +194,7 @@ def populated_dataset_tools(populated_connection_manager):
 @pytest.fixture
 def populated_schema_tools(populated_connection_manager):
     """Capture schema tools with a populated catalog."""
-    from deriva_ml_mcp.tools.schema import register_schema_tools
+    from deriva_mcp.tools.schema import register_schema_tools
 
     mcp, tools = _create_tool_capture()
     register_schema_tools(mcp, populated_connection_manager)
@@ -204,7 +204,7 @@ def populated_schema_tools(populated_connection_manager):
 @pytest.fixture
 def populated_resources(populated_connection_manager):
     """Capture resources with a populated catalog."""
-    from deriva_ml_mcp.resources import register_resources
+    from deriva_mcp.resources import register_resources
 
     mcp, resources = _create_resource_capture()
     register_resources(mcp, populated_connection_manager)
@@ -219,7 +219,7 @@ def populated_resources(populated_connection_manager):
 @pytest.fixture
 def feature_connection_manager(catalog_manager, tmp_path):
     """Create a ConnectionManager pre-connected to a catalog with features."""
-    from deriva_ml_mcp.connection import ConnectionManager
+    from deriva_mcp.connection import ConnectionManager
 
     catalog_manager.reset()
     catalog_manager.ensure_features(tmp_path)
@@ -236,7 +236,7 @@ def feature_connection_manager(catalog_manager, tmp_path):
 @pytest.fixture
 def feature_feature_tools(feature_connection_manager):
     """Capture feature tools with a feature-enabled catalog."""
-    from deriva_ml_mcp.tools.feature import register_feature_tools
+    from deriva_mcp.tools.feature import register_feature_tools
 
     mcp, tools = _create_tool_capture()
     register_feature_tools(mcp, feature_connection_manager)
@@ -246,7 +246,7 @@ def feature_feature_tools(feature_connection_manager):
 @pytest.fixture
 def feature_data_tools(feature_connection_manager):
     """Capture data tools with a feature-enabled catalog."""
-    from deriva_ml_mcp.tools.data import register_data_tools
+    from deriva_mcp.tools.data import register_data_tools
 
     mcp, tools = _create_tool_capture()
     register_data_tools(mcp, feature_connection_manager)
@@ -256,7 +256,7 @@ def feature_data_tools(feature_connection_manager):
 @pytest.fixture
 def feature_schema_tools(feature_connection_manager):
     """Capture schema tools with a feature-enabled catalog."""
-    from deriva_ml_mcp.tools.schema import register_schema_tools
+    from deriva_mcp.tools.schema import register_schema_tools
 
     mcp, tools = _create_tool_capture()
     register_schema_tools(mcp, feature_connection_manager)
@@ -266,7 +266,7 @@ def feature_schema_tools(feature_connection_manager):
 @pytest.fixture
 def feature_resources(feature_connection_manager):
     """Capture resources with a feature-enabled catalog."""
-    from deriva_ml_mcp.resources import register_resources
+    from deriva_mcp.resources import register_resources
 
     mcp, resources = _create_resource_capture()
     register_resources(mcp, feature_connection_manager)
@@ -284,9 +284,9 @@ class TestConnectionWorkflow:
     @pytest.mark.asyncio
     async def test_connect_and_get_info(self, catalog_manager, catalog_host):
         """connect_catalog establishes connection; catalog info resource returns schema details."""
-        from deriva_ml_mcp.connection import ConnectionManager
-        from deriva_ml_mcp.resources import register_resources
-        from deriva_ml_mcp.tools.catalog import register_catalog_tools
+        from deriva_mcp.connection import ConnectionManager
+        from deriva_mcp.resources import register_resources
+        from deriva_mcp.tools.catalog import register_catalog_tools
 
         conn_manager = ConnectionManager()
         mcp, tools = _create_tool_capture()
@@ -323,9 +323,9 @@ class TestConnectionWorkflow:
     @pytest.mark.asyncio
     async def test_list_connections(self, catalog_manager, catalog_host):
         """list_connections resource shows open connections and changes after disconnect."""
-        from deriva_ml_mcp.connection import ConnectionManager
-        from deriva_ml_mcp.resources import register_resources
-        from deriva_ml_mcp.tools.catalog import register_catalog_tools
+        from deriva_mcp.connection import ConnectionManager
+        from deriva_mcp.resources import register_resources
+        from deriva_mcp.tools.catalog import register_catalog_tools
 
         conn_manager = ConnectionManager()
         mcp, tools = _create_tool_capture()
@@ -360,8 +360,8 @@ class TestConnectionWorkflow:
     @pytest.mark.asyncio
     async def test_connect_invalid_catalog(self, catalog_host):
         """connect_catalog returns error for a non-existent catalog."""
-        from deriva_ml_mcp.connection import ConnectionManager
-        from deriva_ml_mcp.tools.catalog import register_catalog_tools
+        from deriva_mcp.connection import ConnectionManager
+        from deriva_mcp.tools.catalog import register_catalog_tools
 
         conn_manager = ConnectionManager()
         mcp, tools = _create_tool_capture()
@@ -1381,10 +1381,10 @@ class TestCrossModuleIntegration:
         populated_connection_manager,
     ):
         """Full workflow: create execution, create dataset inside it, add members."""
-        from deriva_ml_mcp.tools.data import register_data_tools
-        from deriva_ml_mcp.tools.dataset import register_dataset_tools
-        from deriva_ml_mcp.tools.execution import register_execution_tools
-        from deriva_ml_mcp.tools.workflow import register_workflow_tools
+        from deriva_mcp.tools.data import register_data_tools
+        from deriva_mcp.tools.dataset import register_dataset_tools
+        from deriva_mcp.tools.execution import register_execution_tools
+        from deriva_mcp.tools.workflow import register_workflow_tools
 
         cm = populated_connection_manager
 

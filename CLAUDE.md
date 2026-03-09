@@ -35,7 +35,7 @@ uv run bump-version major   # Breaking change (0.5.1 → 1.0.0)
 ### Project Structure
 
 ```
-src/deriva_ml_mcp/
+src/deriva_mcp/
 ├── server.py          # Main MCP server entry point
 ├── connection.py      # ConnectionManager for catalog connections
 ├── resources.py       # MCP resources (config templates, catalog info, docs)
@@ -288,7 +288,7 @@ The Dockerfile uses a multi-stage build:
 
 ## Adding New Tools
 
-1. Create or edit the appropriate module in `src/deriva_ml_mcp/tools/`
+1. Create or edit the appropriate module in `src/deriva_mcp/tools/`
 2. Add the tool function with `@mcp.tool()` decorator
 3. Return JSON-serialized results for structured data
 4. If creating a new module, add the register function to `tools/__init__.py`

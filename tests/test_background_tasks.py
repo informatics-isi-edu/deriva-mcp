@@ -21,7 +21,7 @@ def bg_task_tools_disconnected(disconnected_conn_manager):
     """Capture background task tools with no connection."""
     from tests.conftest import _create_tool_capture
 
-    from deriva_ml_mcp.tools.background_tasks import register_background_task_tools
+    from deriva_mcp.tools.background_tasks import register_background_task_tools
 
     mcp, tools = _create_tool_capture()
     register_background_task_tools(mcp, disconnected_conn_manager)
@@ -50,7 +50,7 @@ class TestCloneCatalogAsync:
     @pytest.mark.asyncio
     async def test_clone_success(self, bg_task_tools, mock_task_manager):
         """Starting a clone returns status=started with task_id."""
-        from deriva_ml_mcp.tasks import TaskType
+        from deriva_mcp.tasks import TaskType
 
         mock_task = MagicMock()
         mock_task.task_id = "abc12345"
@@ -58,7 +58,7 @@ class TestCloneCatalogAsync:
         mock_task_manager.create_task.return_value = mock_task
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["clone_catalog_async"](
@@ -87,7 +87,7 @@ class TestCloneCatalogAsync:
     @pytest.mark.asyncio
     async def test_clone_with_all_parameters(self, bg_task_tools, mock_task_manager):
         """Clone with all optional parameters passes them through correctly."""
-        from deriva_ml_mcp.tasks import TaskType
+        from deriva_mcp.tasks import TaskType
 
         mock_task = MagicMock()
         mock_task.task_id = "task-full"
@@ -95,7 +95,7 @@ class TestCloneCatalogAsync:
         mock_task_manager.create_task.return_value = mock_task
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["clone_catalog_async"](
@@ -145,7 +145,7 @@ class TestCloneCatalogAsync:
     @pytest.mark.asyncio
     async def test_clone_dest_defaults_to_source(self, bg_task_tools, mock_task_manager):
         """When dest_hostname is None, parameters show source as dest."""
-        from deriva_ml_mcp.tasks import TaskType
+        from deriva_mcp.tasks import TaskType
 
         mock_task = MagicMock()
         mock_task.task_id = "task-default-dest"
@@ -153,7 +153,7 @@ class TestCloneCatalogAsync:
         mock_task_manager.create_task.return_value = mock_task
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["clone_catalog_async"](
@@ -170,7 +170,7 @@ class TestCloneCatalogAsync:
         self, bg_task_tools_disconnected, mock_task_manager
     ):
         """When no active connection, user_id is derived from credentials."""
-        from deriva_ml_mcp.tasks import TaskType
+        from deriva_mcp.tasks import TaskType
 
         mock_task = MagicMock()
         mock_task.task_id = "task-cred"
@@ -179,15 +179,15 @@ class TestCloneCatalogAsync:
 
         with (
             patch(
-                "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+                "deriva_mcp.tools.background_tasks.get_task_manager",
                 return_value=mock_task_manager,
             ),
             patch(
-                "deriva_ml_mcp.tools.background_tasks.get_credential",
+                "deriva_mcp.tools.background_tasks.get_credential",
                 return_value={"cookie": "test-cookie"},
             ),
             patch(
-                "deriva_ml_mcp.tools.background_tasks.derive_user_id",
+                "deriva_mcp.tools.background_tasks.derive_user_id",
                 return_value="credential_user_123",
             ),
         ):
@@ -209,7 +209,7 @@ class TestCloneCatalogAsync:
         self, bg_task_tools_disconnected, mock_task_manager
     ):
         """When credential lookup fails, falls back to 'default_user'."""
-        from deriva_ml_mcp.tasks import TaskType
+        from deriva_mcp.tasks import TaskType
 
         mock_task = MagicMock()
         mock_task.task_id = "task-default"
@@ -218,11 +218,11 @@ class TestCloneCatalogAsync:
 
         with (
             patch(
-                "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+                "deriva_mcp.tools.background_tasks.get_task_manager",
                 return_value=mock_task_manager,
             ),
             patch(
-                "deriva_ml_mcp.tools.background_tasks.get_credential",
+                "deriva_mcp.tools.background_tasks.get_credential",
                 side_effect=Exception("No credentials"),
             ),
         ):
@@ -240,7 +240,7 @@ class TestCloneCatalogAsync:
     async def test_clone_error_returns_error_status(self, bg_task_tools):
         """When task creation fails, return status=error."""
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             side_effect=RuntimeError("Task manager not available"),
         ):
             result = await bg_task_tools["clone_catalog_async"](
@@ -259,7 +259,7 @@ class TestCloneCatalogAsync:
         )
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["clone_catalog_async"](
@@ -303,7 +303,7 @@ class TestGetTaskStatus:
         mock_task_manager.get_task_snapshot_async.return_value = snapshot
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["get_task_status"](task_id="task-run")
@@ -342,7 +342,7 @@ class TestGetTaskStatus:
         mock_task_manager.get_task_snapshot_async.return_value = snapshot
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["get_task_status"](
@@ -367,7 +367,7 @@ class TestGetTaskStatus:
         mock_task_manager.get_task_snapshot_async.return_value = snapshot
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["get_task_status"](
@@ -383,7 +383,7 @@ class TestGetTaskStatus:
         mock_task_manager.get_task_snapshot_async.return_value = None
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["get_task_status"](task_id="nonexistent")
@@ -399,7 +399,7 @@ class TestGetTaskStatus:
         mock_task_manager.get_task_snapshot_async.return_value = snapshot
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools["get_task_status"](task_id="t1")
@@ -417,7 +417,7 @@ class TestGetTaskStatus:
         mock_task_manager.get_task_snapshot_async.return_value = snapshot
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools_disconnected["get_task_status"](task_id="t1")
@@ -438,7 +438,7 @@ class TestGetTaskStatus:
         mock_task_manager.get_task_snapshot_async.return_value = snapshot
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["get_task_status"](task_id="task-fail")
@@ -451,7 +451,7 @@ class TestGetTaskStatus:
     async def test_get_status_exception(self, bg_task_tools):
         """When an exception occurs, return status=error."""
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             side_effect=RuntimeError("Internal error"),
         ):
             result = await bg_task_tools["get_task_status"](task_id="t1")
@@ -487,7 +487,7 @@ class TestListTasks:
         mock_task_manager.list_tasks_snapshots_async.return_value = snapshots
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["list_tasks"]()
@@ -501,12 +501,12 @@ class TestListTasks:
     @pytest.mark.asyncio
     async def test_list_tasks_filter_by_status(self, bg_task_tools, mock_task_manager):
         """Filtering by status passes the correct TaskStatus enum."""
-        from deriva_ml_mcp.tasks import TaskStatus
+        from deriva_mcp.tasks import TaskStatus
 
         mock_task_manager.list_tasks_snapshots_async.return_value = []
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools["list_tasks"](status="running")
@@ -518,12 +518,12 @@ class TestListTasks:
     @pytest.mark.asyncio
     async def test_list_tasks_filter_by_type(self, bg_task_tools, mock_task_manager):
         """Filtering by task_type passes the correct TaskType enum."""
-        from deriva_ml_mcp.tasks import TaskType
+        from deriva_mcp.tasks import TaskType
 
         mock_task_manager.list_tasks_snapshots_async.return_value = []
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools["list_tasks"](task_type="clone_catalog")
@@ -535,12 +535,12 @@ class TestListTasks:
     @pytest.mark.asyncio
     async def test_list_tasks_filter_by_both(self, bg_task_tools, mock_task_manager):
         """Filtering by both status and task_type passes both enums."""
-        from deriva_ml_mcp.tasks import TaskStatus, TaskType
+        from deriva_mcp.tasks import TaskStatus, TaskType
 
         mock_task_manager.list_tasks_snapshots_async.return_value = []
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools["list_tasks"](
@@ -557,7 +557,7 @@ class TestListTasks:
         mock_task_manager.list_tasks_snapshots_async.return_value = []
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools["list_tasks"]()
@@ -573,7 +573,7 @@ class TestListTasks:
         mock_task_manager.list_tasks_snapshots_async.return_value = []
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["list_tasks"]()
@@ -585,7 +585,7 @@ class TestListTasks:
     async def test_list_tasks_invalid_status(self, bg_task_tools):
         """Invalid status value returns an error."""
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=MagicMock(),
         ):
             result = await bg_task_tools["list_tasks"](status="invalid_status")
@@ -596,7 +596,7 @@ class TestListTasks:
     async def test_list_tasks_invalid_type(self, bg_task_tools):
         """Invalid task_type value returns an error."""
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=MagicMock(),
         ):
             result = await bg_task_tools["list_tasks"](task_type="invalid_type")
@@ -611,7 +611,7 @@ class TestListTasks:
         mock_task_manager.list_tasks_snapshots_async.return_value = []
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools["list_tasks"]()
@@ -627,7 +627,7 @@ class TestListTasks:
         mock_task_manager.list_tasks_snapshots_async.return_value = []
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools_disconnected["list_tasks"]()
@@ -639,7 +639,7 @@ class TestListTasks:
     async def test_list_tasks_exception(self, bg_task_tools):
         """When an unexpected exception occurs, return status=error."""
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             side_effect=RuntimeError("Unexpected failure"),
         ):
             result = await bg_task_tools["list_tasks"]()
@@ -661,7 +661,7 @@ class TestCancelTask:
         mock_task_manager.cancel_task.return_value = True
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["cancel_task"](task_id="task-to-cancel")
@@ -677,7 +677,7 @@ class TestCancelTask:
         mock_task_manager.cancel_task.return_value = False
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["cancel_task"](task_id="no-such-task")
@@ -690,7 +690,7 @@ class TestCancelTask:
         mock_task_manager.cancel_task.return_value = False
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["cancel_task"](task_id="completed-task")
@@ -705,7 +705,7 @@ class TestCancelTask:
         mock_task_manager.cancel_task.return_value = True
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools["cancel_task"](task_id="t1")
@@ -720,7 +720,7 @@ class TestCancelTask:
         mock_task_manager.cancel_task.return_value = True
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             await bg_task_tools_disconnected["cancel_task"](task_id="t1")
@@ -731,7 +731,7 @@ class TestCancelTask:
     async def test_cancel_exception(self, bg_task_tools):
         """When an exception occurs during cancel, return status=error."""
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             side_effect=RuntimeError("Manager unavailable"),
         ):
             result = await bg_task_tools["cancel_task"](task_id="t1")
@@ -746,7 +746,7 @@ class TestCancelTask:
         mock_task_manager.cancel_task.side_effect = RuntimeError("Lock contention")
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_task_manager",
+            "deriva_mcp.tools.background_tasks.get_task_manager",
             return_value=mock_task_manager,
         ):
             result = await bg_task_tools["cancel_task"](task_id="t1")
@@ -764,7 +764,7 @@ class TestResolveHostname:
 
     def test_localhost_with_env_var(self):
         """When DERIVA_MCP_LOCALHOST_HOSTNAME is set, localhost is remapped."""
-        from deriva_ml_mcp.tools.background_tasks import _resolve_hostname
+        from deriva_mcp.tools.background_tasks import _resolve_hostname
 
         with patch.dict("os.environ", {"DERIVA_MCP_LOCALHOST_HOSTNAME": "deriva"}):
             result = _resolve_hostname("localhost")
@@ -773,7 +773,7 @@ class TestResolveHostname:
 
     def test_localhost_without_env_var(self):
         """When DERIVA_MCP_LOCALHOST_HOSTNAME is not set, localhost is unchanged."""
-        from deriva_ml_mcp.tools.background_tasks import _resolve_hostname
+        from deriva_mcp.tools.background_tasks import _resolve_hostname
 
         with patch.dict("os.environ", {}, clear=True):
             # Make sure the env var is not set
@@ -785,14 +785,14 @@ class TestResolveHostname:
 
     def test_non_localhost_hostname(self):
         """Non-localhost hostnames are returned unchanged."""
-        from deriva_ml_mcp.tools.background_tasks import _resolve_hostname
+        from deriva_mcp.tools.background_tasks import _resolve_hostname
 
         result = _resolve_hostname("www.example.org")
         assert result == "www.example.org"
 
     def test_none_hostname(self):
         """None hostname is returned as None."""
-        from deriva_ml_mcp.tools.background_tasks import _resolve_hostname
+        from deriva_mcp.tools.background_tasks import _resolve_hostname
 
         result = _resolve_hostname(None)
         assert result is None
@@ -803,15 +803,15 @@ class TestGetUserIdFromCredential:
 
     def test_with_valid_hostname(self):
         """With a valid hostname, derives user_id from credentials."""
-        from deriva_ml_mcp.tools.background_tasks import _get_user_id_from_credential
+        from deriva_mcp.tools.background_tasks import _get_user_id_from_credential
 
         with (
             patch(
-                "deriva_ml_mcp.tools.background_tasks.get_credential",
+                "deriva_mcp.tools.background_tasks.get_credential",
                 return_value={"cookie": "abc"},
             ),
             patch(
-                "deriva_ml_mcp.tools.background_tasks.derive_user_id",
+                "deriva_mcp.tools.background_tasks.derive_user_id",
                 return_value="user_hash_123",
             ),
         ):
@@ -821,17 +821,17 @@ class TestGetUserIdFromCredential:
 
     def test_with_none_hostname(self):
         """With no hostname, returns default_user."""
-        from deriva_ml_mcp.tools.background_tasks import _get_user_id_from_credential
+        from deriva_mcp.tools.background_tasks import _get_user_id_from_credential
 
         result = _get_user_id_from_credential(None)
         assert result == "default_user"
 
     def test_credential_exception(self):
         """When get_credential raises, falls back to default_user."""
-        from deriva_ml_mcp.tools.background_tasks import _get_user_id_from_credential
+        from deriva_mcp.tools.background_tasks import _get_user_id_from_credential
 
         with patch(
-            "deriva_ml_mcp.tools.background_tasks.get_credential",
+            "deriva_mcp.tools.background_tasks.get_credential",
             side_effect=Exception("No credential file"),
         ):
             result = _get_user_id_from_credential("www.example.org")
@@ -840,15 +840,15 @@ class TestGetUserIdFromCredential:
 
     def test_derive_user_id_exception(self):
         """When derive_user_id raises, falls back to default_user."""
-        from deriva_ml_mcp.tools.background_tasks import _get_user_id_from_credential
+        from deriva_mcp.tools.background_tasks import _get_user_id_from_credential
 
         with (
             patch(
-                "deriva_ml_mcp.tools.background_tasks.get_credential",
+                "deriva_mcp.tools.background_tasks.get_credential",
                 return_value={"cookie": "abc"},
             ),
             patch(
-                "deriva_ml_mcp.tools.background_tasks.derive_user_id",
+                "deriva_mcp.tools.background_tasks.derive_user_id",
                 side_effect=ValueError("Invalid credential format"),
             ),
         ):

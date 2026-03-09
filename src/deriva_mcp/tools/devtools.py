@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from mcp.server.fastmcp import FastMCP
 
 if TYPE_CHECKING:
-    from deriva_ml_mcp.connection import ConnectionManager
+    from deriva_mcp.connection import ConnectionManager
 
 
 def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:

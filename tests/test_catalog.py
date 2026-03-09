@@ -457,8 +457,8 @@ class TestCreateCatalogAlias:
         mock_server = MagicMock()
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value={"token": "abc"}),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value={"token": "abc"}),
         ):
             result = await catalog_tools["create_catalog_alias"](
                 hostname="test.example.org",
@@ -489,8 +489,8 @@ class TestCreateCatalogAlias:
         mock_server = MagicMock()
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["create_catalog_alias"](
                 hostname="test.example.org",
@@ -510,8 +510,8 @@ class TestCreateCatalogAlias:
         mock_server.create_ermrest_alias.side_effect = Exception("Alias already exists")
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["create_catalog_alias"](
                 hostname="test.example.org",
@@ -543,8 +543,8 @@ class TestUpdateCatalogAlias:
         mock_server.connect_ermrest_alias.return_value = mock_alias
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["update_catalog_alias"](
                 hostname="test.example.org",
@@ -568,8 +568,8 @@ class TestUpdateCatalogAlias:
         mock_server.connect_ermrest_alias.return_value = mock_alias
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["update_catalog_alias"](
                 hostname="test.example.org",
@@ -589,8 +589,8 @@ class TestUpdateCatalogAlias:
         mock_server.connect_ermrest_alias.return_value = mock_alias
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["update_catalog_alias"](
                 hostname="test.example.org",
@@ -611,8 +611,8 @@ class TestUpdateCatalogAlias:
         mock_server.connect_ermrest_alias.return_value = mock_alias
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["update_catalog_alias"](
                 hostname="test.example.org",
@@ -629,8 +629,8 @@ class TestUpdateCatalogAlias:
         mock_server.connect_ermrest_alias.side_effect = Exception("Alias not found")
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["update_catalog_alias"](
                 hostname="test.example.org",
@@ -656,8 +656,8 @@ class TestDeleteCatalogAlias:
         mock_server.connect_ermrest_alias.return_value = mock_alias
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["delete_catalog_alias"](
                 hostname="test.example.org",
@@ -678,8 +678,8 @@ class TestDeleteCatalogAlias:
         mock_server.connect_ermrest_alias.side_effect = Exception("Not authorized")
 
         with (
-            patch("deriva_ml_mcp.tools.catalog.DerivaServer", return_value=mock_server),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.DerivaServer", return_value=mock_server),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["delete_catalog_alias"](
                 hostname="test.example.org",
@@ -744,10 +744,10 @@ class TestCloneCatalog:
                 return_value=mock_result,
             ) as mock_create,
             patch(
-                "deriva_ml_mcp.tools.catalog._resolve_hostname",
+                "deriva_mcp.tools.catalog._resolve_hostname",
                 side_effect=lambda h: h,
             ),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["clone_catalog"](
                 source_hostname="source.example.org",
@@ -778,10 +778,10 @@ class TestCloneCatalog:
                 return_value=mock_result,
             ),
             patch(
-                "deriva_ml_mcp.tools.catalog._resolve_hostname",
+                "deriva_mcp.tools.catalog._resolve_hostname",
                 side_effect=lambda h: h,
             ),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["clone_catalog"](
                 source_hostname="source.example.org",
@@ -803,10 +803,10 @@ class TestCloneCatalog:
                 return_value=mock_result,
             ),
             patch(
-                "deriva_ml_mcp.tools.catalog._resolve_hostname",
+                "deriva_mcp.tools.catalog._resolve_hostname",
                 side_effect=lambda h: h,
             ),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["clone_catalog"](
                 source_hostname="source.example.org",
@@ -833,10 +833,10 @@ class TestCloneCatalog:
                 return_value=mock_result,
             ),
             patch(
-                "deriva_ml_mcp.tools.catalog._resolve_hostname",
+                "deriva_mcp.tools.catalog._resolve_hostname",
                 side_effect=lambda h: h,
             ),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["clone_catalog"](
                 source_hostname="source.example.org",
@@ -860,11 +860,11 @@ class TestCloneCatalog:
                 return_value=mock_result,
             ) as mock_create,
             patch(
-                "deriva_ml_mcp.tools.catalog._resolve_hostname",
+                "deriva_mcp.tools.catalog._resolve_hostname",
                 side_effect=lambda h: "docker-host" if h == "localhost" else h,
             ),
             patch(
-                "deriva_ml_mcp.tools.catalog.get_credential",
+                "deriva_mcp.tools.catalog.get_credential",
                 return_value={"token": "xyz"},
             ) as mock_cred,
         ):
@@ -887,10 +887,10 @@ class TestCloneCatalog:
                 side_effect=Exception("Source catalog not found"),
             ),
             patch(
-                "deriva_ml_mcp.tools.catalog._resolve_hostname",
+                "deriva_mcp.tools.catalog._resolve_hostname",
                 side_effect=lambda h: h,
             ),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["clone_catalog"](
                 source_hostname="bad.host",
@@ -912,10 +912,10 @@ class TestCloneCatalog:
                 return_value=mock_result,
             ),
             patch(
-                "deriva_ml_mcp.tools.catalog._resolve_hostname",
+                "deriva_mcp.tools.catalog._resolve_hostname",
                 side_effect=lambda h: h,
             ),
-            patch("deriva_ml_mcp.tools.catalog.get_credential", return_value=None),
+            patch("deriva_mcp.tools.catalog.get_credential", return_value=None),
         ):
             result = await catalog_tools["clone_catalog"](
                 source_hostname="source.example.org",

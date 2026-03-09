@@ -34,8 +34,8 @@ from typing import TYPE_CHECKING, Any
 
 from deriva.core import get_credential
 
-from deriva_ml_mcp.connection import derive_user_id
-from deriva_ml_mcp.tasks import (
+from deriva_mcp.connection import derive_user_id
+from deriva_mcp.tasks import (
     TaskProgress,
     TaskStatus,
     TaskType,
@@ -45,7 +45,7 @@ from deriva_ml_mcp.tasks import (
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
-    from deriva_ml_mcp.connection import ConnectionManager
+    from deriva_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-mcp")
 

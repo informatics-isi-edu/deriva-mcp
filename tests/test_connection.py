@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from deriva_ml_mcp.connection import (
+from deriva_mcp.connection import (
     ConnectionManager,
     ConnectionInfo,
     MCP_WORKFLOW_TYPE,
@@ -81,7 +81,7 @@ class TestConnectionManager:
         with pytest.raises(DerivaMLException, match="No active execution context"):
             manager.get_active_execution_or_raise()
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
+    @patch("deriva_mcp.connection.DerivaML")
     def test_connect_success(self, mock_derivaml):
         """Test successful connection."""
         mock_instance = MagicMock()
@@ -101,7 +101,7 @@ class TestConnectionManager:
         assert manager._active_connection == "default_user:example.org:123"
         assert len(manager._connections) == 1
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
+    @patch("deriva_mcp.connection.DerivaML")
     def test_connect_creates_workflow_and_execution(self, mock_derivaml):
         """Test that connect creates MCP workflow and execution."""
         mock_instance = MagicMock()
@@ -125,7 +125,7 @@ class TestConnectionManager:
         assert conn_info.workflow_rid == "WF-123"
         assert conn_info.execution == mock_execution
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
+    @patch("deriva_mcp.connection.DerivaML")
     def test_connect_reuses_existing(self, mock_derivaml):
         """Test that connecting to same catalog reuses connection."""
         mock_instance = MagicMock()
@@ -142,7 +142,7 @@ class TestConnectionManager:
         # DerivaML is called twice (to derive user_id), but only one connection is stored
         assert len(manager._connections) == 1
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
+    @patch("deriva_mcp.connection.DerivaML")
     def test_disconnect(self, mock_derivaml):
         """Test disconnecting from a catalog."""
         mock_instance = MagicMock()
@@ -157,7 +157,7 @@ class TestConnectionManager:
         assert manager._active_connection is None
         assert len(manager._connections) == 0
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
+    @patch("deriva_mcp.connection.DerivaML")
     def test_disconnect_closes_execution(self, mock_derivaml):
         """Test that disconnect closes the execution context."""
         mock_instance = MagicMock()
@@ -181,7 +181,7 @@ class TestConnectionManager:
         manager = ConnectionManager()
         assert manager.disconnect() is False
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
+    @patch("deriva_mcp.connection.DerivaML")
     def test_set_active(self, mock_derivaml):
         """Test setting active connection."""
         mock_instance = MagicMock()
@@ -205,7 +205,7 @@ class TestConnectionManager:
         result = manager.set_active("example.org", "123")
         assert result is False
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
+    @patch("deriva_mcp.connection.DerivaML")
     def test_list_connections_includes_execution_info(self, mock_derivaml):
         """Test listing connections includes workflow and execution info."""
         mock_instance = MagicMock()
@@ -225,7 +225,7 @@ class TestConnectionManager:
         assert connections[0]["workflow_rid"] == "WF-123"
         assert connections[0]["execution_rid"] == "EXE-123"
 
-    @patch("deriva_ml_mcp.connection.DerivaML")
+    @patch("deriva_mcp.connection.DerivaML")
     def test_list_connections_multiple(self, mock_derivaml):
         """Test listing multiple connections."""
         mock_instance = MagicMock()

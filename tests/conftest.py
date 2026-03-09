@@ -29,7 +29,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from deriva_ml_mcp.connection import ConnectionManager
+from deriva_mcp.connection import ConnectionManager
 
 if TYPE_CHECKING:
     from deriva_ml import DerivaML
@@ -179,7 +179,7 @@ def disconnected_conn_manager():
 @pytest.fixture
 def vocab_tools(mock_conn_manager):
     """Capture vocabulary tools with a connected mock."""
-    from deriva_ml_mcp.tools.vocabulary import register_vocabulary_tools
+    from deriva_mcp.tools.vocabulary import register_vocabulary_tools
     mcp, tools = _create_tool_capture()
     register_vocabulary_tools(mcp, mock_conn_manager)
     return tools
@@ -188,7 +188,7 @@ def vocab_tools(mock_conn_manager):
 @pytest.fixture
 def vocab_tools_disconnected(disconnected_conn_manager):
     """Capture vocabulary tools with no connection."""
-    from deriva_ml_mcp.tools.vocabulary import register_vocabulary_tools
+    from deriva_mcp.tools.vocabulary import register_vocabulary_tools
     mcp, tools = _create_tool_capture()
     register_vocabulary_tools(mcp, disconnected_conn_manager)
     return tools
@@ -197,7 +197,7 @@ def vocab_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def data_tools(mock_conn_manager):
     """Capture data tools with a connected mock."""
-    from deriva_ml_mcp.tools.data import register_data_tools
+    from deriva_mcp.tools.data import register_data_tools
     mcp, tools = _create_tool_capture()
     register_data_tools(mcp, mock_conn_manager)
     return tools
@@ -206,7 +206,7 @@ def data_tools(mock_conn_manager):
 @pytest.fixture
 def data_tools_disconnected(disconnected_conn_manager):
     """Capture data tools with no connection."""
-    from deriva_ml_mcp.tools.data import register_data_tools
+    from deriva_mcp.tools.data import register_data_tools
     mcp, tools = _create_tool_capture()
     register_data_tools(mcp, disconnected_conn_manager)
     return tools
@@ -215,7 +215,7 @@ def data_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def workflow_tools(mock_conn_manager):
     """Capture workflow tools with a connected mock."""
-    from deriva_ml_mcp.tools.workflow import register_workflow_tools
+    from deriva_mcp.tools.workflow import register_workflow_tools
     mcp, tools = _create_tool_capture()
     register_workflow_tools(mcp, mock_conn_manager)
     return tools
@@ -224,7 +224,7 @@ def workflow_tools(mock_conn_manager):
 @pytest.fixture
 def workflow_tools_disconnected(disconnected_conn_manager):
     """Capture workflow tools with no connection."""
-    from deriva_ml_mcp.tools.workflow import register_workflow_tools
+    from deriva_mcp.tools.workflow import register_workflow_tools
     mcp, tools = _create_tool_capture()
     register_workflow_tools(mcp, disconnected_conn_manager)
     return tools
@@ -233,7 +233,7 @@ def workflow_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def feature_tools(mock_conn_manager):
     """Capture feature tools with a connected mock."""
-    from deriva_ml_mcp.tools.feature import register_feature_tools
+    from deriva_mcp.tools.feature import register_feature_tools
     mcp, tools = _create_tool_capture()
     register_feature_tools(mcp, mock_conn_manager)
     return tools
@@ -242,7 +242,7 @@ def feature_tools(mock_conn_manager):
 @pytest.fixture
 def feature_tools_disconnected(disconnected_conn_manager):
     """Capture feature tools with no connection."""
-    from deriva_ml_mcp.tools.feature import register_feature_tools
+    from deriva_mcp.tools.feature import register_feature_tools
     mcp, tools = _create_tool_capture()
     register_feature_tools(mcp, disconnected_conn_manager)
     return tools
@@ -251,7 +251,7 @@ def feature_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def catalog_tools(mock_conn_manager):
     """Capture catalog tools with a connected mock."""
-    from deriva_ml_mcp.tools.catalog import register_catalog_tools
+    from deriva_mcp.tools.catalog import register_catalog_tools
     mcp, tools = _create_tool_capture()
     register_catalog_tools(mcp, mock_conn_manager)
     return tools
@@ -260,7 +260,7 @@ def catalog_tools(mock_conn_manager):
 @pytest.fixture
 def catalog_tools_disconnected(disconnected_conn_manager):
     """Capture catalog tools with no connection."""
-    from deriva_ml_mcp.tools.catalog import register_catalog_tools
+    from deriva_mcp.tools.catalog import register_catalog_tools
     mcp, tools = _create_tool_capture()
     register_catalog_tools(mcp, disconnected_conn_manager)
     return tools
@@ -269,7 +269,7 @@ def catalog_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def dataset_tools(mock_conn_manager):
     """Capture dataset tools with a connected mock."""
-    from deriva_ml_mcp.tools.dataset import register_dataset_tools
+    from deriva_mcp.tools.dataset import register_dataset_tools
     mcp, tools = _create_tool_capture()
     register_dataset_tools(mcp, mock_conn_manager)
     return tools
@@ -278,7 +278,7 @@ def dataset_tools(mock_conn_manager):
 @pytest.fixture
 def dataset_tools_disconnected(disconnected_conn_manager):
     """Capture dataset tools with no connection."""
-    from deriva_ml_mcp.tools.dataset import register_dataset_tools
+    from deriva_mcp.tools.dataset import register_dataset_tools
     mcp, tools = _create_tool_capture()
     register_dataset_tools(mcp, disconnected_conn_manager)
     return tools
@@ -287,7 +287,7 @@ def dataset_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def schema_tools(mock_conn_manager):
     """Capture schema tools with a connected mock."""
-    from deriva_ml_mcp.tools.schema import register_schema_tools
+    from deriva_mcp.tools.schema import register_schema_tools
     mcp, tools = _create_tool_capture()
     register_schema_tools(mcp, mock_conn_manager)
     return tools
@@ -296,7 +296,7 @@ def schema_tools(mock_conn_manager):
 @pytest.fixture
 def schema_tools_disconnected(disconnected_conn_manager):
     """Capture schema tools with no connection."""
-    from deriva_ml_mcp.tools.schema import register_schema_tools
+    from deriva_mcp.tools.schema import register_schema_tools
     mcp, tools = _create_tool_capture()
     register_schema_tools(mcp, disconnected_conn_manager)
     return tools
@@ -305,7 +305,7 @@ def schema_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def execution_tools(mock_conn_manager):
     """Capture execution tools with a connected mock."""
-    from deriva_ml_mcp.tools.execution import register_execution_tools
+    from deriva_mcp.tools.execution import register_execution_tools
     mcp, tools = _create_tool_capture()
     register_execution_tools(mcp, mock_conn_manager)
     return tools
@@ -314,7 +314,7 @@ def execution_tools(mock_conn_manager):
 @pytest.fixture
 def execution_tools_disconnected(disconnected_conn_manager):
     """Capture execution tools with no connection."""
-    from deriva_ml_mcp.tools.execution import register_execution_tools
+    from deriva_mcp.tools.execution import register_execution_tools
     mcp, tools = _create_tool_capture()
     register_execution_tools(mcp, disconnected_conn_manager)
     return tools
@@ -323,7 +323,7 @@ def execution_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def storage_tools(mock_conn_manager):
     """Capture storage tools with a connected mock."""
-    from deriva_ml_mcp.tools.execution import register_storage_tools
+    from deriva_mcp.tools.execution import register_storage_tools
     mcp, tools = _create_tool_capture()
     register_storage_tools(mcp, mock_conn_manager)
     return tools
@@ -332,7 +332,7 @@ def storage_tools(mock_conn_manager):
 @pytest.fixture
 def annotation_tools(mock_conn_manager):
     """Capture annotation tools with a connected mock."""
-    from deriva_ml_mcp.tools.annotation import register_annotation_tools
+    from deriva_mcp.tools.annotation import register_annotation_tools
     mcp, tools = _create_tool_capture()
     register_annotation_tools(mcp, mock_conn_manager)
     return tools
@@ -341,7 +341,7 @@ def annotation_tools(mock_conn_manager):
 @pytest.fixture
 def annotation_tools_disconnected(disconnected_conn_manager):
     """Capture annotation tools with no connection."""
-    from deriva_ml_mcp.tools.annotation import register_annotation_tools
+    from deriva_mcp.tools.annotation import register_annotation_tools
     mcp, tools = _create_tool_capture()
     register_annotation_tools(mcp, disconnected_conn_manager)
     return tools
@@ -350,7 +350,7 @@ def annotation_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def bg_task_tools(mock_conn_manager):
     """Capture background task tools with a connected mock."""
-    from deriva_ml_mcp.tools.background_tasks import register_background_task_tools
+    from deriva_mcp.tools.background_tasks import register_background_task_tools
     mcp, tools = _create_tool_capture()
     register_background_task_tools(mcp, mock_conn_manager)
     return tools
@@ -359,7 +359,7 @@ def bg_task_tools(mock_conn_manager):
 @pytest.fixture
 def devtools(mock_conn_manager):
     """Capture devtools with a connected mock."""
-    from deriva_ml_mcp.tools.devtools import register_devtools
+    from deriva_mcp.tools.devtools import register_devtools
     mcp, tools = _create_tool_capture()
     register_devtools(mcp, mock_conn_manager)
     return tools
@@ -368,7 +368,7 @@ def devtools(mock_conn_manager):
 @pytest.fixture
 def devtools_disconnected(disconnected_conn_manager):
     """Capture devtools with no connection."""
-    from deriva_ml_mcp.tools.devtools import register_devtools
+    from deriva_mcp.tools.devtools import register_devtools
     mcp, tools = _create_tool_capture()
     register_devtools(mcp, disconnected_conn_manager)
     return tools
@@ -382,7 +382,7 @@ def devtools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def captured_resources(mock_conn_manager):
     """Capture all resources with a connected mock."""
-    from deriva_ml_mcp.resources import register_resources
+    from deriva_mcp.resources import register_resources
     mcp, resources = _create_resource_capture()
     register_resources(mcp, mock_conn_manager)
     return resources
@@ -391,7 +391,7 @@ def captured_resources(mock_conn_manager):
 @pytest.fixture
 def captured_resources_disconnected(disconnected_conn_manager):
     """Capture all resources with no connection."""
-    from deriva_ml_mcp.resources import register_resources
+    from deriva_mcp.resources import register_resources
     mcp, resources = _create_resource_capture()
     register_resources(mcp, disconnected_conn_manager)
     return resources

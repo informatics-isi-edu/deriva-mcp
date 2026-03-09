@@ -16,9 +16,9 @@ import json
 
 from mcp.server.fastmcp import FastMCP
 
-from deriva_ml_mcp import __version__
-from deriva_ml_mcp.connection import ConnectionManager
-from deriva_ml_mcp.github_docs import fetch_doc
+from deriva_mcp import __version__
+from deriva_mcp.connection import ConnectionManager
+from deriva_mcp.github_docs import fetch_doc
 
 
 def register_resources(mcp: FastMCP, conn_manager: ConnectionManager) -> None:

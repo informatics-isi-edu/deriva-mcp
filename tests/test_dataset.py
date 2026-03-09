@@ -528,7 +528,7 @@ class TestIncrementDatasetVersion:
         mock_dataset.increment_dataset_version.return_value = "0.6.0"
         mock_ml.lookup_dataset.return_value = mock_dataset
 
-        with patch("deriva_ml_mcp.tools.dataset.VersionPart", create=True):
+        with patch("deriva_mcp.tools.dataset.VersionPart", create=True):
             result = await dataset_tools["increment_dataset_version"](
                 dataset_rid="DS-001",
                 description="Added new images",
@@ -1860,7 +1860,7 @@ class TestSerializeDataset:
 
     def test_serialize_basic(self):
         """Basic serialization extracts expected fields."""
-        from deriva_ml_mcp.tools.dataset import _serialize_dataset
+        from deriva_mcp.tools.dataset import _serialize_dataset
 
         mock_ds = _make_mock_dataset(
             dataset_rid="DS-100",
@@ -1878,7 +1878,7 @@ class TestSerializeDataset:
 
     def test_serialize_null_version(self):
         """When current_version is None, serializes as None."""
-        from deriva_ml_mcp.tools.dataset import _serialize_dataset
+        from deriva_mcp.tools.dataset import _serialize_dataset
 
         mock_ds = _make_mock_dataset(current_version=None)
 
@@ -1888,7 +1888,7 @@ class TestSerializeDataset:
 
     def test_serialize_empty_types(self):
         """Empty dataset_types serializes as empty list."""
-        from deriva_ml_mcp.tools.dataset import _serialize_dataset
+        from deriva_mcp.tools.dataset import _serialize_dataset
 
         mock_ds = _make_mock_dataset(dataset_types=[])
 
