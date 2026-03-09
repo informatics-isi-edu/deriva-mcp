@@ -43,7 +43,7 @@ scripts = [
 ]
 
 [project.scripts]
-deriva-mcp = "deriva_ml_mcp.server:main"
+deriva-mcp = "deriva_mcp.server:main"
 
 [build-system]
 requires = ["setuptools>=80", "setuptools_scm[toml]>=8", "wheel"]
@@ -72,7 +72,7 @@ sign_tags = false
 tag_name = "v{new_version}"
 tag_message = "Bump version: {current_version} → {new_version}"
 allow_dirty = false
-commit = false
+commit = true
 message = "Bump version: {current_version} → {new_version}"
 
 [tool.ruff]
