@@ -1,6 +1,6 @@
 ---
 name: write-hydra-config
-description: "Authoritative reference for writing and validating hydra-zen config files for DerivaML — datasets, assets, workflows, model configs, experiments, multiruns, and notebook configs. Use whenever adding, editing, or updating any config in a DerivaML project's configs/ directory, after creating catalog entities that should be reflected in configs, or when validating that config RIDs and versions match the catalog."
+description: "Write and validate hydra-zen config files for DerivaML — DatasetSpecConfig, asset_store, builds(), experiment_config, multirun_config, with_description. Use when adding, editing, or updating any config in configs/, or when validating that config RIDs and versions match the catalog."
 user-invocable: true
 ---
 

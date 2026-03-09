@@ -1,6 +1,6 @@
 ---
 name: configure-experiment
-description: "ALWAYS use this skill when setting up a DerivaML experiment project from scratch or adding new config groups. Covers project structure, config groups (deriva, datasets, assets, workflow, model_config), experiment composition, and the hydra-zen configuration system."
+description: "ALWAYS use this skill when setting up a DerivaML experiment project, adding config groups, or understanding how experiments compose. Triggers on: 'set up experiment', 'config groups', 'project structure', 'hydra defaults', 'DerivaModelConfig', 'experiment preset', 'new project from template'."
 ---
 
 # Configure ML Experiments with hydra-zen and DerivaML

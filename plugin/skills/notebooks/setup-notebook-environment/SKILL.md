@@ -1,6 +1,6 @@
 ---
 name: setup-notebook-environment
-description: "Step-by-step guide to set up environment for running DerivaML notebooks"
+description: "Set up the environment for running DerivaML Jupyter notebooks — install kernel, uv sync --group=jupyter, configure nbstripout, authenticate with Deriva. Use before developing or running notebooks for the first time."
 ---
 
 # Set Up Environment for DerivaML Notebooks

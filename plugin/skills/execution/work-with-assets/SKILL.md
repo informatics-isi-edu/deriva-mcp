@@ -1,6 +1,6 @@
 ---
 name: work-with-assets
-description: "Step-by-step guide to discovering, querying, and downloading Deriva assets (files, images, models, CSVs) - find asset tables, check provenance, download files. For uploading assets and creating asset tables, see run-ml-execution."
+description: "Discover, query, and download Deriva assets (files, images, model weights, CSVs) — find asset tables, check provenance, download files, trace which executions created an asset. For uploading assets, see run-ml-execution."
 ---
 
 # Working with Deriva Assets

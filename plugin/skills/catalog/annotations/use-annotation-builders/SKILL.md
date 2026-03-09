@@ -1,6 +1,6 @@
 ---
 name: use-annotation-builders
-description: "Python type-safe annotation builder classes for production Deriva catalog code"
+description: "Write Python scripts using type-safe annotation builder classes (ColumnAnnotation, TableAnnotation, KeyAnnotation) for production Deriva catalog code. Use when writing Python code to configure catalog display, not when using interactive MCP tools."
 ---
 
 # Using Annotation Builder Classes

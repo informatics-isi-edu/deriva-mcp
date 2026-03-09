@@ -1,6 +1,6 @@
 ---
 name: run-notebook
-description: "ALWAYS use this skill when developing or running DerivaML Jupyter notebooks with execution tracking. Covers notebook structure (parameters cell, execution context), running notebooks via CLI or MCP tools, commit/version workflow, and troubleshooting."
+description: "ALWAYS use this skill when developing or running DerivaML Jupyter notebooks with execution tracking. Triggers on: 'run notebook', 'jupyter', 'papermill', 'parameters cell', 'notebook structure', 'deriva-ml-run-notebook', 'notebook with provenance'."
 ---
 
 # Develop and Run a DerivaML Notebook

@@ -1,6 +1,6 @@
 ---
 name: query-catalog-data
-description: "ALWAYS use this skill when querying, filtering, searching, or browsing data in a Deriva catalog. Covers querying tables, filtering records, pagination, RID lookups, schema exploration, vocabulary lookups, feature queries, dataset denormalization, asset provenance, and the Chaise web interface."
+description: "ALWAYS use this skill when querying, filtering, searching, or browsing data in a Deriva catalog. Triggers on: 'query table', 'find records', 'filter by', 'how many records', 'look up RID', 'what tables exist', 'show me the data', 'explore the catalog', 'get record by RID'."
 ---
 
 # Querying and Exploring Data in a Deriva Catalog

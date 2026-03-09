@@ -1,6 +1,6 @@
 ---
 name: generate-descriptions
-description: "ALWAYS use: Generate meaningful descriptions for Deriva catalog entities (datasets, executions, features, tables, columns, vocabularies) when user doesn't provide one"
+description: "ALWAYS use when creating any Deriva catalog entity (dataset, execution, feature, table, column, vocabulary, workflow) and the user hasn't provided a description. Auto-generate a meaningful description from context."
 user-invocable: false
 ---
 

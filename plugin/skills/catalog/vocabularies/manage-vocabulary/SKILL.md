@@ -1,6 +1,6 @@
 ---
 name: manage-vocabulary
-description: "Step-by-step guide to create and manage controlled vocabularies in Deriva — add terms, synonyms, descriptions, and browse existing vocabularies. Use whenever working with categorical data, labels, or controlled term lists independent of features."
+description: "Create and manage controlled vocabularies in Deriva — create vocabulary tables, add terms with descriptions, add synonyms, and browse existing vocabularies. Use whenever working with categorical data, labels, or controlled term lists independent of features."
 user-invocable: true
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: customize-display
-description: "Customize Chaise web UI display using MCP annotation tools for Deriva catalogs"
+description: "Customize the Chaise web UI display for Deriva catalog tables using MCP annotation tools. Use when setting visible columns, reordering columns, changing display names, configuring row name patterns, or adjusting how tables and records appear in the browser UI."
 ---
 
 # Customizing Chaise Web UI Display

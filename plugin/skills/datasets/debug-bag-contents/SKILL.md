@@ -1,6 +1,6 @@
 ---
 name: debug-bag-contents
-description: "Step-by-step guide for diagnosing missing data in DerivaML dataset bag exports"
+description: "Diagnose missing data in DerivaML dataset bag (BDBag) exports — FK traversal issues, missing tables, materialization problems, export timeouts. Use when a downloaded dataset bag is missing expected records, images, or feature values."
 ---
 
 # Debugging Dataset Bag Contents

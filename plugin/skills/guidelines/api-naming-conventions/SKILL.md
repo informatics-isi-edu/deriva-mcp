@@ -1,6 +1,6 @@
 ---
 name: api-naming-conventions
-description: "Reference guide for DerivaML API naming conventions - lookup_ vs find_ vs list_ vs get_ vs create_ vs add_ method prefixes"
+description: "Reference for DerivaML API naming conventions — when to use lookup_ vs find_ vs list_ vs get_ vs create_ vs add_ method prefixes. Use when choosing the right method name or understanding why a method is named the way it is."
 user-invocable: false
 ---
 

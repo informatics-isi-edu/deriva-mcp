@@ -1,6 +1,6 @@
 ---
 name: troubleshoot-execution
-description: "ALWAYS use: When any DerivaML execution fails, produces errors, gets stuck, or has unexpected results - covers authentication errors, missing files, stuck executions, version mismatches, permission denied, and upload timeouts"
+description: "ALWAYS use when any DerivaML execution fails, errors, gets stuck, or produces unexpected results. Covers authentication errors, missing files, stuck 'Running' status, version mismatches, permission denied, upload timeouts, and dataset download failures."
 user-invocable: false
 ---
 

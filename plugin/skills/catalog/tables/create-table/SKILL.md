@@ -1,6 +1,6 @@
 ---
 name: create-table
-description: "ALWAYS use this skill when creating tables, asset tables, or adding columns in a Deriva catalog. Covers table types (standard, asset, vocabulary), column types, foreign keys, naming conventions, and documentation best practices."
+description: "ALWAYS use this skill when creating tables, asset tables, or adding columns in a Deriva catalog. Triggers on: 'create table', 'add column', 'asset table', 'foreign key', 'define schema', 'new table for images/subjects/samples', 'column types'."
 ---
 
 # Creating Domain Tables in Deriva

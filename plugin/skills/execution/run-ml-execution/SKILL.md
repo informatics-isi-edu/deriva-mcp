@@ -1,6 +1,6 @@
 ---
 name: run-ml-execution
-description: "ALWAYS use this skill when running ML executions with provenance tracking in DerivaML. Covers the execution lifecycle (create/start/work/stop/upload), Python context manager pattern, MCP tools workflow, ExecutionConfiguration, output file registration, nested executions, and asset management."
+description: "ALWAYS use this skill when running ML executions with provenance tracking in DerivaML — the execution lifecycle, context managers, output registration, and nested executions. Triggers on: 'create execution', 'run with provenance', 'upload outputs', 'asset_file_path', 'execution lifecycle', 'track my work'."
 ---
 
 # Running an ML Execution with Provenance

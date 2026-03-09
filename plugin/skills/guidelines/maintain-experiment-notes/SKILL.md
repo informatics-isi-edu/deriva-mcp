@@ -1,6 +1,6 @@
 ---
 name: maintain-experiment-notes
-description: "ALWAYS use: After any significant experiment decision — dataset creation, split strategy, feature selection, hyperparameter choice, architecture selection, or catalog structure change — automatically append the decision and its rationale to experiment-decisions.md. Triggers on create_dataset, split_dataset, create_feature, create_execution, configure-experiment, or any discussion where the user chooses between alternatives."
+description: "ALWAYS use after any significant experiment decision — dataset creation, split strategy, feature selection, hyperparameter choice, architecture selection, or catalog structure change. Append the decision and rationale to experiment-decisions.md automatically."
 user-invocable: false
 ---
 

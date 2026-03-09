@@ -1,6 +1,6 @@
 ---
 name: run-experiment
-description: "ALWAYS use this skill when running experiments with deriva-ml-run. Covers the pre-flight checklist (git status, version, lock file), dry run testing, CLI commands, Hydra overrides, multirun sweeps, and result verification."
+description: "ALWAYS use this skill when running experiments with deriva-ml-run — pre-flight checks, dry runs, CLI commands, and result verification. Triggers on: 'run experiment', 'deriva-ml-run', 'dry run', 'multirun', 'sweep', 'pre-flight', 'check git status before running'."
 ---
 
 # Run an Experiment with deriva-ml-run

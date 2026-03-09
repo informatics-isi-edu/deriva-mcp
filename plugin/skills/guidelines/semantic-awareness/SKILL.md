@@ -1,6 +1,6 @@
 ---
 name: semantic-awareness
-description: "ALWAYS use: Before creating new tables, vocabularies, features, datasets, or workflows in Deriva catalogs, search for existing entities to prevent duplicates. Also use when looking up, searching for, or referencing any catalog entity by name or concept — even if the name is misspelled, abbreviated, or uses a synonym. Triggers whenever the user asks to create, add, define, find, search, or look up any catalog entity. Decides whether to reuse, extend, or create."
+description: "ALWAYS use before creating new tables, vocabularies, features, datasets, or workflows in Deriva catalogs. Search for existing entities to prevent duplicates — even if names are misspelled, abbreviated, or use synonyms. Also use when looking up or referencing any catalog entity by name or concept."
 user-invocable: false
 ---
 

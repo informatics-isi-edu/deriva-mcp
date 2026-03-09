@@ -1,6 +1,6 @@
 ---
 name: create-feature
-description: "ALWAYS use this skill when creating features, adding labels or annotations to records, setting up classification categories, attaching metadata like confidence scores to domain objects, or working with feature values. Covers vocabulary creation, feature definition, and populating feature values with provenance."
+description: "ALWAYS use this skill when creating features, adding labels or annotations to records, setting up classification categories, or working with feature values in DerivaML. Triggers on: 'create feature', 'add labels', 'annotate images', 'classification', 'ground truth', 'confidence score', 'vocabulary terms for labeling'."
 ---
 
 # Creating and Populating Features in DerivaML

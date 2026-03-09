@@ -1,6 +1,6 @@
 ---
 name: create-dataset
-description: "ALWAYS use this skill when creating, populating, splitting, or managing datasets in DerivaML. Covers dataset creation within executions, element types, members, types, splits (random/stratified/labeled), versioning, nested datasets, and provenance tracking."
+description: "ALWAYS use this skill when creating, populating, splitting, or managing datasets in DerivaML — including adding members, registering element types, train/test splits, versioning, nested datasets, and provenance. Triggers on: 'create a dataset', 'split dataset', 'add members', 'training/testing split', 'dataset types'."
 ---
 
 # Creating and Managing Datasets in DerivaML

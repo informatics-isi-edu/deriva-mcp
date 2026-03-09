@@ -1,6 +1,6 @@
 ---
 name: coding-guidelines
-description: "Recommended workflow and coding standards for DerivaML projects - use when setting up a new project, configuring uv/pyproject.toml, establishing Git workflow, writing docstrings, or setting up ruff linting"
+description: "Coding standards and project setup for DerivaML projects — uv/pyproject.toml configuration, Git workflow, Google docstrings, ruff linting, type hints. Use when setting up a new project or establishing development practices."
 ---
 
 # Coding Guidelines for DerivaML Projects

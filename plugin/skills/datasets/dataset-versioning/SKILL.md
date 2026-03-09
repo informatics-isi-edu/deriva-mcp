@@ -1,6 +1,6 @@
 ---
 name: dataset-versioning
-description: "CRITICAL: Dataset version management rules for DerivaML - always use explicit versions for experiments, increment after catalog changes"
+description: "Dataset version management rules for DerivaML — always use explicit versions in DatasetSpecConfig, increment after catalog changes, check versions before experiments. Use when pinning versions, debugging version mismatches, or understanding the versioning lifecycle."
 user-invocable: false
 ---
 

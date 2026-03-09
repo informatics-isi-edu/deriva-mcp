@@ -1,6 +1,6 @@
 ---
 name: prepare-training-data
-description: "Step-by-step guide to prepare DerivaML dataset for ML training - denormalize to DataFrame, download BDBag, build training features and labels, extract images"
+description: "Prepare a DerivaML dataset for ML training — denormalize to DataFrame, download BDBag, build training features and labels, extract images, restructure assets. Use when getting data out of the catalog and into a format for model training or analysis."
 ---
 
 # Preparing Training Data from a DerivaML Dataset

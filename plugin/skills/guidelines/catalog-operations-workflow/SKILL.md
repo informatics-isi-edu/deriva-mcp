@@ -1,6 +1,6 @@
 ---
 name: catalog-operations-workflow
-description: "ALWAYS use: When performing Deriva catalog operations (dataset creation, splitting, ETL, feature creation), generate a committed script for full provenance tracking"
+description: "ALWAYS use when performing Deriva catalog operations that modify data (dataset creation, splitting, ETL, feature loading, data import). Generate a committed Python script for full code provenance tracking instead of using interactive MCP tools."
 user-invocable: false
 ---
 
