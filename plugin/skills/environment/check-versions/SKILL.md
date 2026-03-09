@@ -3,45 +3,59 @@ name: check-versions
 description: "Run this skill proactively at the START of every new conversation to check if the DerivaML ecosystem is up to date. Also use when the user asks about versions, updates, or whether their environment is current. Triggers on: session start, 'check versions', 'am I up to date', 'update deriva', 'what version', 'upgrade packages'."
 ---
 
-# Check DerivaML Ecosystem Versions
+# Check and Update DerivaML Ecosystem
 
-Run the version checker script at the start of every session to ensure the user's environment is current.
+Run the version checker at the start of every session to ensure the user's environment is current. The script checks three components and can automatically update them.
 
 ## When to Run
 
-- **Every new session** — Run this automatically before any other work
+- **Every new session** — Run automatically before other work
 - When the user asks about versions or updates
-- After the user clones or sets up a new project
+- After pulling code changes or setting up a new project
 
 ## How to Check
-
-Run the bundled script:
 
 ```bash
 python <skill-dir>/scripts/check_versions.py
 ```
 
-This checks:
-1. **deriva-ml** — Compares installed version against latest GitHub release tag
-2. **deriva-mcp** — Compares installed/running server version against latest GitHub release tag
+To automatically update outdated components:
+
+```bash
+python <skill-dir>/scripts/check_versions.py --update
+```
+
+To check/update a single component:
+
+```bash
+python <skill-dir>/scripts/check_versions.py --component deriva-ml --update
+```
+
+## What It Checks
+
+| Component | What it checks | How it updates |
+|-----------|---------------|----------------|
+| **deriva-ml** | Installed package version vs latest GitHub release tag | `uv lock --upgrade-package deriva-ml && uv sync` |
+| **skills** | Local repo commits vs remote branch | `git pull --ff-only` in the deriva-mcp repo |
+| **mcp-server** | Docker container age vs latest repo commit | Rebuild via `docker compose up -d --build` |
+
+The MCP server check adapts to the deployment mode:
+- **Local dev Docker** (e.g., `deriva-mcp:dev`): Compares container creation time against latest repo commit, rebuilds via `docker compose up -d --build`
+- **Registry Docker** (e.g., `ghcr.io/.../deriva-mcp:latest`): Checks remote registry for newer image, updates via `docker pull` + restart. New images are built automatically by GitHub Actions when the version is bumped.
+- **Native/direct**: Compares installed package version against latest GitHub release tag, updates via `uv lock && uv sync`
 
 ## Interpreting Results
 
 - **UP TO DATE** — No action needed
-- **OUTDATED** — Report to the user with the update command from the script output
-- **Dev version** — Installed from git HEAD, ahead of or at the latest release. This is normal for developers working on the library itself.
-- **UNKNOWN** — Could not determine (network issue, not installed, etc.)
+- **OUTDATED** — Component has a newer version available
+- **UPDATED** — Component was successfully updated (when using `--update`)
+- **UNKNOWN** — Could not determine status (network issue, not installed, etc.)
+- **Dev version** — Installed from git HEAD, at or ahead of latest release. Normal for library developers.
 
-## Update Commands
+## Behavior on Session Start
 
-If components are outdated, suggest:
-
-- **deriva-ml**: `uv lock --upgrade-package deriva-ml && uv sync`
-- **deriva-mcp**: Pull latest from the repository and rebuild (or `uv lock --upgrade-package deriva-mcp && uv sync` if installed as a package)
-
-## Behavior
-
-- Run silently at session start — only report if something is outdated or an error occurs
-- If everything is up to date, don't mention it unless the user specifically asked
-- If outdated, briefly mention which component and the update command
-- Don't block the user's actual request — report version status concisely and move on
+- Run the check automatically
+- If everything is up to date, say nothing (unless the user asked)
+- If something is outdated, briefly report which component and offer to update
+- For the MCP server, always ask before rebuilding — it takes time and restarts the server
+- Don't block the user's actual request — report concisely and move on
