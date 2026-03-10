@@ -816,166 +816,23 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 # =============================================================================
 
 
-def _human_readable_size(size_bytes: int) -> str:
-    """Convert bytes to human-readable string."""
-    if size_bytes == 0:
-        return "0 B"
-    units = ["B", "KB", "MB", "GB", "TB"]
-    i = 0
-    size = float(size_bytes)
-    while size >= 1024 and i < len(units) - 1:
-        size /= 1024
-        i += 1
-    return f"{size:.1f} {units[i]}"
-
-
-def _discover_storage_entries(
-    connected_cache_dir: str | None = None,
-    connected_working_dir: str | None = None,
-) -> list[dict[str, Any]]:
+def _discover_storage_entries() -> list[dict[str, Any]]:
     """Discover all storage entries across ~/.deriva-ml/.
 
-    Scans working directories for cached bags, execution dirs, and other
-    artifacts. Returns a flat list of entries with consistent structure.
+    Delegates to deriva_ml.cache_tui.discover_entries() for consistent
+    behavior with the CLI tool (deriva-ml-storage).
 
-    Each entry has: rid, label, location, category, size_bytes, size,
-    item_count, modified, path.
+    Returns a flat list of dicts with: rid, label, location, category,
+    size_bytes, size, item_count, modified, path.
     """
-    from datetime import datetime
+    from deriva_ml.cache_tui import discover_entries
 
-    entries: list[dict[str, Any]] = []
-    default_root = Path.home() / ".deriva-ml"
-
-    if not default_root.exists():
-        return entries
-
-    def _dir_size(p: Path) -> int:
-        try:
-            return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
-        except OSError:
-            return 0
-
-    def _dir_file_count(p: Path) -> int:
-        try:
-            return sum(1 for f in p.rglob("*") if f.is_file())
-        except OSError:
-            return 0
-
-    def _scan_workdir(workdir: Path, location: str) -> None:
-        for item in sorted(workdir.iterdir()):
-            if not item.is_dir() or item.name.startswith(".") or "@" in item.name:
-                continue
-
-            size = _dir_size(item)
-            file_count = _dir_file_count(item)
-            try:
-                mtime = datetime.fromtimestamp(item.stat().st_mtime).isoformat()
-            except OSError:
-                mtime = None
-
-            if item.name == "cache":
-                for cache_entry in sorted(item.iterdir()):
-                    if cache_entry.is_dir() and "_" in cache_entry.name:
-                        rid = cache_entry.name.rsplit("_", 1)[0]
-                        ce_size = _dir_size(cache_entry)
-                        try:
-                            ce_mtime = datetime.fromtimestamp(
-                                cache_entry.stat().st_mtime
-                            ).isoformat()
-                        except OSError:
-                            ce_mtime = None
-                        entries.append({
-                            "rid": rid,
-                            "label": f"cache/{rid}",
-                            "location": location,
-                            "category": "cache",
-                            "size_bytes": ce_size,
-                            "size": _human_readable_size(ce_size),
-                            "item_count": _dir_file_count(cache_entry),
-                            "modified": ce_mtime,
-                            "path": str(cache_entry),
-                        })
-            elif item.name == "deriva-ml":
-                exec_dir = item / "execution"
-                if exec_dir.exists():
-                    for exec_entry in sorted(exec_dir.iterdir()):
-                        if exec_entry.is_dir():
-                            ex_size = _dir_size(exec_entry)
-                            try:
-                                ex_mtime = datetime.fromtimestamp(
-                                    exec_entry.stat().st_mtime
-                                ).isoformat()
-                            except OSError:
-                                ex_mtime = None
-                            entries.append({
-                                "rid": exec_entry.name,
-                                "label": f"execution/{exec_entry.name}",
-                                "location": location,
-                                "category": "execution",
-                                "size_bytes": ex_size,
-                                "size": _human_readable_size(ex_size),
-                                "item_count": _dir_file_count(exec_entry),
-                                "modified": ex_mtime,
-                                "path": str(exec_entry),
-                            })
-                # Execution root with no individual exec dirs
-                if size > 0 and not (exec_dir.exists() and any(exec_dir.iterdir())):
-                    entries.append({
-                        "rid": None,
-                        "label": "deriva-ml/",
-                        "location": location,
-                        "category": "execution",
-                        "size_bytes": size,
-                        "size": _human_readable_size(size),
-                        "item_count": file_count,
-                        "modified": mtime,
-                        "path": str(item),
-                    })
-            else:
-                entries.append({
-                    "rid": None,
-                    "label": item.name,
-                    "location": location,
-                    "category": "other",
-                    "size_bytes": size,
-                    "size": _human_readable_size(size),
-                    "item_count": file_count,
-                    "modified": mtime,
-                    "path": str(item),
-                })
-
-    # Scan two levels: hostname/catalog_id
-    for host_dir in sorted(default_root.iterdir()):
-        if not host_dir.is_dir() or host_dir.name.startswith("."):
-            continue
-
-        has_catalog_subdirs = False
-        for catalog_dir in sorted(host_dir.iterdir()):
-            if not catalog_dir.is_dir() or "@" in catalog_dir.name:
-                continue
-
-            is_workdir = any(
-                (catalog_dir / sub).exists()
-                for sub in ["cache", "deriva-ml", "hydra", "hydra-sweep", "client_export"]
-            )
-            if is_workdir:
-                has_catalog_subdirs = True
-                _scan_workdir(catalog_dir, f"{host_dir.name}/{catalog_dir.name}")
-
-        # Check if host_dir itself is a working dir
-        if not has_catalog_subdirs:
-            is_workdir = any(
-                (host_dir / sub).exists()
-                for sub in ["cache", "deriva-ml", "hydra", "hydra-sweep", "client_export"]
-            )
-            if is_workdir:
-                _scan_workdir(host_dir, host_dir.name)
-
-    return entries
+    return [e.to_dict() for e in discover_entries()]
 
 
 def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager):
     """Register storage management tools with the MCP server."""
+    from deriva_ml.cache_tui import _human_readable_size
 
     @mcp_server.tool()
     async def list_storage_contents(
@@ -1000,7 +857,7 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
         Returns:
             JSON with:
                 - entries: list of storage entries, each with rid, label,
-                  location, category (cache/execution/other), size, item_count,
+                  location, category (dataset/execution/other), size, item_count,
                   modified, path
                 - total_entries: number of entries
                 - total_size / total_size_bytes: aggregate size
@@ -1009,7 +866,7 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
             all_entries = _discover_storage_entries()
 
             if filter == "cache":
-                all_entries = [e for e in all_entries if e["category"] == "cache"]
+                all_entries = [e for e in all_entries if e["category"] == "dataset"]
             elif filter == "executions":
                 all_entries = [e for e in all_entries if e["category"] == "execution"]
 
