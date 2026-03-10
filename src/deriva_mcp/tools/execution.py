@@ -829,379 +829,233 @@ def _human_readable_size(size_bytes: int) -> str:
     return f"{size:.1f} {units[i]}"
 
 
-def _discover_working_dirs(connected_working_dir: str | None = None) -> list[Path]:
-    """Discover all DerivaML working directories (hostname/catalog_id level).
+def _discover_storage_entries(
+    connected_cache_dir: str | None = None,
+    connected_working_dir: str | None = None,
+) -> list[dict[str, Any]]:
+    """Discover all storage entries across ~/.deriva-ml/.
 
-    Scans ~/.deriva-ml/ for directories that contain a 'cache' or 'deriva-ml'
-    subdirectory, which identifies them as working directories.
+    Scans working directories for cached bags, execution dirs, and other
+    artifacts. Returns a flat list of entries with consistent structure.
 
-    Returns:
-        Sorted list of working directory Paths.
-    """
-    from pathlib import Path
-
-    candidates: set[Path] = set()
-
-    default_root = Path.home() / ".deriva-ml"
-    if default_root.exists():
-        # Look for dirs that are hostname/catalog_id level
-        # These typically contain cache/, deriva-ml/, hydra/, etc.
-        for host_dir in sorted(default_root.iterdir()):
-            if not host_dir.is_dir():
-                continue
-            for catalog_dir in sorted(host_dir.iterdir()):
-                if not catalog_dir.is_dir():
-                    continue
-                # Skip snapshot dirs (contain @)
-                if "@" in catalog_dir.name:
-                    continue
-                # A working dir has at least one of these subdirs
-                if any((catalog_dir / sub).exists()
-                       for sub in ["cache", "deriva-ml", "hydra", "hydra-sweep", "client_export"]):
-                    candidates.add(catalog_dir.resolve())
-
-    # Also handle top-level dirs that are themselves catalog dirs (e.g., ~/.deriva-ml/1/)
-    if default_root.exists():
-        for entry in sorted(default_root.iterdir()):
-            if entry.is_dir() and not entry.name.startswith(".") and "@" not in entry.name:
-                if any((entry / sub).exists()
-                       for sub in ["cache", "deriva-ml", "hydra", "hydra-sweep", "client_export"]):
-                    candidates.add(entry.resolve())
-
-    if connected_working_dir:
-        p = Path(connected_working_dir)
-        if p.exists():
-            candidates.add(p.resolve())
-
-    return sorted(candidates)
-
-
-def _parse_working_dir(workdir: Path) -> dict[str, Any]:
-    """Parse a working directory into a structured summary.
-
-    Examines a hostname/catalog_id working directory and catalogs its contents:
-    execution dirs, hydra configs, stale bags, and other artifacts.
-
-    Returns:
-        Dict with working directory metadata and subdirectory summaries.
+    Each entry has: rid, label, location, category, size_bytes, size,
+    item_count, modified, path.
     """
     from datetime import datetime
 
-    # Derive label from path
-    default_root = str(Path.home() / ".deriva-ml")
-    if str(workdir).startswith(default_root):
-        # Extract relative path after ~/.deriva-ml/
-        rel = workdir.relative_to(default_root)
-        label = str(rel)
-    else:
-        label = str(workdir)
+    entries: list[dict[str, Any]] = []
+    default_root = Path.home() / ".deriva-ml"
 
-    subdirs: list[dict[str, Any]] = []
-    total_bytes = 0
+    if not default_root.exists():
+        return entries
 
-    for entry in sorted(workdir.iterdir()):
-        if not entry.is_dir() or entry.name.startswith("."):
+    def _dir_size(p: Path) -> int:
+        try:
+            return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+        except OSError:
+            return 0
+
+    def _dir_file_count(p: Path) -> int:
+        try:
+            return sum(1 for f in p.rglob("*") if f.is_file())
+        except OSError:
+            return 0
+
+    def _scan_workdir(workdir: Path, location: str) -> None:
+        for item in sorted(workdir.iterdir()):
+            if not item.is_dir() or item.name.startswith(".") or "@" in item.name:
+                continue
+
+            size = _dir_size(item)
+            file_count = _dir_file_count(item)
+            try:
+                mtime = datetime.fromtimestamp(item.stat().st_mtime).isoformat()
+            except OSError:
+                mtime = None
+
+            if item.name == "cache":
+                for cache_entry in sorted(item.iterdir()):
+                    if cache_entry.is_dir() and "_" in cache_entry.name:
+                        rid = cache_entry.name.rsplit("_", 1)[0]
+                        ce_size = _dir_size(cache_entry)
+                        try:
+                            ce_mtime = datetime.fromtimestamp(
+                                cache_entry.stat().st_mtime
+                            ).isoformat()
+                        except OSError:
+                            ce_mtime = None
+                        entries.append({
+                            "rid": rid,
+                            "label": f"cache/{rid}",
+                            "location": location,
+                            "category": "cache",
+                            "size_bytes": ce_size,
+                            "size": _human_readable_size(ce_size),
+                            "item_count": _dir_file_count(cache_entry),
+                            "modified": ce_mtime,
+                            "path": str(cache_entry),
+                        })
+            elif item.name == "deriva-ml":
+                exec_dir = item / "execution"
+                if exec_dir.exists():
+                    for exec_entry in sorted(exec_dir.iterdir()):
+                        if exec_entry.is_dir():
+                            ex_size = _dir_size(exec_entry)
+                            try:
+                                ex_mtime = datetime.fromtimestamp(
+                                    exec_entry.stat().st_mtime
+                                ).isoformat()
+                            except OSError:
+                                ex_mtime = None
+                            entries.append({
+                                "rid": exec_entry.name,
+                                "label": f"execution/{exec_entry.name}",
+                                "location": location,
+                                "category": "execution",
+                                "size_bytes": ex_size,
+                                "size": _human_readable_size(ex_size),
+                                "item_count": _dir_file_count(exec_entry),
+                                "modified": ex_mtime,
+                                "path": str(exec_entry),
+                            })
+                # Execution root with no individual exec dirs
+                if size > 0 and not (exec_dir.exists() and any(exec_dir.iterdir())):
+                    entries.append({
+                        "rid": None,
+                        "label": "deriva-ml/",
+                        "location": location,
+                        "category": "execution",
+                        "size_bytes": size,
+                        "size": _human_readable_size(size),
+                        "item_count": file_count,
+                        "modified": mtime,
+                        "path": str(item),
+                    })
+            else:
+                entries.append({
+                    "rid": None,
+                    "label": item.name,
+                    "location": location,
+                    "category": "other",
+                    "size_bytes": size,
+                    "size": _human_readable_size(size),
+                    "item_count": file_count,
+                    "modified": mtime,
+                    "path": str(item),
+                })
+
+    # Scan two levels: hostname/catalog_id
+    for host_dir in sorted(default_root.iterdir()):
+        if not host_dir.is_dir() or host_dir.name.startswith("."):
             continue
 
-        entry_size = sum(f.stat().st_size for f in entry.rglob("*") if f.is_file())
-        file_count = sum(1 for f in entry.rglob("*") if f.is_file())
-        try:
-            mtime = datetime.fromtimestamp(entry.stat().st_mtime)
-        except OSError:
-            mtime = None
+        has_catalog_subdirs = False
+        for catalog_dir in sorted(host_dir.iterdir()):
+            if not catalog_dir.is_dir() or "@" in catalog_dir.name:
+                continue
 
-        if entry.name == "cache":
-            # Count cache entries
-            cache_entries = sum(1 for c in entry.iterdir() if c.is_dir() and "_" in c.name)
-            subdirs.append({
-                "name": "cache",
-                "type": "cache",
-                "size_bytes": entry_size,
-                "size": _human_readable_size(entry_size),
-                "item_count": cache_entries,
-                "modified": mtime.isoformat() if mtime else None,
-                "path": str(entry),
-            })
-        elif entry.name == "deriva-ml":
-            # Count execution dirs
-            exec_dir = entry / "execution"
-            exec_count = 0
-            if exec_dir.exists():
-                exec_count = sum(1 for e in exec_dir.iterdir() if e.is_dir())
-            subdirs.append({
-                "name": "deriva-ml",
-                "type": "executions",
-                "size_bytes": entry_size,
-                "size": _human_readable_size(entry_size),
-                "item_count": exec_count,
-                "modified": mtime.isoformat() if mtime else None,
-                "path": str(entry),
-            })
-        else:
-            subdirs.append({
-                "name": entry.name,
-                "type": "other",
-                "size_bytes": entry_size,
-                "size": _human_readable_size(entry_size),
-                "item_count": file_count,
-                "modified": mtime.isoformat() if mtime else None,
-                "path": str(entry),
-            })
+            is_workdir = any(
+                (catalog_dir / sub).exists()
+                for sub in ["cache", "deriva-ml", "hydra", "hydra-sweep", "client_export"]
+            )
+            if is_workdir:
+                has_catalog_subdirs = True
+                _scan_workdir(catalog_dir, f"{host_dir.name}/{catalog_dir.name}")
 
-        total_bytes += entry_size
+        # Check if host_dir itself is a working dir
+        if not has_catalog_subdirs:
+            is_workdir = any(
+                (host_dir / sub).exists()
+                for sub in ["cache", "deriva-ml", "hydra", "hydra-sweep", "client_export"]
+            )
+            if is_workdir:
+                _scan_workdir(host_dir, host_dir.name)
 
-    return {
-        "label": label,
-        "path": str(workdir),
-        "subdirectories": subdirs,
-        "total_bytes": total_bytes,
-        "total_size": _human_readable_size(total_bytes),
-    }
-
-
-def _discover_cache_dirs(connected_cache_dir: str | None = None, extra_dirs: list[str] | None = None) -> list[Path]:
-    """Discover all potential DerivaML cache directories.
-
-    Scans the default ~/.deriva-ml tree for any cache/ directories,
-    adds the connected catalog's cache_dir, and any explicitly provided paths.
-
-    Returns:
-        Deduplicated list of existing cache directory Paths.
-    """
-    from pathlib import Path
-
-    candidates: set[Path] = set()
-
-    # Scan default location: ~/.deriva-ml/*/*/cache/
-    default_root = Path.home() / ".deriva-ml"
-    if default_root.exists():
-        for cache_dir in default_root.rglob("cache"):
-            if cache_dir.is_dir():
-                candidates.add(cache_dir.resolve())
-
-    # Add connected catalog's cache dir
-    if connected_cache_dir:
-        p = Path(connected_cache_dir)
-        if p.exists():
-            candidates.add(p.resolve())
-
-    # Add any explicitly provided directories
-    for d in (extra_dirs or []):
-        p = Path(d)
-        if p.exists():
-            candidates.add(p.resolve())
-
-    return sorted(candidates)
-
-
-def _parse_cache_entry(entry_path: Path) -> dict[str, Any] | None:
-    """Parse a single cache directory entry into structured info.
-
-    Cache entries have the naming convention: {dataset_rid}_{checksum}
-    Inside is Dataset_{dataset_rid}/ containing the extracted bag.
-
-    Returns:
-        Dict with entry metadata, or None if not a valid cache entry.
-    """
-    import csv
-    from datetime import datetime
-
-    name = entry_path.name
-    # Parse {rid}_{checksum} format — RID is everything before the last underscore+hex
-    parts = name.rsplit("_", 1)
-    if len(parts) != 2:
-        return None
-
-    dataset_rid = parts[0]
-    checksum = parts[1]
-
-    # Calculate size
-    try:
-        size_bytes = sum(f.stat().st_size for f in entry_path.rglob("*") if f.is_file())
-        mtime = datetime.fromtimestamp(entry_path.stat().st_mtime)
-    except OSError:
-        return None
-
-    # Check materialization status
-    materialized = (entry_path / "validated_check.txt").exists()
-
-    # Try to extract description and version from Dataset.csv inside the bag
-    description = ""
-    bag_dir = entry_path / f"Dataset_{dataset_rid}"
-    dataset_csv = bag_dir / "data" / "Dataset.csv"
-    if dataset_csv.exists():
-        try:
-            with dataset_csv.open(newline="", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if row.get("RID") == dataset_rid:
-                        description = row.get("Description", "")
-                        break
-        except Exception:
-            pass
-
-    # Count asset files from fetch.txt
-    asset_count = 0
-    asset_total_bytes = 0
-    fetch_txt = bag_dir / "fetch.txt"
-    if fetch_txt.exists():
-        try:
-            with fetch_txt.open(encoding="utf-8") as f:
-                for line in f:
-                    parts_line = line.strip().split("\t")
-                    if len(parts_line) >= 2:
-                        asset_count += 1
-                        try:
-                            asset_total_bytes += int(parts_line[1])
-                        except ValueError:
-                            pass
-        except Exception:
-            pass
-
-    return {
-        "dataset_rid": dataset_rid,
-        "checksum": checksum[:12] + "...",
-        "checksum_full": checksum,
-        "size_bytes": size_bytes,
-        "size": _human_readable_size(size_bytes),
-        "asset_count": asset_count,
-        "asset_total_bytes": asset_total_bytes,
-        "asset_size": _human_readable_size(asset_total_bytes),
-        "materialized": materialized,
-        "description": description,
-        "modified": mtime.isoformat(),
-        "path": str(entry_path),
-    }
+    return entries
 
 
 def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager):
     """Register storage management tools with the MCP server."""
 
     @mcp_server.tool()
-    async def list_cache_contents(
-        cache_dirs: list[str] | None = None,
+    async def list_storage_contents(
+        filter: str = "all",
     ) -> str:
-        """List all cached dataset bags and working directory contents.
+        """List DerivaML storage contents across all working directories.
 
-        Discovers cache directories automatically by scanning ~/.deriva-ml/
-        and the connected catalog's cache. Shows each cached bag with its
-        dataset RID, description, size, asset count, and materialization status.
-
-        Also provides a separate working_directories table showing the full
-        contents of each DerivaML working directory (execution dirs, hydra
-        configs, stale bags, and other artifacts).
+        Scans ~/.deriva-ml/ for cached dataset bags, execution directories,
+        and other artifacts (hydra configs, client exports, etc.).
 
         Use this to understand what's consuming disk space before deciding
-        what to delete.
+        what to delete with delete_storage.
+
+        Equivalent to the CLI: `deriva-ml-storage --list [cache|executions|all]`
 
         Args:
-            cache_dirs: Optional additional cache directory paths to scan.
-                These are added to the automatically discovered directories.
+            filter: What to show. One of:
+                - "all" (default): All storage entries
+                - "cache": Only cached dataset bags
+                - "executions": Only execution working directories
 
         Returns:
             JSON with:
-                - cache_directories: list of discovered cache paths with entry counts
-                - entries: list of cached bags, each with dataset_rid, checksum,
-                  size, asset_count, materialized, description, modified, path
-                - total_size: human-readable total size of cached bags
-                - total_size_bytes: total size in bytes of cached bags
-                - working_directories: list of working directory summaries,
-                  each with label, path, subdirectories (cache, executions,
-                  stale_bag, other), and total_size
+                - entries: list of storage entries, each with rid, label,
+                  location, category (cache/execution/other), size, item_count,
+                  modified, path
+                - total_entries: number of entries
+                - total_size / total_size_bytes: aggregate size
         """
         try:
-            # Get connected catalog's cache/working dir if available
-            connected_cache = None
-            connected_workdir = None
-            try:
-                ml = conn_manager.get_active_or_raise()
-                connected_cache = str(ml.cache_dir)
-                connected_workdir = str(ml.working_dir)
-            except Exception:
-                pass  # Not connected, just scan defaults
+            all_entries = _discover_storage_entries()
 
-            dirs = _discover_cache_dirs(connected_cache, cache_dirs)
+            if filter == "cache":
+                all_entries = [e for e in all_entries if e["category"] == "cache"]
+            elif filter == "executions":
+                all_entries = [e for e in all_entries if e["category"] == "execution"]
 
-            all_entries: list[dict[str, Any]] = []
-            dir_summaries: list[dict[str, Any]] = []
-
-            for cache_dir in dirs:
-                entries_in_dir = []
-                for entry in sorted(cache_dir.iterdir()):
-                    if entry.is_dir() and "_" in entry.name:
-                        parsed = _parse_cache_entry(entry)
-                        if parsed:
-                            parsed["cache_dir"] = str(cache_dir)
-                            entries_in_dir.append(parsed)
-
-                # Derive hostname/catalog from the cache dir path
-                # Pattern: ~/.deriva-ml/{hostname}/{catalog_id}/cache
-                cache_parts = cache_dir.parts
-                label = str(cache_dir)
-                try:
-                    cache_idx = cache_parts.index("cache")
-                    if cache_idx >= 2:
-                        label = f"{cache_parts[cache_idx - 2]}/{cache_parts[cache_idx - 1]}"
-                except (ValueError, IndexError):
-                    pass
-
-                dir_summaries.append({
-                    "path": str(cache_dir),
-                    "label": label,
-                    "entry_count": len(entries_in_dir),
-                    "total_bytes": sum(e["size_bytes"] for e in entries_in_dir),
-                    "total_size": _human_readable_size(
-                        sum(e["size_bytes"] for e in entries_in_dir)
-                    ),
-                })
-                all_entries.extend(entries_in_dir)
+            # Sort by size descending
+            all_entries.sort(key=lambda e: e["size_bytes"], reverse=True)
 
             total_bytes = sum(e["size_bytes"] for e in all_entries)
 
-            # Build working directory summaries
-            workdirs = _discover_working_dirs(connected_workdir)
-            workdir_summaries = [_parse_working_dir(wd) for wd in workdirs]
-            workdir_total = sum(wd["total_bytes"] for wd in workdir_summaries)
-
             return json.dumps({
                 "status": "success",
-                "cache_directories": dir_summaries,
+                "filter": filter,
                 "entries": all_entries,
                 "total_entries": len(all_entries),
                 "total_size_bytes": total_bytes,
                 "total_size": _human_readable_size(total_bytes),
-                "working_directories": workdir_summaries,
-                "working_directories_total_bytes": workdir_total,
-                "working_directories_total_size": _human_readable_size(workdir_total),
             })
         except Exception as e:
-            logger.error(f"Failed to list cache contents: {e}")
+            logger.error(f"Failed to list storage contents: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp_server.tool()
-    async def delete_cache_entry(
-        dataset_rid: str,
-        cache_dir: str | None = None,
+    async def delete_storage(
+        rids: list[str],
         confirm: bool = False,
     ) -> str:
-        """Delete cached dataset bags for a specific dataset RID.
+        """Delete storage entries by RID.
 
-        Finds and removes all cached bags matching the given dataset RID.
-        A single dataset may have multiple cached versions (different checksums).
+        Finds and removes cached dataset bags, execution directories, or
+        other artifacts matching the given RID(s). A single RID may match
+        multiple entries (e.g., a dataset with several cached versions,
+        or an execution RID matching a working directory).
 
-        IMPORTANT: This permanently deletes cached data. The bags can be
-        re-downloaded from the catalog but this may take significant time
-        for large datasets. Always call list_cache_contents first to review
-        what will be deleted.
+        Searches across all DerivaML working directories in ~/.deriva-ml/.
+
+        IMPORTANT: This permanently deletes local data. Cached bags can be
+        re-downloaded from the catalog but execution outputs that have not
+        been uploaded will be lost. Always call list_storage_contents first
+        to review entries, and set confirm=true to proceed.
+
+        Equivalent to the CLI: `deriva-ml-storage --delete <RID> [<RID> ...]`
 
         Args:
-            dataset_rid: The dataset RID to delete cached bags for.
-                All cached versions of this dataset will be removed.
-            cache_dir: Optional specific cache directory to delete from.
-                If not provided, searches all discovered cache directories.
+            rids: One or more RIDs to delete. Matches against dataset RIDs
+                (for cached bags) and execution RIDs (for working directories).
             confirm: Must be set to true to actually delete. If false,
-                returns what would be deleted without removing anything
-                (dry run).
+                returns a preview of what would be deleted (dry run).
 
         Returns:
             JSON with deleted entries and bytes freed, or dry run preview.
@@ -1209,45 +1063,29 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
         try:
             import shutil
 
-            connected_cache = None
-            try:
-                ml = conn_manager.get_active_or_raise()
-                connected_cache = str(ml.cache_dir)
-            except Exception:
-                pass
+            all_entries = _discover_storage_entries()
 
-            search_dirs = (
-                [Path(cache_dir)] if cache_dir else
-                _discover_cache_dirs(connected_cache)
-            )
-
-            matches: list[dict[str, Any]] = []
-            for d in search_dirs:
-                if not d.exists():
-                    continue
-                for entry in d.iterdir():
-                    if entry.is_dir() and entry.name.startswith(f"{dataset_rid}_"):
-                        parsed = _parse_cache_entry(entry)
-                        if parsed:
-                            matches.append(parsed)
+            rid_set = set(rids)
+            matches = [e for e in all_entries if e.get("rid") in rid_set]
 
             if not matches:
                 return json.dumps({
                     "status": "success",
-                    "message": f"No cached bags found for dataset {dataset_rid}",
+                    "message": f"No entries found matching: {', '.join(rids)}",
                     "entries_found": 0,
                 })
+
+            total_bytes = sum(e["size_bytes"] for e in matches)
 
             if not confirm:
                 return json.dumps({
                     "status": "dry_run",
-                    "message": f"Found {len(matches)} cached bag(s) for dataset {dataset_rid}. "
+                    "message": f"Found {len(matches)} entry/entries "
+                               f"({_human_readable_size(total_bytes)}). "
                                f"Set confirm=true to delete.",
                     "entries": matches,
-                    "total_bytes": sum(e["size_bytes"] for e in matches),
-                    "total_size": _human_readable_size(
-                        sum(e["size_bytes"] for e in matches)
-                    ),
+                    "total_bytes": total_bytes,
+                    "total_size": _human_readable_size(total_bytes),
                 })
 
             # Actually delete
@@ -1262,6 +1100,20 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
                 except Exception as e:
                     errors.append({"path": entry["path"], "error": str(e)})
 
+            # Clean up empty parent dirs
+            deriva_root = Path.home() / ".deriva-ml"
+            for entry in deleted:
+                parent = Path(entry["path"]).parent
+                while parent != deriva_root and parent.exists():
+                    try:
+                        if not any(parent.iterdir()):
+                            parent.rmdir()
+                            parent = parent.parent
+                        else:
+                            break
+                    except OSError:
+                        break
+
             return json.dumps({
                 "status": "success",
                 "deleted": deleted,
@@ -1271,189 +1123,5 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
                 "errors": errors,
             })
         except Exception as e:
-            logger.error(f"Failed to delete cache entry: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp_server.tool()
-    async def clear_cache(
-        older_than_days: int | None = None,
-        cache_dir: str | None = None,
-        confirm: bool = False,
-    ) -> str:
-        """Clear the dataset cache directory.
-
-        Removes cached dataset bags to free disk space. Can optionally
-        filter by age to only remove old entries.
-
-        IMPORTANT: This permanently deletes cached data. Always call
-        list_cache_contents first to review what will be removed, and
-        set confirm=true to proceed.
-
-        Args:
-            older_than_days: If provided, only remove cache entries older
-                than this many days. If None, removes all cache entries.
-            cache_dir: Optional specific cache directory to clear. If not
-                provided, clears the connected catalog's cache directory.
-            confirm: Must be set to true to actually delete. If false,
-                returns a preview of what would be deleted (dry run).
-
-        Returns:
-            JSON with deletion results or dry run preview.
-        """
-        try:
-            if cache_dir:
-                target = Path(cache_dir)
-            else:
-                ml = conn_manager.get_active_or_raise()
-                target = ml.cache_dir
-
-            if not target.exists():
-                return json.dumps({
-                    "status": "success",
-                    "message": "Cache directory does not exist or is empty.",
-                    "entries_found": 0,
-                })
-
-            # Gather entries that would be affected
-            import time
-            cutoff_time = None
-            if older_than_days is not None:
-                cutoff_time = time.time() - (older_than_days * 24 * 60 * 60)
-
-            entries_to_delete: list[dict[str, Any]] = []
-            for entry in sorted(target.iterdir()):
-                if not entry.is_dir():
-                    continue
-                if cutoff_time is not None:
-                    if entry.stat().st_mtime > cutoff_time:
-                        continue
-                parsed = _parse_cache_entry(entry)
-                if parsed:
-                    entries_to_delete.append(parsed)
-
-            if not entries_to_delete:
-                return json.dumps({
-                    "status": "success",
-                    "message": "No cache entries match the criteria.",
-                    "entries_found": 0,
-                })
-
-            total_bytes = sum(e["size_bytes"] for e in entries_to_delete)
-
-            if not confirm:
-                return json.dumps({
-                    "status": "dry_run",
-                    "message": f"Found {len(entries_to_delete)} cache entry/entries "
-                               f"({_human_readable_size(total_bytes)}). "
-                               f"Set confirm=true to delete.",
-                    "older_than_days": older_than_days,
-                    "entries": entries_to_delete,
-                    "total_bytes": total_bytes,
-                    "total_size": _human_readable_size(total_bytes),
-                })
-
-            # Actually delete
-            import shutil
-            deleted = []
-            errors = []
-            bytes_freed = 0
-            for entry_info in entries_to_delete:
-                try:
-                    shutil.rmtree(entry_info["path"])
-                    deleted.append(entry_info)
-                    bytes_freed += entry_info["size_bytes"]
-                except Exception as e:
-                    errors.append({"path": entry_info["path"], "error": str(e)})
-
-            return json.dumps({
-                "status": "success",
-                "older_than_days": older_than_days,
-                "entries_deleted": len(deleted),
-                "bytes_freed": bytes_freed,
-                "size_freed": _human_readable_size(bytes_freed),
-                "deleted": deleted,
-                "errors": errors,
-            })
-        except Exception as e:
-            logger.error(f"Failed to clear cache: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp_server.tool()
-    async def clean_execution_dirs(
-        older_than_days: int | None = None,
-        exclude_rids: list[str] | None = None,
-        confirm: bool = False,
-    ) -> str:
-        """Clean up execution working directories.
-
-        Removes execution output directories from the local working directory
-        to free disk space. Use this to clean up completed or orphaned executions.
-
-        IMPORTANT: This permanently deletes execution outputs that have not
-        been uploaded. Set confirm=true to proceed.
-
-        Args:
-            older_than_days: If provided, only remove directories older than
-                this many days. If None, removes all (except excluded).
-            exclude_rids: List of execution RIDs to preserve (never remove).
-            confirm: Must be set to true to actually delete. If false,
-                returns a preview of what would be deleted (dry run).
-
-        Returns:
-            JSON with deletion results or dry run preview.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-
-            if not confirm:
-                # Dry run: list what would be deleted
-                all_dirs = ml.list_execution_dirs()
-                exclude_set = set(exclude_rids or [])
-
-                import time
-                cutoff_time = None
-                if older_than_days is not None:
-                    cutoff_time = time.time() - (older_than_days * 24 * 60 * 60)
-
-                would_delete = []
-                for d in all_dirs:
-                    if d["execution_rid"] in exclude_set:
-                        continue
-                    if cutoff_time is not None:
-                        from datetime import datetime
-                        d_mtime = d["modified"].timestamp() if isinstance(d["modified"], datetime) else 0
-                        if d_mtime > cutoff_time:
-                            continue
-                    would_delete.append({
-                        "execution_rid": d["execution_rid"],
-                        "size": _human_readable_size(d["size_bytes"]),
-                        "size_bytes": d["size_bytes"],
-                        "modified": d["modified"].isoformat() if hasattr(d["modified"], "isoformat") else str(d["modified"]),
-                        "file_count": d["file_count"],
-                    })
-
-                total_bytes = sum(d["size_bytes"] for d in would_delete)
-                return json.dumps({
-                    "status": "dry_run",
-                    "message": f"Found {len(would_delete)} execution dir(s) "
-                               f"({_human_readable_size(total_bytes)}). "
-                               f"Set confirm=true to delete.",
-                    "entries": would_delete,
-                    "total_bytes": total_bytes,
-                    "total_size": _human_readable_size(total_bytes),
-                })
-
-            result = ml.clean_execution_dirs(
-                older_than_days=older_than_days,
-                exclude_rids=exclude_rids,
-            )
-            return json.dumps({
-                "status": "success",
-                "older_than_days": older_than_days,
-                "exclude_rids": exclude_rids,
-                **result,
-                "size_freed": _human_readable_size(result.get("bytes_freed", 0)),
-            })
-        except Exception as e:
-            logger.error(f"Failed to clean execution dirs: {e}")
+            logger.error(f"Failed to delete storage entries: {e}")
             return json.dumps({"status": "error", "message": str(e)})

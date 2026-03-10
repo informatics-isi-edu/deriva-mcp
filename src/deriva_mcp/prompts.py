@@ -6022,4 +6022,5 @@ logging.basicConfig(level=logging.DEBUG)
   - No unexpected files or directory structures.
 
 ### Clean Up
-- **Tool**: `clean_execution_dirs` to remove local execution working directories that are no longer needed, freeing disk space."""
+- **Tool**: `list_storage_contents` to see what's consuming disk space (cached bags, execution dirs, etc.)
+- **Tool**: `delete_storage` to remove specific entries by RID, freeing disk space."""
