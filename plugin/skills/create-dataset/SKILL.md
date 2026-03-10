@@ -56,6 +56,7 @@ For the full step-by-step guide with code examples (both Python API and MCP tool
 
 ## Reference Resources
 
+- `deriva://docs/datasets` — Full guide to dataset creation, versioning, downloading, and restructuring. Read this for detailed examples and edge cases beyond what this skill covers.
 - `deriva://catalog/datasets` — Browse existing datasets before creating new ones
 - `deriva://dataset/{rid}` — Dataset details including current version
 - `deriva://catalog/dataset-element-types` — Check which element types are registered

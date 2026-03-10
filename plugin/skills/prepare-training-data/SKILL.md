@@ -200,6 +200,7 @@ increment_dataset_version(dataset_rid="2-XXXX")
 
 ## Reference Resources
 
+- `deriva://docs/datasets` — Full guide to dataset downloading, restructuring, BDBag format, and versioning. Read this for detailed examples and edge cases beyond what this skill covers.
 - `deriva://table/{table_name}/schema` — Understand table structure before extraction
 - `deriva://dataset/{rid}` — Dataset details including version and element types
 - `deriva://catalog/features` — Available features for building training labels

@@ -44,6 +44,7 @@ Features link domain objects (e.g., Image, Subject) to vocabulary terms, assets,
 
 ## Reference Resources
 
+- `deriva://docs/features` — Full guide to feature creation, values, querying, and selectors. Read this for detailed examples and edge cases beyond what this skill covers.
 - `deriva://catalog/features` — Browse existing features before creating new ones
 - `deriva://feature/{table_name}/{feature_name}` — Feature details and current values
 

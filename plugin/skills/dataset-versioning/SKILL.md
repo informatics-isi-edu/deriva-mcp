@@ -98,6 +98,7 @@ Follow semantic versioning for dataset versions:
 
 ## Reference Resources
 
+- `deriva://docs/datasets` — Full guide to dataset versioning, snapshots, and version increment workflows. Read this for detailed examples and edge cases beyond what this skill covers.
 - `deriva://dataset/{rid}/versions` — View version history for a dataset
 - `deriva://dataset/{rid}` — Current dataset info including version
 

@@ -49,6 +49,7 @@ get_execution_working_dir(execution_rid="2-EXEC")
 
 ## Reference Resources
 
+- `deriva://docs/file-assets` — Full guide to asset tables, types, uploading, and provenance tracking. Read this for detailed examples and edge cases beyond what this skill covers.
 - `deriva://catalog/asset-tables` — List all asset tables in the catalog
 - `deriva://table/{table_name}/assets` — Browse assets in a specific table
 - `deriva://asset/{rid}` — Asset details and provenance

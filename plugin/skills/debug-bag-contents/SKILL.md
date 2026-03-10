@@ -218,6 +218,7 @@ Use this checklist when data is missing from a bag:
 
 ## Reference Resources
 
+- `deriva://docs/datasets` — Full guide to bag export traversal, FK paths, and troubleshooting. Read this for detailed examples and edge cases beyond what this skill covers.
 - `deriva://dataset/{rid}/bag-preview` — Preview bag contents before downloading
 - `deriva://catalog/dataset-element-types` — Check which element types are registered
 - `deriva://table/{table_name}/foreign-keys` — Understand FK paths for traversal debugging

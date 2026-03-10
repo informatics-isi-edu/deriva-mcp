@@ -59,6 +59,7 @@ upload_execution_outputs(execution_rid=...)
 
 ## Reference Resources
 
+- `deriva://docs/execution-configuration` — Full guide to the execution lifecycle and configuration parameters. Read this for detailed examples and edge cases beyond what this skill covers.
 - `deriva://execution/{rid}` — Execution details and status
 - `deriva://catalog/workflows` — Available workflows for execution context
 
