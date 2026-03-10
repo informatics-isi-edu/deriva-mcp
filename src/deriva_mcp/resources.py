@@ -699,7 +699,7 @@ multirun_config(
                     ],
                     "version_history": [
                         {
-                            "version": str(h.version) if h.version else None,
+                            "version": str(h.dataset_version) if h.dataset_version else None,
                             "description": h.description,
                             "snapshot": h.snapshot,
                         }
@@ -765,7 +765,7 @@ multirun_config(
                     "current_version": str(ds.current_version),
                     "versions": [
                         {
-                            "version": str(h.version) if h.version else None,
+                            "version": str(h.dataset_version) if h.dataset_version else None,
                             "description": h.description,
                             "snapshot": h.snapshot,
                         }
