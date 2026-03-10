@@ -1,43 +1,109 @@
 ---
 name: run-notebook
-description: "ALWAYS use this skill when developing or running DerivaML Jupyter notebooks with execution tracking. Triggers on: 'run notebook', 'jupyter', 'papermill', 'parameters cell', 'notebook structure', 'deriva-ml-run-notebook', 'notebook with provenance'."
+description: "ALWAYS use this skill when creating, developing, or running DerivaML Jupyter notebooks with execution tracking. Triggers on: 'create notebook', 'new notebook', 'add notebook', 'scaffold notebook', 'run notebook', 'jupyter', 'notebook structure', 'deriva-ml-run-notebook', 'notebook with provenance', 'notebook_config', 'run_notebook'."
 ---
 
-# Develop and Run a DerivaML Notebook
+# Create and Run a DerivaML Notebook
 
-DerivaML notebooks support full execution tracking and provenance when structured correctly.
+DerivaML notebooks support full execution tracking and provenance. The `run_notebook()` API handles connection, execution context, and config loading automatically.
 
-## Required Notebook Structure
+## Creating a New Notebook
 
-1. **Imports cell** — All imports in the first code cell
-2. **Parameters cell** — Tagged `"parameters"` for papermill injection. Contains all configurable values (host, catalog, dataset RIDs, hyperparameters, `dry_run`)
-3. **Config loading** — `ml = DerivaML(host=host, catalog_id=catalog_id, schema=schema)`
-4. **Execution context** — Main logic inside `with ml.create_execution(...) as execution:` block
-5. **Save execution RID** — Set `DERIVA_ML_SAVE_EXECUTION_RID = execution.rid` after the context block
+### Step 1: Define a config module
+
+Create `src/configs/<notebook_name>.py`:
+
+**Simple notebook** (standard fields only — assets, datasets, workflow):
+```python
+from deriva_ml.execution import notebook_config
+
+notebook_config(
+    "<notebook_name>",
+    defaults={"assets": "my_assets", "datasets": "my_dataset"},
+)
+```
+
+**Notebook with custom parameters:**
+```python
+from dataclasses import dataclass
+from deriva_ml.execution import BaseConfig, notebook_config
+
+@dataclass
+class MyAnalysisConfig(BaseConfig):
+    threshold: float = 0.5
+    num_iterations: int = 100
+
+notebook_config(
+    "<notebook_name>",
+    config_class=MyAnalysisConfig,
+    defaults={"assets": "my_assets"},
+)
+```
+
+Multiple named configs can share one file:
+```python
+notebook_config(
+    "<notebook_name>",
+    defaults={"assets": "my_assets"},
+)
+
+notebook_config(
+    "<notebook_name>_variant",
+    defaults={"assets": "other_assets", "datasets": "other_dataset"},
+)
+```
+
+See the `write-hydra-config` skill for the full config API reference and rules.
+
+### Step 2: Create the notebook
+
+Create `notebooks/<notebook_name>.ipynb` with an initialization cell:
+
+```python
+from deriva_ml.execution import run_notebook
+
+ml, execution, config = run_notebook("<notebook_name>")
+
+# Ready to use:
+# - ml: Connected DerivaML instance
+# - execution: Execution context with downloaded inputs
+# - config: Resolved configuration (config.assets, config.threshold, etc.)
+```
+
+`run_notebook()` handles catalog connection, execution creation, dataset downloading, and config resolution. There is no need to manually set up parameters cells, papermill tags, or connection boilerplate.
+
+Add a final cell to upload outputs:
+```python
+execution.upload_execution_outputs()
+```
+
+Use `execution.asset_file_path("Execution_Asset", filename)` for all output files.
+
+### Step 3: Run
+
+```bash
+# Show available configs
+uv run deriva-ml-run-notebook notebooks/<notebook_name>.ipynb --info
+
+# Run with defaults
+uv run deriva-ml-run-notebook notebooks/<notebook_name>.ipynb
+
+# Override assets or datasets (positional Hydra overrides, NOT --config)
+uv run deriva-ml-run-notebook notebooks/<notebook_name>.ipynb assets=different_assets
+
+# Override host/catalog
+uv run deriva-ml-run-notebook notebooks/<notebook_name>.ipynb \
+    --host www.example.org --catalog 2
+```
+
+`--config` does NOT override the `run_notebook()` config name in the notebook cell. Use positional Hydra overrides instead.
 
 ## Critical Rules
 
-1. **Tag the parameters cell** — Must have `"parameters"` tag for papermill to inject values
-2. **Use `create_execution()` context manager** — Provides provenance tracking, auto-status updates
-3. **Clear outputs before committing** — Use `nbstripout` or manual clear
-4. **Commit before production runs** — Git hash is recorded in the execution record
-5. **Test with `dry_run=True`** — Validates pipeline without catalog writes
-
-## Running Notebooks
-
-```bash
-# Via CLI (recommended)
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb
-
-# With config overrides
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb assets=my_assets
-
-# Override host/catalog
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --host ml.derivacloud.org --catalog 2
-
-# Show available configs
-uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
-```
+1. **Clear outputs before committing** — Use `nbstripout` or manual clear
+2. **Commit before production runs** — Git hash is recorded in the execution record
+3. **Test with dry run** — `uv run deriva-ml-run-notebook notebooks/<name>.ipynb dry_run=true`
+4. **Use `asset_file_path("Execution_Asset", ...)`** for all output files
 
 ## MCP Tools
 
@@ -46,11 +112,10 @@ uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
 
 ## Pre-Production Checklist
 
-- [ ] Parameters cell tagged `"parameters"`
-- [ ] All configurable values in parameters cell
-- [ ] Main logic inside `create_execution()` context
-- [ ] `DERIVA_ML_SAVE_EXECUTION_RID` set after context
+- [ ] Config module created in `src/configs/`
+- [ ] `run_notebook("<name>")` call in first cell matches config name
+- [ ] `upload_execution_outputs()` in final cell
 - [ ] Runs end-to-end with Restart & Run All
 - [ ] Outputs cleared, code committed, version bumped
 
-For the full guide with environment setup, papermill details, and troubleshooting table, read `references/workflow.md`.
+For the full guide with environment setup, the manual papermill approach, and troubleshooting, read `references/workflow.md`.
