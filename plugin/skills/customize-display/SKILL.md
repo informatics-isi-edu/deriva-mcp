@@ -262,6 +262,18 @@ set_row_name_pattern(table="Diagnosis", pattern="{{{Name}}}")
 apply_annotations()
 ```
 
+## Reference Resources
+
+For detailed reference material beyond what this skill covers, read these MCP resources:
+
+- `deriva://docs/annotation-contexts` — Complete JSON reference of all valid Chaise annotation contexts and their usage. Read this when you need to know which contexts are available or what a specific context controls.
+- `deriva://docs/annotations` — Full guide to the annotation builder classes and annotation JSON structure. Read this for details on pseudo-column source syntax, facet configuration options, or advanced Handlebars patterns.
+- `deriva://docs/chaise/config` — Chaise web UI configuration options. Read this when customizing Chaise behavior beyond annotations (e.g., default page sizes, navbar, login config).
+
+To inspect current annotations on a specific table or column:
+- `deriva://table/{table_name}/annotations` — Display-related annotations currently set on a table
+- `deriva://table/{table_name}/column/{column_name}/annotations` — Display-related annotations on a column
+
 ## Tips
 
 - Always call `apply_annotations()` as the final step after making changes.

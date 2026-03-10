@@ -390,6 +390,18 @@ table.columns["URL"].annotations[ColumnDisplay.tag] = url_display.to_dict()
 ml.apply_annotations()
 ```
 
+## Reference Resources
+
+For detailed reference material beyond what this skill covers, read these MCP resources:
+
+- `deriva://docs/annotation-contexts` — Complete JSON reference of all valid Chaise annotation contexts and their usage. Read this when you need the full list of contexts or want to understand context inheritance.
+- `deriva://docs/annotations` — Full guide to annotation builders and the underlying JSON structure. Read this for advanced pseudo-column source syntax, facet options, or pre-format directives.
+- `deriva://docs/chaise/config` — Chaise web UI configuration beyond annotations. Read this for navbar customization, default page sizes, or login configuration.
+
+To inspect current annotations on a specific table or column:
+- `deriva://table/{table_name}/annotations` — Display-related annotations currently set on a table
+- `deriva://table/{table_name}/column/{column_name}/annotations` — Display-related annotations on a column
+
 ## Tips
 
 - Builders produce the same JSON that MCP tools set -- they are two ways to do the same thing.
