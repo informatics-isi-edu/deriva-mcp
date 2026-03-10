@@ -1210,6 +1210,7 @@ class TestDownloadDataset:
         assert data["bag_path"] == "/tmp/bags/DS-001"
         mock_spec_cls.assert_called_once_with(
             rid="DS-001", version="1.0.0", materialize=True,
+            exclude_tables=None, timeout=None,
         )
         mock_ml.download_dataset_bag.assert_called_once_with(mock_spec_instance)
 
@@ -1240,6 +1241,7 @@ class TestDownloadDataset:
         assert data["status"] == "downloaded"
         mock_spec_cls.assert_called_once_with(
             rid="DS-001", version="1.0.0", materialize=False,
+            exclude_tables=None, timeout=None,
         )
 
     @pytest.mark.asyncio
@@ -1286,6 +1288,104 @@ class TestDownloadDataset:
     async def test_download_no_connection(self, dataset_tools_disconnected):
         """When not connected, return an error."""
         result = await dataset_tools_disconnected["download_dataset"](
+            dataset_rid="DS-001",
+            version="1.0.0",
+        )
+
+        assert_error(result, expected_message="No active catalog connection")
+
+
+# =============================================================================
+# TestEstimateBagSize
+# =============================================================================
+
+
+class TestEstimateBagSize:
+    """Tests for the estimate_bag_size tool."""
+
+    @pytest.mark.asyncio
+    async def test_estimate_success(self, dataset_tools, mock_ml):
+        """Estimating bag size returns table breakdown and totals."""
+        mock_estimate = {
+            "tables": {
+                "Image": {"row_count": 100, "is_asset": True, "asset_bytes": 500_000_000},
+                "Subject": {"row_count": 20, "is_asset": False, "asset_bytes": 0},
+            },
+            "total_rows": 120,
+            "total_asset_bytes": 500_000_000,
+            "total_asset_size": "476.8 MB",
+        }
+        mock_ml.estimate_bag_size.return_value = mock_estimate
+
+        mock_spec_cls = MagicMock()
+        mock_spec_instance = MagicMock()
+        mock_spec_cls.return_value = mock_spec_instance
+
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec", mock_spec_cls):
+            result = await dataset_tools["estimate_bag_size"](
+                dataset_rid="DS-001",
+                version="1.0.0",
+            )
+
+        data = assert_success(result)
+        assert data["total_rows"] == 120
+        assert data["total_asset_bytes"] == 500_000_000
+        assert data["total_asset_size"] == "476.8 MB"
+        assert "Image" in data["tables"]
+        assert data["tables"]["Image"]["is_asset"] is True
+        assert data["tables"]["Image"]["asset_bytes"] == 500_000_000
+        assert data["tables"]["Subject"]["row_count"] == 20
+        mock_spec_cls.assert_called_once_with(
+            rid="DS-001", version="1.0.0", exclude_tables=None,
+        )
+        mock_ml.estimate_bag_size.assert_called_once_with(mock_spec_instance)
+
+    @pytest.mark.asyncio
+    async def test_estimate_with_exclude_tables(self, dataset_tools, mock_ml):
+        """Exclude tables are passed through to DatasetSpec."""
+        mock_ml.estimate_bag_size.return_value = {
+            "tables": {},
+            "total_rows": 0,
+            "total_asset_bytes": 0,
+            "total_asset_size": "0 B",
+        }
+
+        mock_spec_cls = MagicMock()
+        mock_spec_instance = MagicMock()
+        mock_spec_cls.return_value = mock_spec_instance
+
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec", mock_spec_cls):
+            result = await dataset_tools["estimate_bag_size"](
+                dataset_rid="DS-001",
+                version="1.0.0",
+                exclude_tables=["Study", "Protocol"],
+            )
+
+        data = assert_success(result)
+        mock_spec_cls.assert_called_once_with(
+            rid="DS-001", version="1.0.0", exclude_tables={"Study", "Protocol"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_estimate_error(self, dataset_tools, mock_ml):
+        """Errors are returned as error status."""
+        mock_ml.estimate_bag_size.side_effect = Exception("Version not found")
+
+        mock_spec_cls = MagicMock()
+        mock_spec_cls.return_value = MagicMock()
+
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec", mock_spec_cls):
+            result = await dataset_tools["estimate_bag_size"](
+                dataset_rid="DS-001",
+                version="99.0.0",
+            )
+
+        assert_error(result, expected_message="Version not found")
+
+    @pytest.mark.asyncio
+    async def test_estimate_not_connected(self, dataset_tools_disconnected):
+        """Returns error when no catalog is connected."""
+        result = await dataset_tools_disconnected["estimate_bag_size"](
             dataset_rid="DS-001",
             version="1.0.0",
         )

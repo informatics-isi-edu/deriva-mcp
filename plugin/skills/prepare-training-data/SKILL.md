@@ -94,6 +94,13 @@ query_table(
 
 Downloads the full dataset as a BDBag archive with all assets (files, images).
 
+**Preview size before downloading:**
+```
+estimate_bag_size(dataset_rid="2-XXXX", version="1.0.0")
+```
+Returns row counts and asset file sizes per table so you know what to expect.
+
+**Download:**
 ```
 download_dataset(dataset_rid="2-XXXX", version="1.0.0")
 ```
@@ -113,7 +120,11 @@ download_dataset(dataset_rid="2-XXXX", version="1.0.0")
 
 **When downloads are slow or timing out:**
 - Deep FK chains (e.g., Image → Sample → Subject → Study) can cause expensive joins
-- Use `exclude_tables` to prune specific tables from the FK graph:
+- **First**, increase the read timeout (default is 610s / ~10 min):
+  ```
+  download_dataset(dataset_rid="2-XXXX", version="1.0.0", timeout=[10, 1800])
+  ```
+- If the query is still too expensive, use `exclude_tables` to prune tables from the FK graph:
   ```
   download_dataset(dataset_rid="2-XXXX", version="1.0.0", exclude_tables=["Study", "Protocol"])
   ```

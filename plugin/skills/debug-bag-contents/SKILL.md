@@ -132,21 +132,35 @@ For each registered element type, examine the FK paths that the export will foll
 ### Deep join timeouts
 **Problem**: FK traversal through many intermediate tables causes slow exports or timeouts.
 
-**Fix — Option A (preferred): Exclude unnecessary tables from the FK graph.**
-Use the `exclude_tables` parameter on `download_dataset` or `download_execution_dataset` to prune branches of the FK graph that are causing the expensive joins:
+**Fix — Option A (preferred): Increase the download timeout.**
+The default network timeout is (10, 610) seconds — 10s to connect, 610s (~10 min) to read each query response. For large datasets with deep FK joins, increase the read timeout:
+
+```
+download_dataset(dataset_rid="2-XXXX", version="1.0.0", timeout=[10, 1800])
+```
+
+This gives the server 30 minutes per query instead of 10. The connect timeout (first value) rarely needs changing.
+
+For Hydra-Zen configs, add `timeout` to `DatasetSpecConfig`:
+```python
+DatasetSpecConfig(rid="28EA", version="0.4.0", timeout=[10, 1800])
+```
+
+**Fix — Option B: Exclude unnecessary tables from the FK graph.**
+If you don't need data from certain tables, prune them from the FK traversal:
 
 ```
 download_dataset(dataset_rid="2-XXXX", version="1.0.0", exclude_tables=["Study", "Protocol"])
 ```
 
-This prevents the export from traversing into those tables, avoiding the deep join entirely. Use this when the excluded tables' data is not needed in the bag.
+This prevents the export from traversing into those tables entirely. Use this when the excluded tables' data is not needed in the bag.
 
-For Hydra-Zen configs, add `exclude_tables` to `DatasetSpecConfig`:
+For Hydra-Zen configs:
 ```python
 DatasetSpecConfig(rid="28EA", version="0.4.0", exclude_tables=["Study", "Protocol"])
 ```
 
-**Fix — Option B: Flatten the traversal by adding direct members.**
+**Fix — Option C: Flatten the traversal by adding direct members.**
 Add records from intermediate tables as direct dataset members rather than relying on deep FK traversal. This replaces the deep join with simpler association-based lookups.
 
 ### Missing element type registration
@@ -195,11 +209,12 @@ Use this checklist when data is missing from a bag:
    - `increment_dataset_version` if members were recently changed.
 
 6. **Is the download timing out?**
-   - Use `exclude_tables` to prune expensive FK branches.
+   - First try increasing the timeout: `timeout=[10, 1800]` (30 min read timeout).
+   - If that's not enough, use `exclude_tables` to prune expensive FK branches.
    - Or add intermediate records as direct members to flatten the joins.
 
 7. **Preview before full download.**
-   - Check the bag preview resource to confirm expected counts before downloading.
+   - `estimate_bag_size` -- shows row counts and asset sizes per table before downloading.
 
 ## Related Tools
 
@@ -212,7 +227,8 @@ Use this checklist when data is missing from a bag:
 | `validate_dataset_bag` | Validate bag contents against expectations |
 | `increment_dataset_version` | Bump dataset version after changes |
 | `get_dataset_spec` | View dataset specification |
-| `download_dataset` | Download the dataset bag (supports `exclude_tables` for timeout recovery) |
+| `estimate_bag_size` | Preview row counts and asset sizes before downloading |
+| `download_dataset` | Download the dataset bag (supports `exclude_tables` and `timeout`) |
 | `denormalize_dataset` | Flatten dataset for analysis |
 | `query_table` | Inspect FK column values |
 | `get_table` | Check table schema and FK relationships |
