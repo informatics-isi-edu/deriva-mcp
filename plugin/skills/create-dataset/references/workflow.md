@@ -38,11 +38,30 @@ Before adding records from a table to a dataset, you must register that table as
 
 ### FK Traversal in Bag Exports
 
-When a dataset is downloaded as a BDBag, the export follows foreign key relationships:
+When a dataset is downloaded as a BDBag, the export follows foreign key relationships from registered element types:
 
-- **All FK-reachable tables are included**: If you add Image records and Image has a FK to Subject, Subject records are automatically exported.
-- **Vocabulary tables are exported separately**: Controlled vocabulary terms are included in a separate section of the bag.
-- **Deep join chains can timeout**: If your schema has many levels of FK relationships (e.g., Image -> Sample -> Subject -> Study -> Institution), the export query may timeout. Solution: add records from intermediate tables as direct members to avoid deep joins.
+- **Starting points are member records from registered element types.** Only tables registered via `add_dataset_element_type` that have members serve as traversal starting points.
+- **Both FK directions are followed.** Outgoing FKs (this table references another) and incoming FKs (another table references this one) are both traversed.
+- **Vocabulary tables are natural terminators.** Controlled vocabulary terms are collected and exported separately — they don't generate further FK traversal.
+- **Feature tables are automatically included.** Feature annotation tables for reachable element types are added to the export.
+- **Versions capture catalog snapshots.** A bag for a specific version reflects the exact catalog state when that version was created. Changes made after the version was created are not included.
+
+#### When downloads are slow or timing out
+
+Deep FK chains (e.g., Image → Sample → Subject → Study → Institution) can produce expensive server-side joins that timeout. Two solutions:
+
+1. **Exclude tables from the FK graph** — Use the `exclude_tables` parameter on `download_dataset` to prune branches:
+   ```
+   download_dataset(dataset_rid="2-XXXX", version="1.0.0", exclude_tables=["Study", "Institution"])
+   ```
+   This prevents traversal into those tables entirely. Use when the excluded tables' data is not needed.
+
+2. **Add intermediate records as direct members** — Register intermediate tables as element types and add their records as members. This replaces deep FK joins with simpler association lookups.
+
+For Hydra-Zen configs, `exclude_tables` is available on both `DatasetSpecConfig` and `DatasetSpec`:
+```python
+DatasetSpecConfig(rid="28EA", version="0.4.0", exclude_tables=["Study", "Institution"])
+```
 
 ## Step 1: Check Existing Resources
 

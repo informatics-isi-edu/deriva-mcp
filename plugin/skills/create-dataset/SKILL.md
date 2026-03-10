@@ -33,7 +33,7 @@ All splits create nested child datasets automatically. Use `dry_run=true` to pre
 
 1. **Always create datasets within an execution** — Use `create_execution_dataset`, not bare `create_dataset`, to maintain provenance.
 2. **Register element types before adding members** — `add_dataset_element_type` must be called for each source table before `add_dataset_members`.
-3. **FK traversal in bag exports** — Downloaded bags include all FK-reachable records. Deep join chains (Image -> Sample -> Subject -> Study) can cause timeouts. Workaround: add intermediate table records as direct members.
+3. **FK traversal in bag exports** — Downloaded bags include all FK-reachable records from registered element types. The export walks all foreign key paths (both directions) from member records, with vocabulary tables as natural terminators. Deep join chains (Image -> Sample -> Subject -> Study) can cause timeouts. Two fixes: (a) use `exclude_tables` to prune specific tables from the FK graph, or (b) add intermediate table records as direct members to flatten the traversal.
 4. **Version after every modification** — Call `increment_dataset_version` after adding/removing members or changing element types.
 5. **Validate RIDs first** — Use `validate_rids` before `add_dataset_members` to catch invalid RIDs early.
 6. **Set seeds on splits** — Always pass `seed` to `split_dataset` for reproducibility.

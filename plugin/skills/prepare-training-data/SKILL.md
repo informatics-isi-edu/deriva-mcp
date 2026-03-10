@@ -95,14 +95,30 @@ query_table(
 Downloads the full dataset as a BDBag archive with all assets (files, images).
 
 ```
-download_dataset(dataset_rid="2-XXXX")
+download_dataset(dataset_rid="2-XXXX", version="1.0.0")
 ```
 
 **What it does:**
 - Downloads all data tables as CSV files
 - Downloads all referenced assets (images, files, etc.)
 - Creates a reproducible BDBag with checksums
-- Preserves the exact dataset state at download time
+- Captures the exact catalog state at the version's snapshot time — the same version always returns the same data
+
+**How bag contents are determined:**
+- The export starts from each registered element type that has members in the dataset
+- From those starting records, it follows all foreign key paths (both directions) to include related data
+- Vocabulary tables are natural terminators — they're exported separately, not traversed further
+- Feature tables for reachable element types are automatically included
+- Nested child datasets are included recursively with all their members
+
+**When downloads are slow or timing out:**
+- Deep FK chains (e.g., Image → Sample → Subject → Study) can cause expensive joins
+- Use `exclude_tables` to prune specific tables from the FK graph:
+  ```
+  download_dataset(dataset_rid="2-XXXX", version="1.0.0", exclude_tables=["Study", "Protocol"])
+  ```
+- Alternatively, add records from intermediate tables as direct dataset members to flatten the traversal
+- Use `materialize=False` to skip downloading actual asset files (only metadata)
 
 **When to use:** Production training pipelines, reproducible experiments, when you need actual files (not just URLs).
 

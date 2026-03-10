@@ -708,6 +708,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         dataset_rid: str,
         version: str,
         materialize: bool = True,
+        exclude_tables: list[str] | None = None,
     ) -> str:
         """Download a dataset version as a BDBag for local processing.
 
@@ -725,8 +726,9 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         from element types that have members in this dataset are included.
 
         If any query fails during export (e.g., due to server-side timeout on deep
-        joins), the export raises an error. The error message will suggest adding
-        the affected records as direct dataset members to avoid the deep join.
+        joins), the export raises an error. Use exclude_tables to prune the FK
+        graph and avoid the problematic join, or add affected records as direct
+        dataset members to flatten the traversal.
 
         Use this for standalone processing outside an execution context. For
         tracked ML workflows, use download_execution_dataset instead.
@@ -738,6 +740,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             materialize: If True (default), fetch all referenced asset files
                 (images, model weights, etc.) from Hatrac storage. If False,
                 bag contains only metadata and remote file references.
+            exclude_tables: Optional list of table names to exclude from FK path
+                traversal during bag export. Tables in this list will not be
+                visited, pruning branches of the FK graph. Use this when bag
+                downloads are slow or timing out due to expensive joins through
+                large intermediate tables.
 
         Returns:
             JSON with bag attributes: dataset_rid, version, description,
@@ -749,7 +756,12 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             from deriva_ml.model.deriva_ml_database import DerivaMLDatabase
 
             ml = conn_manager.get_active_or_raise()
-            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
+            spec = DatasetSpec(
+                rid=dataset_rid,
+                version=version,
+                materialize=materialize,
+                exclude_tables=set(exclude_tables) if exclude_tables else None,
+            )
             bag = ml.download_dataset_bag(spec)
 
             # Build table inventory with row counts

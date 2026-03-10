@@ -132,7 +132,22 @@ For each registered element type, examine the FK paths that the export will foll
 ### Deep join timeouts
 **Problem**: FK traversal through many intermediate tables causes slow exports or timeouts.
 
-**Fix**: Add records from intermediate tables as direct dataset members rather than relying on deep FK traversal. This flattens the traversal and speeds up the export.
+**Fix — Option A (preferred): Exclude unnecessary tables from the FK graph.**
+Use the `exclude_tables` parameter on `download_dataset` or `download_execution_dataset` to prune branches of the FK graph that are causing the expensive joins:
+
+```
+download_dataset(dataset_rid="2-XXXX", version="1.0.0", exclude_tables=["Study", "Protocol"])
+```
+
+This prevents the export from traversing into those tables, avoiding the deep join entirely. Use this when the excluded tables' data is not needed in the bag.
+
+For Hydra-Zen configs, add `exclude_tables` to `DatasetSpecConfig`:
+```python
+DatasetSpecConfig(rid="28EA", version="0.4.0", exclude_tables=["Study", "Protocol"])
+```
+
+**Fix — Option B: Flatten the traversal by adding direct members.**
+Add records from intermediate tables as direct dataset members rather than relying on deep FK traversal. This replaces the deep join with simpler association-based lookups.
 
 ### Missing element type registration
 **Problem**: Records from a table are added as members but the table is not a registered element type, so those records are ignored during export.
@@ -179,7 +194,11 @@ Use this checklist when data is missing from a bag:
 5. **Is the version current?**
    - `increment_dataset_version` if members were recently changed.
 
-6. **Preview before full download.**
+6. **Is the download timing out?**
+   - Use `exclude_tables` to prune expensive FK branches.
+   - Or add intermediate records as direct members to flatten the joins.
+
+7. **Preview before full download.**
    - Check the bag preview resource to confirm expected counts before downloading.
 
 ## Related Tools
@@ -193,7 +212,7 @@ Use this checklist when data is missing from a bag:
 | `validate_dataset_bag` | Validate bag contents against expectations |
 | `increment_dataset_version` | Bump dataset version after changes |
 | `get_dataset_spec` | View dataset specification |
-| `download_dataset` | Download the dataset bag |
+| `download_dataset` | Download the dataset bag (supports `exclude_tables` for timeout recovery) |
 | `denormalize_dataset` | Flatten dataset for analysis |
 | `query_table` | Inspect FK column values |
 | `get_table` | Check table schema and FK relationships |

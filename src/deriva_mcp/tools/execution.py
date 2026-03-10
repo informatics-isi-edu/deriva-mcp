@@ -594,6 +594,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         dataset_rid: str,
         version: str,
         materialize: bool = True,
+        exclude_tables: list[str] | None = None,
     ) -> str:
         """Download a dataset version as a BDBag for use in this execution.
 
@@ -612,6 +613,9 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             materialize: If True (default), fetch all referenced asset files
                 (images, model weights, etc.) from Hatrac storage. If False,
                 bag contains only metadata and remote file references.
+            exclude_tables: Optional list of table names to exclude from FK path
+                traversal during bag export. Use when downloads are slow or
+                timing out due to expensive joins through large tables.
 
         Returns:
             JSON with bag attributes: dataset_rid, version, description,
@@ -627,7 +631,12 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                     "message": "No active execution.",
                 })
 
-            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
+            spec = DatasetSpec(
+                rid=dataset_rid,
+                version=version,
+                materialize=materialize,
+                exclude_tables=set(exclude_tables) if exclude_tables else None,
+            )
             bag = execution.download_dataset_bag(spec)
 
             return json.dumps({
