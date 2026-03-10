@@ -48,18 +48,25 @@ When a dataset is downloaded as a BDBag, the export follows foreign key relation
 
 #### When downloads are slow or timing out
 
-Deep FK chains (e.g., Image → Sample → Subject → Study → Institution) can produce expensive server-side joins that timeout. Two solutions:
+Deep FK chains (e.g., Image → Sample → Subject → Study → Institution) can produce expensive server-side joins that timeout. Three solutions, in order of preference:
 
-1. **Exclude tables from the FK graph** — Use the `exclude_tables` parameter on `download_dataset` to prune branches:
+1. **Increase the download timeout** — The default read timeout is 610 seconds (~10 min). For large datasets, increase it:
+   ```
+   download_dataset(dataset_rid="2-XXXX", version="1.0.0", timeout=[10, 1800])
+   ```
+   This gives the server 30 minutes per query. The first value (connect timeout) rarely needs changing.
+
+2. **Exclude tables from the FK graph** — If you don't need data from certain tables, prune them:
    ```
    download_dataset(dataset_rid="2-XXXX", version="1.0.0", exclude_tables=["Study", "Institution"])
    ```
-   This prevents traversal into those tables entirely. Use when the excluded tables' data is not needed.
+   This prevents traversal into those tables entirely.
 
-2. **Add intermediate records as direct members** — Register intermediate tables as element types and add their records as members. This replaces deep FK joins with simpler association lookups.
+3. **Add intermediate records as direct members** — Register intermediate tables as element types and add their records as members. This replaces deep FK joins with simpler association lookups.
 
-For Hydra-Zen configs, `exclude_tables` is available on both `DatasetSpecConfig` and `DatasetSpec`:
+For Hydra-Zen configs, both `timeout` and `exclude_tables` are available on `DatasetSpecConfig`:
 ```python
+DatasetSpecConfig(rid="28EA", version="0.4.0", timeout=[10, 1800])
 DatasetSpecConfig(rid="28EA", version="0.4.0", exclude_tables=["Study", "Institution"])
 ```
 

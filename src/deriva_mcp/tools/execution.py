@@ -595,6 +595,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         version: str,
         materialize: bool = True,
         exclude_tables: list[str] | None = None,
+        timeout: list[int] | None = None,
     ) -> str:
         """Download a dataset version as a BDBag for use in this execution.
 
@@ -616,6 +617,9 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             exclude_tables: Optional list of table names to exclude from FK path
                 traversal during bag export. Use when downloads are slow or
                 timing out due to expensive joins through large tables.
+            timeout: Optional [connect_timeout, read_timeout] in seconds for
+                network requests. Default is [10, 610]. Increase read_timeout
+                for large datasets with deep FK joins that need more time.
 
         Returns:
             JSON with bag attributes: dataset_rid, version, description,
@@ -636,6 +640,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 version=version,
                 materialize=materialize,
                 exclude_tables=set(exclude_tables) if exclude_tables else None,
+                timeout=tuple(timeout) if timeout else None,
             )
             bag = execution.download_dataset_bag(spec)
 

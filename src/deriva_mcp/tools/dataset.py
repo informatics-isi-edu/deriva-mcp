@@ -709,6 +709,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         version: str,
         materialize: bool = True,
         exclude_tables: list[str] | None = None,
+        timeout: list[int] | None = None,
     ) -> str:
         """Download a dataset version as a BDBag for local processing.
 
@@ -745,6 +746,9 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 visited, pruning branches of the FK graph. Use this when bag
                 downloads are slow or timing out due to expensive joins through
                 large intermediate tables.
+            timeout: Optional [connect_timeout, read_timeout] in seconds for
+                network requests. Default is [10, 610]. Increase read_timeout
+                for large datasets with deep FK joins that need more time.
 
         Returns:
             JSON with bag attributes: dataset_rid, version, description,
@@ -761,6 +765,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 version=version,
                 materialize=materialize,
                 exclude_tables=set(exclude_tables) if exclude_tables else None,
+                timeout=tuple(timeout) if timeout else None,
             )
             bag = ml.download_dataset_bag(spec)
 
