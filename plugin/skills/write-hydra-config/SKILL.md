@@ -449,6 +449,18 @@ Descriptions are recorded in execution metadata and make experiments self-docume
 - **Purposeful**: "Validation set held out by patient ID to prevent data leakage"
 - **Version-aware**: "Frozen at version 3, which excludes 12 QC-failed slides"
 
+## Reference Resources
+
+- `deriva://docs/hydra-zen` — Full guide to hydra-zen configuration management in DerivaML. Read this for background on how the config system works and why patterns are structured the way they are.
+- `deriva://docs/execution-configuration` — Execution configuration reference including all available parameters.
+- `deriva://config/deriva-ml-template` — Starter template for DerivaML connection config.
+- `deriva://config/dataset-spec-template` — Starter template for dataset specs.
+- `deriva://config/model-template` — Starter template for model configs with `zen_partial`.
+- `deriva://config/experiment-template` — Starter template for experiment presets.
+- `deriva://config/multirun-template` — Starter template for multirun sweeps.
+- `deriva://dataset/{rid}` — Look up dataset details including current version before writing DatasetSpecConfig.
+- `deriva://catalog/workflow-types` — Browse available workflow types for workflow config.
+
 ## Validating Configs Against the Catalog
 
 Before running experiments, validate that all RIDs and versions in config files actually exist in the connected catalog. This catches common errors like typos in RIDs, stale versions, or configs pointing at the wrong catalog.
