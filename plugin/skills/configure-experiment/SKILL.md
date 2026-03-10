@@ -85,6 +85,12 @@ Generated from `src/configs/experiments.py` and `src/configs/multiruns.py`.
 - **Purpose**: Why this experiment exists
 ```
 
+## Reference Resources
+
+- `deriva://config/experiment-template` — Experiment config template
+- `deriva://config/multirun-template` — Multirun config template
+- `deriva://catalog/workflows` — Available workflows and types
+
 ## Related Skills
 
 - **`write-hydra-config`** — Exact Python API patterns for each config type

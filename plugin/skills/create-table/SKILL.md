@@ -52,4 +52,10 @@ create_asset_table(table_name="Slide_Image", columns=[...], comment="...")
 add_column(table="Subject", column_name="Weight_kg", column_type="float8", comment="...")
 ```
 
+## Reference Resources
+
+- `deriva://catalog/schema` — Full catalog schema to check existing tables
+- `deriva://table/{table_name}/schema` — Table details including columns and foreign keys
+- `deriva://docs/ermrest/naming` — ERMrest naming conventions
+
 For the full guide with column types table, FK specification, common patterns, and examples, read `references/workflow.md`.

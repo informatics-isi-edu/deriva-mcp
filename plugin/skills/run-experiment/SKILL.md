@@ -57,4 +57,10 @@ After a run, check the execution was recorded:
 - Read `deriva://chaise-url/Execution/{rid}` for the web UI link
 - Verify: status is "Complete", correct datasets linked, output assets attached, git hash matches
 
+## Reference Resources
+
+- `deriva://execution/{rid}` — Execution details and status after a run
+- `deriva://experiment/{rid}` — Full experiment info with inputs and outputs
+- `deriva://chaise-url/{rid}` — Web UI link for viewing results in Chaise
+
 For the full guide with troubleshooting table, Hydra override syntax, and multirun details, read `references/workflow.md`.

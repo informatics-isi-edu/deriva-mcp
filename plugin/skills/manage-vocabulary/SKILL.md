@@ -220,6 +220,11 @@ The FK to the vocabulary table enables dropdown selection in the Chaise entry fo
 4. **Add synonyms** for common alternate names
 5. **Verify** — read `deriva://vocabulary/{vocab_name}` to confirm
 
+## Reference Resources
+
+- `deriva://catalog/vocabularies` — Browse all vocabularies and term counts
+- `deriva://vocabulary/{vocab_name}` — Browse terms in a specific vocabulary
+
 ## Tips
 
 - Vocabulary tables support faceted search in Chaise automatically — no extra configuration needed

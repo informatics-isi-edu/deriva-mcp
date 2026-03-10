@@ -167,6 +167,12 @@ Check the project's `pyproject.toml` for predefined dependency groups before add
 - [ ] `from deriva.ml import DerivaML` imports without error
 - [ ] Can connect to the target catalog
 
+## Reference Resources
+
+- `deriva://docs/notebooks` — Notebook documentation
+- `deriva://docs/install` — Installation reference
+- `deriva://docs/deriva-py/install` — Deriva-Py installation guide
+
 ## Troubleshooting
 
 ### Kernel Not Showing in JupyterLab

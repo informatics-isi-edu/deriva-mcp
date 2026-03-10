@@ -90,6 +90,31 @@ Example: "Individual chest X-ray images with associated metadata. Links to Subje
 
 Example: "Patient age at time of imaging in years. Integer value, range 0-120. Required for demographic stratification in training splits."
 
+## Formatting with Markdown
+
+Descriptions support **GitHub-flavored Markdown** which renders in the Chaise web UI. Use markdown to make descriptions more readable, especially for longer or structured content:
+
+- **Bold** and *italic* for emphasis
+- Bulleted or numbered lists for multi-part descriptions
+- `code` formatting for RIDs, column names, or config values
+- Markdown tables for parameter summaries or comparisons
+- Headers for long execution descriptions that cover multiple phases
+
+For example, an execution description might use:
+
+```markdown
+Train ResNet-50 on chest X-ray dataset `1-ABC4` v1.2.0.
+
+**Parameters:**
+- Learning rate: 0.001
+- Batch size: 32
+- Epochs: 100
+
+**Expected outputs:** model weights, training metrics, confusion matrix.
+```
+
+Keep simple descriptions as plain text — markdown is most useful for executions, datasets, and multirun descriptions where structured detail helps.
+
 ## Quality Checklist
 
 Before finalizing any description, verify it is:

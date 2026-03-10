@@ -198,6 +198,12 @@ increment_dataset_version(dataset_rid="2-XXXX")
 - Use nested datasets (train/test/validation splits) with `split_dataset` for consistent splits across experiments
 - Download datasets within an execution context so the provenance is automatically recorded
 
+## Reference Resources
+
+- `deriva://table/{table_name}/schema` — Understand table structure before extraction
+- `deriva://dataset/{rid}` — Dataset details including version and element types
+- `deriva://catalog/features` — Available features for building training labels
+
 ## Tips
 
 - Start with `denormalize_dataset` for quick exploration, then move to `download_dataset` for production.

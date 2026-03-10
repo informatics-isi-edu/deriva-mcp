@@ -57,4 +57,9 @@ upload_execution_outputs(execution_rid=...)
 - `list_nested_executions` / `list_parent_executions` — Navigate execution hierarchy
 - `add_asset_type` / `create_asset_table` — Manage asset categories and tables
 
+## Reference Resources
+
+- `deriva://execution/{rid}` — Execution details and status
+- `deriva://catalog/workflows` — Available workflows for execution context
+
 For the full guide with ExecutionConfiguration details, nested executions, asset management, and inspection tools, read `references/workflow.md`.

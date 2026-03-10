@@ -216,6 +216,12 @@ Use this checklist when data is missing from a bag:
 7. **Preview before full download.**
    - `estimate_bag_size` -- shows row counts and asset sizes per table before downloading.
 
+## Reference Resources
+
+- `deriva://dataset/{rid}/bag-preview` — Preview bag contents before downloading
+- `deriva://catalog/dataset-element-types` — Check which element types are registered
+- `deriva://table/{table_name}/foreign-keys` — Understand FK paths for traversal debugging
+
 ## Related Tools
 
 | Tool | Purpose |

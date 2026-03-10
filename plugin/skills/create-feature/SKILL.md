@@ -42,4 +42,9 @@ Features link domain objects (e.g., Image, Subject) to vocabulary terms, assets,
 | Mixed | `terms=[...], assets=[...]` | Labels with overlay images |
 | With metadata | `metadata=[{"name": "confidence", "type": {"typename": "float4"}}]` | Scores, reviewer refs |
 
+## Reference Resources
+
+- `deriva://catalog/features` — Browse existing features before creating new ones
+- `deriva://feature/{table_name}/{feature_name}` — Feature details and current values
+
 For the full step-by-step guide with code examples (both Python API and MCP tools), read `references/workflow.md`.

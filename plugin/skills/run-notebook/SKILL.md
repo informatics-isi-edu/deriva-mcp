@@ -119,4 +119,9 @@ uv run deriva-ml-run-notebook notebooks/<notebook_name>.ipynb \
 - [ ] Runs end-to-end with Restart & Run All
 - [ ] Outputs cleared, code committed, version bumped
 
+## Reference Resources
+
+- `deriva://docs/notebooks` — Full notebook documentation
+- `deriva://execution/{rid}` — Execution details after a notebook run
+
 For the full guide with environment setup, the manual papermill approach, and troubleshooting, read `references/workflow.md`.

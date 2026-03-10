@@ -96,6 +96,11 @@ Follow semantic versioning for dataset versions:
 4. Commit config changes
 5. Run experiments with the new version
 
+## Reference Resources
+
+- `deriva://dataset/{rid}/versions` — View version history for a dataset
+- `deriva://dataset/{rid}` — Current dataset info including version
+
 ## Common Mistakes
 
 | Mistake | Problem | Fix |

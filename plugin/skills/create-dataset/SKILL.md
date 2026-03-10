@@ -54,6 +54,12 @@ The standard sequence for creating a dataset:
 
 For the full step-by-step guide with code examples (both Python API and MCP tools), see `references/workflow.md`.
 
+## Reference Resources
+
+- `deriva://catalog/datasets` — Browse existing datasets before creating new ones
+- `deriva://dataset/{rid}` — Dataset details including current version
+- `deriva://catalog/dataset-element-types` — Check which element types are registered
+
 ## Related Skills
 
 - **`prepare-training-data`** — Downloading, extracting, and preparing dataset data for ML training pipelines.

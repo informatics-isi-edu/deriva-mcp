@@ -95,66 +95,12 @@ Commit the version bump before running.
 
 ## Coding Standards
 
-### Docstrings
+- **Docstrings**: Use Google-style docstrings for all public functions and classes.
+- **Type hints**: Use modern Python typing (3.11+) on all function signatures. Prefer `X | None` over `Optional[X]`.
+- **Formatting and linting**: Use `ruff` for linting and formatting, configured in `pyproject.toml`.
+- **Semantic versioning**: Bump versions with `uv run bump-version patch|minor|major` before production runs.
 
-Use Google-style docstrings for all public functions and classes:
-
-```python
-def train_model(config: ModelConfig, dataset_path: Path) -> dict[str, float]:
-    """Train the classification model on the provided dataset.
-
-    Args:
-        config: Model hyperparameters and architecture configuration.
-        dataset_path: Path to the downloaded and extracted dataset.
-
-    Returns:
-        Dictionary of metric names to final values, e.g.
-        {"accuracy": 0.95, "loss": 0.12}.
-
-    Raises:
-        ValueError: If the dataset contains no samples.
-    """
-```
-
-### Type Hints
-
-Use type hints on all function signatures. Use modern Python typing (Python 3.11+):
-
-```python
-from pathlib import Path
-
-def load_images(directory: Path, extensions: list[str] | None = None) -> list[Path]:
-    ...
-
-def compute_metrics(predictions: dict[str, list[float]]) -> dict[str, float]:
-    ...
-```
-
-### Code Formatting and Linting
-
-- Use `ruff` for linting and formatting.
-- Configure in `pyproject.toml`:
-
-```toml
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
-```
-
-## Semantic Versioning
-
-DerivaML projects follow semantic versioning. The version is recorded in every execution, creating a direct link between code and results.
-
-| Change Type | Version Bump | Example |
-|---|---|---|
-| Fix a bug in data loading | patch | 0.1.0 -> 0.1.1 |
-| Add a new model architecture | minor | 0.1.1 -> 0.2.0 |
-| Restructure the config system | major | 0.2.0 -> 1.0.0 |
-
-The version lives in `pyproject.toml` and is managed by the `bump-version` tool.
+For docstring templates, type hint examples, ruff rule sets, and the versioning table, see `references/coding-standards.md`.
 
 ## Notebook Guidelines
 

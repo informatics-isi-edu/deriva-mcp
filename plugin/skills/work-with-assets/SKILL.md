@@ -47,6 +47,12 @@ download_execution_dataset(execution_rid="2-EXEC")
 get_execution_working_dir(execution_rid="2-EXEC")
 ```
 
+## Reference Resources
+
+- `deriva://catalog/asset-tables` — List all asset tables in the catalog
+- `deriva://table/{table_name}/assets` — Browse assets in a specific table
+- `deriva://asset/{rid}` — Asset details and provenance
+
 ## Uploading Assets and Creating Asset Tables
 
 For uploading assets as execution outputs, creating new asset tables, and managing asset types, see the `run-ml-execution` skill. Assets should always be uploaded within an execution context for provenance tracking.

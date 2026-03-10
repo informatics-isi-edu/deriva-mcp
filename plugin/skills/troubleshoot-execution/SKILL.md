@@ -162,6 +162,12 @@ This guide covers common problems encountered when running DerivaML executions a
 
 ---
 
+## Reference Resources
+
+- `deriva://execution/{rid}` — Inspect execution state, status, and metadata
+- `deriva://storage/execution-dirs` — Check execution working directories
+- `deriva://catalog/vocabularies` — Verify vocabulary terms exist (e.g., status types, workflow types)
+
 ## General Debugging Tips
 
 ### Enable Verbose Logging
