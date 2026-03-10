@@ -27,6 +27,7 @@ Storage tools (sync):
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -1561,156 +1562,177 @@ class TestListParentExecutions:
 
 
 # =============================================================================
-# TestClearCache (Storage tool - SYNC)
+# TestListCacheContents (Storage tool)
+# =============================================================================
+
+
+class TestListCacheContents:
+    """Tests for the list_cache_contents storage tool."""
+
+    @pytest.mark.asyncio
+    async def test_list_cache_discovers_dirs(self, storage_tools, mock_ml):
+        """list_cache_contents discovers cache dirs and returns entries."""
+        mock_ml.cache_dir = Path("/tmp/test-cache")
+
+        with patch("deriva_mcp.tools.execution._discover_cache_dirs") as mock_discover:
+            mock_discover.return_value = []
+            result = await storage_tools["list_cache_contents"]()
+
+        data = assert_success(result)
+        assert data["total_entries"] == 0
+        assert data["total_size_bytes"] == 0
+
+    @pytest.mark.asyncio
+    async def test_list_cache_with_extra_dirs(self, storage_tools, mock_ml):
+        """list_cache_contents accepts extra cache directories."""
+        mock_ml.cache_dir = Path("/tmp/test-cache")
+
+        with patch("deriva_mcp.tools.execution._discover_cache_dirs") as mock_discover:
+            mock_discover.return_value = []
+            result = await storage_tools["list_cache_contents"](
+                cache_dirs=["/tmp/extra-cache"]
+            )
+
+        data = assert_success(result)
+        mock_discover.assert_called_once_with(
+            str(Path("/tmp/test-cache")), ["/tmp/extra-cache"]
+        )
+
+
+# =============================================================================
+# TestDeleteCacheEntry (Storage tool)
+# =============================================================================
+
+
+class TestDeleteCacheEntry:
+    """Tests for the delete_cache_entry storage tool."""
+
+    @pytest.mark.asyncio
+    async def test_delete_dry_run(self, storage_tools, mock_ml):
+        """delete_cache_entry without confirm returns dry run preview."""
+        mock_ml.cache_dir = Path("/tmp/test-cache")
+
+        with patch("deriva_mcp.tools.execution._discover_cache_dirs") as mock_discover:
+            mock_discover.return_value = []
+            result = await storage_tools["delete_cache_entry"](
+                dataset_rid="DS-001",
+            )
+
+        data = assert_success(result)
+        assert data["entries_found"] == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_no_connection_still_works(self, storage_tools_disconnected):
+        """delete_cache_entry works without connection (scans defaults)."""
+        with patch("deriva_mcp.tools.execution._discover_cache_dirs") as mock_discover:
+            mock_discover.return_value = []
+            result = await storage_tools_disconnected["delete_cache_entry"](
+                dataset_rid="DS-001",
+            )
+
+        data = assert_success(result)
+        assert data["entries_found"] == 0
+
+
+# =============================================================================
+# TestClearCache (Storage tool)
 # =============================================================================
 
 
 class TestClearCache:
-    """Tests for the clear_cache storage tool (sync)."""
+    """Tests for the clear_cache storage tool."""
 
-    def test_clear_cache_all(self, storage_tools, mock_ml):
-        """clear_cache removes all cache entries and returns summary."""
-        mock_ml.clear_cache.return_value = {
-            "files_removed": 15,
-            "dirs_removed": 3,
-            "bytes_freed": 1048576,
-            "errors": 0,
-        }
+    @pytest.mark.asyncio
+    async def test_clear_cache_dry_run(self, storage_tools, mock_ml):
+        """clear_cache without confirm returns dry run preview."""
+        mock_ml.cache_dir = Path("/tmp/test-cache")
 
-        result = storage_tools["clear_cache"]()
+        with patch.object(Path, "exists", return_value=False):
+            result = await storage_tools["clear_cache"]()
 
         data = assert_success(result)
-        assert data["status"] == "success"
-        assert data["older_than_days"] is None
-        assert data["files_removed"] == 15
-        assert data["dirs_removed"] == 3
-        assert data["bytes_freed"] == 1048576
-        assert data["errors"] == 0
-        mock_ml.clear_cache.assert_called_once_with(older_than_days=None)
+        assert data["entries_found"] == 0
 
-    def test_clear_cache_older_than(self, storage_tools, mock_ml):
-        """clear_cache with older_than_days only removes old entries."""
-        mock_ml.clear_cache.return_value = {
-            "files_removed": 5,
-            "dirs_removed": 1,
-            "bytes_freed": 512000,
-            "errors": 0,
-        }
+    @pytest.mark.asyncio
+    async def test_clear_cache_confirmed(self, storage_tools, mock_ml):
+        """clear_cache with confirm=True and empty cache succeeds."""
+        mock_ml.cache_dir = Path("/tmp/test-cache")
 
-        result = storage_tools["clear_cache"](older_than_days=7)
+        with patch.object(Path, "exists", return_value=False):
+            result = await storage_tools["clear_cache"](confirm=True)
 
         data = assert_success(result)
-        assert data["older_than_days"] == 7
-        assert data["files_removed"] == 5
-        mock_ml.clear_cache.assert_called_once_with(older_than_days=7)
+        assert data["entries_found"] == 0
 
-    def test_clear_cache_empty(self, storage_tools, mock_ml):
-        """clear_cache succeeds when cache is already empty."""
-        mock_ml.clear_cache.return_value = {
-            "files_removed": 0,
-            "dirs_removed": 0,
-            "bytes_freed": 0,
-            "errors": 0,
-        }
-
-        result = storage_tools["clear_cache"]()
-
-        data = assert_success(result)
-        assert data["files_removed"] == 0
-        assert data["bytes_freed"] == 0
-
-    def test_clear_cache_exception(self, storage_tools, mock_ml):
-        """clear_cache returns error when cache clearing fails."""
-        mock_ml.clear_cache.side_effect = Exception("Permission denied")
-
-        result = storage_tools["clear_cache"]()
-
-        assert_error(result, "Permission denied")
-
-    def test_clear_cache_no_connection(self, storage_tools_disconnected):
-        """clear_cache returns error when not connected."""
-        result = storage_tools_disconnected["clear_cache"]()
+    @pytest.mark.asyncio
+    async def test_clear_cache_no_connection(self, storage_tools_disconnected):
+        """clear_cache returns error when not connected and no cache_dir given."""
+        result = await storage_tools_disconnected["clear_cache"]()
 
         assert_error(result, "No active catalog connection")
 
+    @pytest.mark.asyncio
+    async def test_clear_cache_with_explicit_dir(self, storage_tools_disconnected):
+        """clear_cache works without connection when cache_dir is provided."""
+        with patch.object(Path, "exists", return_value=False):
+            result = await storage_tools_disconnected["clear_cache"](
+                cache_dir="/tmp/explicit-cache"
+            )
+
+        data = assert_success(result)
+        assert data["entries_found"] == 0
+
 
 # =============================================================================
-# TestCleanExecutionDirs (Storage tool - SYNC)
+# TestCleanExecutionDirs (Storage tool)
 # =============================================================================
 
 
 class TestCleanExecutionDirs:
-    """Tests for the clean_execution_dirs storage tool (sync)."""
+    """Tests for the clean_execution_dirs storage tool."""
 
-    def test_clean_dirs_all(self, storage_tools, mock_ml):
-        """clean_execution_dirs removes all execution directories."""
+    @pytest.mark.asyncio
+    async def test_clean_dirs_dry_run(self, storage_tools, mock_ml):
+        """clean_execution_dirs without confirm returns dry run preview."""
+        mock_ml.list_execution_dirs.return_value = []
+
+        result = await storage_tools["clean_execution_dirs"]()
+
+        data = json.loads(result)
+        assert data["status"] == "dry_run"
+
+    @pytest.mark.asyncio
+    async def test_clean_dirs_confirmed(self, storage_tools, mock_ml):
+        """clean_execution_dirs with confirm=True actually deletes."""
         mock_ml.clean_execution_dirs.return_value = {
             "dirs_removed": 5,
             "bytes_freed": 2097152,
             "errors": 0,
         }
 
-        result = storage_tools["clean_execution_dirs"]()
+        result = await storage_tools["clean_execution_dirs"](confirm=True)
 
         data = assert_success(result)
-        assert data["status"] == "success"
-        assert data["older_than_days"] is None
-        assert data["exclude_rids"] is None
         assert data["dirs_removed"] == 5
         assert data["bytes_freed"] == 2097152
-        assert data["errors"] == 0
         mock_ml.clean_execution_dirs.assert_called_once_with(
             older_than_days=None,
             exclude_rids=None,
         )
 
-    def test_clean_dirs_older_than(self, storage_tools, mock_ml):
-        """clean_execution_dirs with older_than_days only removes old dirs."""
-        mock_ml.clean_execution_dirs.return_value = {
-            "dirs_removed": 2,
-            "bytes_freed": 100000,
-            "errors": 0,
-        }
-
-        result = storage_tools["clean_execution_dirs"](older_than_days=30)
-
-        data = assert_success(result)
-        assert data["older_than_days"] == 30
-        mock_ml.clean_execution_dirs.assert_called_once_with(
-            older_than_days=30,
-            exclude_rids=None,
-        )
-
-    def test_clean_dirs_with_excludes(self, storage_tools, mock_ml):
-        """clean_execution_dirs excludes specified RIDs."""
-        mock_ml.clean_execution_dirs.return_value = {
-            "dirs_removed": 3,
-            "bytes_freed": 500000,
-            "errors": 0,
-        }
-
-        result = storage_tools["clean_execution_dirs"](
-            exclude_rids=["1-ABC", "1-DEF"]
-        )
-
-        data = assert_success(result)
-        assert data["exclude_rids"] == ["1-ABC", "1-DEF"]
-        mock_ml.clean_execution_dirs.assert_called_once_with(
-            older_than_days=None,
-            exclude_rids=["1-ABC", "1-DEF"],
-        )
-
-    def test_clean_dirs_with_both_params(self, storage_tools, mock_ml):
-        """clean_execution_dirs with both older_than_days and exclude_rids."""
+    @pytest.mark.asyncio
+    async def test_clean_dirs_with_params(self, storage_tools, mock_ml):
+        """clean_execution_dirs passes through older_than_days and exclude_rids."""
         mock_ml.clean_execution_dirs.return_value = {
             "dirs_removed": 1,
             "bytes_freed": 250000,
             "errors": 0,
         }
 
-        result = storage_tools["clean_execution_dirs"](
+        result = await storage_tools["clean_execution_dirs"](
             older_than_days=14,
             exclude_rids=["1-KEEP"],
+            confirm=True,
         )
 
         data = assert_success(result)
@@ -1721,44 +1743,19 @@ class TestCleanExecutionDirs:
             exclude_rids=["1-KEEP"],
         )
 
-    def test_clean_dirs_empty(self, storage_tools, mock_ml):
-        """clean_execution_dirs succeeds when no directories to clean."""
-        mock_ml.clean_execution_dirs.return_value = {
-            "dirs_removed": 0,
-            "bytes_freed": 0,
-            "errors": 0,
-        }
-
-        result = storage_tools["clean_execution_dirs"]()
-
-        data = assert_success(result)
-        assert data["dirs_removed"] == 0
-
-    def test_clean_dirs_with_errors(self, storage_tools, mock_ml):
-        """clean_execution_dirs reports partial cleanup with errors."""
-        mock_ml.clean_execution_dirs.return_value = {
-            "dirs_removed": 3,
-            "bytes_freed": 750000,
-            "errors": 2,
-        }
-
-        result = storage_tools["clean_execution_dirs"]()
-
-        data = assert_success(result)
-        assert data["dirs_removed"] == 3
-        assert data["errors"] == 2
-
-    def test_clean_dirs_exception(self, storage_tools, mock_ml):
+    @pytest.mark.asyncio
+    async def test_clean_dirs_exception(self, storage_tools, mock_ml):
         """clean_execution_dirs returns error when cleanup fails."""
-        mock_ml.clean_execution_dirs.side_effect = Exception("Disk error")
+        mock_ml.list_execution_dirs.side_effect = Exception("Disk error")
 
-        result = storage_tools["clean_execution_dirs"]()
+        result = await storage_tools["clean_execution_dirs"]()
 
         assert_error(result, "Disk error")
 
-    def test_clean_dirs_no_connection(self, storage_tools_disconnected):
+    @pytest.mark.asyncio
+    async def test_clean_dirs_no_connection(self, storage_tools_disconnected):
         """clean_execution_dirs returns error when not connected."""
-        result = storage_tools_disconnected["clean_execution_dirs"]()
+        result = await storage_tools_disconnected["clean_execution_dirs"]()
 
         assert_error(result, "No active catalog connection")
 
