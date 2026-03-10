@@ -5001,7 +5001,7 @@ Before finalizing any description, verify it is:
 
     @mcp.prompt(
         name="maintain-experiment-notes",
-        description="ALWAYS use after any significant experiment decision — dataset creation, split strategy, feature selection, hyperparameter choice, architecture selection, or catalog structure change. Append the decision and rationale to experiment-decisions.md automatically.",
+        description="ALWAYS use after any significant experiment decision — dataset creation/versioning/structure, split strategy, feature selection, vocabulary changes, hyperparameter choice, architecture selection, data model changes, workflow creation, model runs with notable results, asset organization, catalog cloning, or significant code changes. Append the decision and rationale to experiment-decisions.md automatically.",
     )
     def maintain_experiment_notes_prompt() -> str:
         """maintain-experiment-notes workflow guide."""
@@ -5018,11 +5018,19 @@ This is not a session log, a task list, or a changelog. It does not track who di
 Append an entry after any of these events:
 
 - **Dataset composition**: Why these members were included/excluded, why this size, why these types
+- **Dataset versioning**: Why a new version was created, what changed since the previous version, why the version was needed now
+- **Dataset structure**: Why a dataset element type was registered, why datasets were nested (parent/child hierarchy), why a dataset was deleted
 - **Split strategy**: Why this split ratio, why stratified, why patient-level vs image-level
-- **Feature selection**: Why this feature was created (or reused), what it represents, why this vocabulary
+- **Feature selection**: Why this feature was created (or reused), what it represents, why this vocabulary. Also when a feature is deleted — why was it removed or replaced?
+- **Vocabulary changes**: Why a new vocabulary term was added, why an existing term was renamed or its description changed, why a synonym was added or removed
 - **Architecture/model choice**: Why this model, why these hyperparameters, what alternatives were considered
-- **Catalog structure changes**: Why a table was added/extended, why a column was added, why a FK was created
+- **Data model changes**: Why a table was added/extended, why a column was added, why a FK was created, why annotations (display, visible columns, row names) were changed
+- **Workflow creation**: Why a new workflow or workflow type was created — what experimental approach does it represent?
 - **Configuration choices**: Why this hydra-zen config, why these overrides, why this multirun setup
+- **Model runs**: Notable results from running a model — record the execution RID, key metrics, and whether results matched expectations or revealed something unexpected
+- **Asset organization**: Why assets were restructured into a particular directory layout (group_by choices), why an asset type was created or assigned
+- **Catalog cloning**: Why a catalog was cloned, what was included/excluded, what the clone is for (dev workspace, reproducibility archive, etc.)
+- **Significant code changes**: When commits reflect high-level changes to model logic, training pipeline, or data processing — summarize what changed and why (not every commit, only ones that affect experiment design or results)
 - **Problem resolution**: What went wrong and why the chosen fix was correct (not just "fixed it")
 
 Do NOT write entries for routine operations that don't involve a choice — querying data, reading schemas, listing datasets. Only capture moments where an alternative existed and a direction was chosen.
@@ -5076,6 +5084,26 @@ User requested a Patient table with Name, Age, Gender, Enrollment_Date. Subject 
 (RID: 1-4W2G) already has Name, Age, Gender with 1,247 records and 8 incoming FKs.
 Creating a duplicate table would orphan all existing relationships. Added Enrollment_Date
 column to Subject instead.
+
+### Added "Proliferative_DR" term to Disease_Stage vocabulary
+
+The existing Disease_Stage vocabulary had 4 NPDR severity levels but no proliferative stage.
+Added "Proliferative_DR" (RID: 3-ABCD) to cover the full ETDRS classification. Chose a
+single term rather than splitting into subtypes since the imaging data doesn't distinguish
+early vs high-risk proliferative.
+
+### Incremented dataset version after adding classification labels
+
+Incremented 6-EKGA to v6-EPTP after batch-uploading 400 new Image_Classification values.
+The previous version (v6-EMST) only had 311 labeled images. Existing experiment configs
+referencing v6-EMST still see the old snapshot — updated cifar10_extended config to use
+the new version.
+
+### Baseline CNN run: 87% test accuracy (execution 6-EP9G)
+
+First full run of cifar10_extended config on the labeled split. Test accuracy 87.2%,
+train accuracy 94.1% — moderate overfitting as expected without augmentation. ROC AUC 0.96
+across 10 classes. This establishes the baseline for architecture experiments.
 ```
 
 ## Relationship to Other Files
