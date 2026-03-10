@@ -1044,8 +1044,7 @@ class TestExecutionDetails:
         exe.workflow_rid = "WF-500"
         exe.status = MagicMock()
         exe.status.value = "Complete"
-        exe.configuration = MagicMock()
-        exe.configuration.description = "Test execution"
+        exe.description = "Test execution"
         exe.list_nested_executions.return_value = [{"Nested_Execution": "EXE-501"}]
         exe.list_parent_executions.return_value = [{"Execution": "EXE-499"}]
         mock_ml.lookup_execution.return_value = exe

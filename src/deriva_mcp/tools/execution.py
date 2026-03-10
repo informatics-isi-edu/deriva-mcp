@@ -538,7 +538,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 "status": "downloaded",
                 "execution_rid": execution.execution_rid,
                 "asset_rid": asset_rid,
-                "file_path": str(asset_path.asset_path),
+                "file_path": str(asset_path),
                 "filename": asset_path.file_name,
                 "asset_table": asset_path.asset_table,
                 "asset_types": asset_path.asset_types,

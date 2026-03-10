@@ -1734,7 +1734,7 @@ multirun_config(
                     "rid": exe.execution_rid,
                     "workflow_rid": exe.workflow_rid,
                     "status": exe.status.value if hasattr(exe.status, "value") else str(exe.status),
-                    "description": exe.configuration.description if exe.configuration else "",
+                    "description": exe.description,
                     "nested_executions": [n["Nested_Execution"] for n in nested],
                     "parent_executions": [p["Execution"] for p in parents],
                 },

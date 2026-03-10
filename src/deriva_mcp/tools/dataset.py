@@ -694,7 +694,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             for exe in executions:
                 results.append({
                     "execution_rid": exe.execution_rid,
-                    "description": exe.configuration.description if exe.configuration else None,
+                    "description": exe.description,
                     "status": exe.status.value if exe.status else None,
                     "workflow_rid": exe.workflow_rid,
                 })

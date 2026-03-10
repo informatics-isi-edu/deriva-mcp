@@ -916,7 +916,7 @@ class TestDownloadAsset:
             execution_rid="EXE-DL", working_dir="/tmp/exec_dl"
         )
         mock_asset_path = MagicMock()
-        mock_asset_path.asset_path = Path("/tmp/exec_dl/model.pt")
+        mock_asset_path.__str__ = lambda self: "/tmp/exec_dl/model.pt"
         mock_asset_path.file_name = "model.pt"
         mock_asset_path.asset_table = "Model"
         mock_asset_path.asset_types = ["Model"]
@@ -943,7 +943,7 @@ class TestDownloadAsset:
         """download_asset downloads to a specified directory."""
         mock_execution = _make_mock_execution()
         mock_asset_path = MagicMock()
-        mock_asset_path.asset_path = Path("/custom/dir/image.jpg")
+        mock_asset_path.__str__ = lambda self: "/custom/dir/image.jpg"
         mock_asset_path.file_name = "image.jpg"
         mock_asset_path.asset_table = "Image"
         mock_asset_path.asset_types = ["Training"]

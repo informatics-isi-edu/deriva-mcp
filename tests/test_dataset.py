@@ -1114,13 +1114,13 @@ class TestListDatasetExecutions:
 
         mock_exe1 = MagicMock()
         mock_exe1.execution_rid = "EXE-1"
-        mock_exe1.configuration.description = "Training run"
+        mock_exe1.description = "Training run"
         mock_exe1.status.value = "complete"
         mock_exe1.workflow_rid = "WF-1"
 
         mock_exe2 = MagicMock()
         mock_exe2.execution_rid = "EXE-2"
-        mock_exe2.configuration = None
+        mock_exe2.description = None
         mock_exe2.status = None
         mock_exe2.workflow_rid = "WF-2"
 
