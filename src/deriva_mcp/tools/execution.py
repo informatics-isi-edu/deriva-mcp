@@ -829,6 +829,136 @@ def _human_readable_size(size_bytes: int) -> str:
     return f"{size:.1f} {units[i]}"
 
 
+def _discover_working_dirs(connected_working_dir: str | None = None) -> list[Path]:
+    """Discover all DerivaML working directories (hostname/catalog_id level).
+
+    Scans ~/.deriva-ml/ for directories that contain a 'cache' or 'deriva-ml'
+    subdirectory, which identifies them as working directories.
+
+    Returns:
+        Sorted list of working directory Paths.
+    """
+    from pathlib import Path
+
+    candidates: set[Path] = set()
+
+    default_root = Path.home() / ".deriva-ml"
+    if default_root.exists():
+        # Look for dirs that are hostname/catalog_id level
+        # These typically contain cache/, deriva-ml/, hydra/, etc.
+        for host_dir in sorted(default_root.iterdir()):
+            if not host_dir.is_dir():
+                continue
+            for catalog_dir in sorted(host_dir.iterdir()):
+                if not catalog_dir.is_dir():
+                    continue
+                # Skip snapshot dirs (contain @)
+                if "@" in catalog_dir.name:
+                    continue
+                # A working dir has at least one of these subdirs
+                if any((catalog_dir / sub).exists()
+                       for sub in ["cache", "deriva-ml", "hydra", "hydra-sweep", "client_export"]):
+                    candidates.add(catalog_dir.resolve())
+
+    # Also handle top-level dirs that are themselves catalog dirs (e.g., ~/.deriva-ml/1/)
+    if default_root.exists():
+        for entry in sorted(default_root.iterdir()):
+            if entry.is_dir() and not entry.name.startswith(".") and "@" not in entry.name:
+                if any((entry / sub).exists()
+                       for sub in ["cache", "deriva-ml", "hydra", "hydra-sweep", "client_export"]):
+                    candidates.add(entry.resolve())
+
+    if connected_working_dir:
+        p = Path(connected_working_dir)
+        if p.exists():
+            candidates.add(p.resolve())
+
+    return sorted(candidates)
+
+
+def _parse_working_dir(workdir: Path) -> dict[str, Any]:
+    """Parse a working directory into a structured summary.
+
+    Examines a hostname/catalog_id working directory and catalogs its contents:
+    execution dirs, hydra configs, stale bags, and other artifacts.
+
+    Returns:
+        Dict with working directory metadata and subdirectory summaries.
+    """
+    from datetime import datetime
+
+    # Derive label from path
+    default_root = str(Path.home() / ".deriva-ml")
+    if str(workdir).startswith(default_root):
+        # Extract relative path after ~/.deriva-ml/
+        rel = workdir.relative_to(default_root)
+        label = str(rel)
+    else:
+        label = str(workdir)
+
+    subdirs: list[dict[str, Any]] = []
+    total_bytes = 0
+
+    for entry in sorted(workdir.iterdir()):
+        if not entry.is_dir() or entry.name.startswith("."):
+            continue
+
+        entry_size = sum(f.stat().st_size for f in entry.rglob("*") if f.is_file())
+        file_count = sum(1 for f in entry.rglob("*") if f.is_file())
+        try:
+            mtime = datetime.fromtimestamp(entry.stat().st_mtime)
+        except OSError:
+            mtime = None
+
+        if entry.name == "cache":
+            # Count cache entries
+            cache_entries = sum(1 for c in entry.iterdir() if c.is_dir() and "_" in c.name)
+            subdirs.append({
+                "name": "cache",
+                "type": "cache",
+                "size_bytes": entry_size,
+                "size": _human_readable_size(entry_size),
+                "item_count": cache_entries,
+                "modified": mtime.isoformat() if mtime else None,
+                "path": str(entry),
+            })
+        elif entry.name == "deriva-ml":
+            # Count execution dirs
+            exec_dir = entry / "execution"
+            exec_count = 0
+            if exec_dir.exists():
+                exec_count = sum(1 for e in exec_dir.iterdir() if e.is_dir())
+            subdirs.append({
+                "name": "deriva-ml",
+                "type": "executions",
+                "size_bytes": entry_size,
+                "size": _human_readable_size(entry_size),
+                "item_count": exec_count,
+                "modified": mtime.isoformat() if mtime else None,
+                "path": str(entry),
+            })
+        else:
+            subdirs.append({
+                "name": entry.name,
+                "type": "other",
+                "size_bytes": entry_size,
+                "size": _human_readable_size(entry_size),
+                "item_count": file_count,
+                "modified": mtime.isoformat() if mtime else None,
+                "path": str(entry),
+            })
+
+        total_bytes += entry_size
+
+    return {
+        "label": label,
+        "path": str(workdir),
+        "subdirectories": subdirs,
+        "total_bytes": total_bytes,
+        "total_size": _human_readable_size(total_bytes),
+    }
+
+
 def _discover_cache_dirs(connected_cache_dir: str | None = None, extra_dirs: list[str] | None = None) -> list[Path]:
     """Discover all potential DerivaML cache directories.
 
@@ -951,11 +1081,15 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
     async def list_cache_contents(
         cache_dirs: list[str] | None = None,
     ) -> str:
-        """List all cached dataset bags across all DerivaML cache directories.
+        """List all cached dataset bags and working directory contents.
 
         Discovers cache directories automatically by scanning ~/.deriva-ml/
         and the connected catalog's cache. Shows each cached bag with its
         dataset RID, description, size, asset count, and materialization status.
+
+        Also provides a separate working_directories table showing the full
+        contents of each DerivaML working directory (execution dirs, hydra
+        configs, stale bags, and other artifacts).
 
         Use this to understand what's consuming disk space before deciding
         what to delete.
@@ -969,15 +1103,20 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
                 - cache_directories: list of discovered cache paths with entry counts
                 - entries: list of cached bags, each with dataset_rid, checksum,
                   size, asset_count, materialized, description, modified, path
-                - total_size: human-readable total size
-                - total_size_bytes: total size in bytes
+                - total_size: human-readable total size of cached bags
+                - total_size_bytes: total size in bytes of cached bags
+                - working_directories: list of working directory summaries,
+                  each with label, path, subdirectories (cache, executions,
+                  stale_bag, other), and total_size
         """
         try:
-            # Get connected catalog's cache dir if available
+            # Get connected catalog's cache/working dir if available
             connected_cache = None
+            connected_workdir = None
             try:
                 ml = conn_manager.get_active_or_raise()
                 connected_cache = str(ml.cache_dir)
+                connected_workdir = str(ml.working_dir)
             except Exception:
                 pass  # Not connected, just scan defaults
 
@@ -1019,6 +1158,11 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
 
             total_bytes = sum(e["size_bytes"] for e in all_entries)
 
+            # Build working directory summaries
+            workdirs = _discover_working_dirs(connected_workdir)
+            workdir_summaries = [_parse_working_dir(wd) for wd in workdirs]
+            workdir_total = sum(wd["total_bytes"] for wd in workdir_summaries)
+
             return json.dumps({
                 "status": "success",
                 "cache_directories": dir_summaries,
@@ -1026,6 +1170,9 @@ def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager)
                 "total_entries": len(all_entries),
                 "total_size_bytes": total_bytes,
                 "total_size": _human_readable_size(total_bytes),
+                "working_directories": workdir_summaries,
+                "working_directories_total_bytes": workdir_total,
+                "working_directories_total_size": _human_readable_size(workdir_total),
             })
         except Exception as e:
             logger.error(f"Failed to list cache contents: {e}")
