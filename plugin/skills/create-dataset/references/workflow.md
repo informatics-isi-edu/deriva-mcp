@@ -329,6 +329,12 @@ When using `split_dataset`, child datasets are automatically nested under the pa
 
 ## Downloading and Using Datasets
 
+Before downloading, use `estimate_bag_size` to preview what the bag will contain:
+```
+estimate_bag_size(dataset_rid="2-DS01", version="1.0.0")
+```
+Returns row counts and asset sizes per table, so you can decide whether to use `exclude_tables` or adjust `timeout` before committing to the full download.
+
 For extracting, downloading, and preparing dataset data for ML training, see the `prepare-training-data` skill. For diagnosing missing data in bag exports, see the `debug-bag-contents` skill.
 
 ## Complete Example: End-to-End Dataset Workflow

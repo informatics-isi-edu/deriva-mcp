@@ -214,7 +214,7 @@ Use this checklist when data is missing from a bag:
    - Or add intermediate records as direct members to flatten the joins.
 
 7. **Preview before full download.**
-   - Check the bag preview resource to confirm expected counts before downloading.
+   - `estimate_bag_size` -- shows row counts and asset sizes per table before downloading.
 
 ## Related Tools
 
@@ -227,7 +227,8 @@ Use this checklist when data is missing from a bag:
 | `validate_dataset_bag` | Validate bag contents against expectations |
 | `increment_dataset_version` | Bump dataset version after changes |
 | `get_dataset_spec` | View dataset specification |
-| `download_dataset` | Download the dataset bag (supports `exclude_tables` for timeout recovery) |
+| `estimate_bag_size` | Preview row counts and asset sizes before downloading |
+| `download_dataset` | Download the dataset bag (supports `exclude_tables` and `timeout`) |
 | `denormalize_dataset` | Flatten dataset for analysis |
 | `query_table` | Inspect FK column values |
 | `get_table` | Check table schema and FK relationships |

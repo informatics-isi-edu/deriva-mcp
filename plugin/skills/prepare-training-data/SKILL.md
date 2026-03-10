@@ -94,6 +94,13 @@ query_table(
 
 Downloads the full dataset as a BDBag archive with all assets (files, images).
 
+**Preview size before downloading:**
+```
+estimate_bag_size(dataset_rid="2-XXXX", version="1.0.0")
+```
+Returns row counts and asset file sizes per table so you know what to expect.
+
+**Download:**
 ```
 download_dataset(dataset_rid="2-XXXX", version="1.0.0")
 ```
