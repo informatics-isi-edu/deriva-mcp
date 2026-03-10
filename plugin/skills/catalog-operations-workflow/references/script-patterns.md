@@ -39,7 +39,8 @@ def main():
     with ml.create_execution(config, dry_run=args.dry_run) as execution:
         # Perform operations
         ...
-        execution.upload_execution_outputs()
+
+    execution.upload_execution_outputs()
 
 if __name__ == "__main__":
     main()
@@ -49,7 +50,7 @@ Key elements:
 - `argparse` for CLI arguments
 - `--dry-run` flag for testing without side effects
 - `ExecutionConfiguration` context manager for provenance tracking
-- `execution.upload_execution_outputs()` to record results
+- `execution.upload_execution_outputs()` called after the with block to record results
 
 ---
 
@@ -65,7 +66,8 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
         description="Training dataset with 10,000 balanced images.",
     )
     execution.add_dataset_members(dataset.rid, member_rids)
-    execution.upload_execution_outputs()
+
+execution.upload_execution_outputs()
 ```
 
 ---
@@ -82,7 +84,8 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
         stratify_by="Diagnosis",
         group_by="Subject",
     )
-    execution.upload_execution_outputs()
+
+execution.upload_execution_outputs()
 ```
 
 ---
@@ -101,7 +104,8 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
     )
     for image_rid, severity in annotations.items():
         execution.add_feature_value(feature.name, image_rid, severity)
-    execution.upload_execution_outputs()
+
+execution.upload_execution_outputs()
 ```
 
 ---
@@ -117,5 +121,6 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
     # Transform and insert
     for record in transform(data):
         execution.insert_record("TargetTable", record)
-    execution.upload_execution_outputs()
+
+execution.upload_execution_outputs()
 ```

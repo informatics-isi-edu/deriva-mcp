@@ -33,7 +33,7 @@ config = ExecutionConfiguration(
 with ml.create_execution(config) as exe:
     exe.download_execution_dataset()
     # ... do work ...
-    path = exe.asset_file_path("results.csv", description="Model predictions")
+    path = exe.asset_file_path("Execution_Asset", "results.csv")
     # ... write to path ...
 exe.upload_execution_outputs()
 ```
@@ -45,7 +45,7 @@ create_execution(workflow_rid=..., description=..., dataset_rids=[...])
 start_execution(execution_rid=...)
 download_execution_dataset(execution_rid=...)
 # ... do work ...
-asset_file_path(execution_rid=..., filename=..., description=...)
+asset_file_path(execution_rid=..., asset_name=..., filename=...)
 stop_execution(execution_rid=...)
 upload_execution_outputs(execution_rid=...)
 ```
