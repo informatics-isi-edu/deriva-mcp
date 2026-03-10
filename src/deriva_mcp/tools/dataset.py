@@ -795,6 +795,47 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def estimate_bag_size(
+        dataset_rid: str,
+        version: str,
+        exclude_tables: list[str] | None = None,
+    ) -> str:
+        """Estimate the size of a dataset bag before downloading.
+
+        Runs the same FK path traversal as download_dataset, then queries the
+        snapshot catalog for row counts and asset file sizes. Use this to
+        preview what a download will contain and how large it will be before
+        committing to the full download.
+
+        Args:
+            dataset_rid: RID of the dataset to estimate.
+            version: Semantic version to estimate (e.g., "1.0.0").
+            exclude_tables: Optional list of table names to exclude from FK
+                path traversal, same as in download_dataset.
+
+        Returns:
+            JSON with:
+                - tables: dict of table name -> {row_count, is_asset, asset_bytes}
+                - total_rows: total row count across all tables
+                - total_asset_bytes: total asset size in bytes
+                - total_asset_size: human-readable size (e.g., "1.2 GB")
+        """
+        try:
+            from deriva_ml.dataset.aux_classes import DatasetSpec
+
+            ml = conn_manager.get_active_or_raise()
+            spec = DatasetSpec(
+                rid=dataset_rid,
+                version=version,
+                exclude_tables=set(exclude_tables) if exclude_tables else None,
+            )
+            estimate = ml.estimate_bag_size(spec)
+            return json.dumps({"status": "success"} | estimate)
+        except Exception as e:
+            logger.error(f"Failed to estimate bag size: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def validate_dataset_bag(
         dataset_rid: str,
         version: str | None = None,
