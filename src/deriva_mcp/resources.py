@@ -29,7 +29,7 @@ def register_resources(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     # =========================================================================
 
     @mcp.resource(
-        "deriva-ml://server/version",
+        "deriva://server/version",
         name="Server Version",
         description="DerivaML MCP server version information",
         mime_type="application/json",
@@ -49,7 +49,7 @@ def register_resources(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     # =========================================================================
 
     @mcp.resource(
-        "deriva-ml://config/deriva-ml-template",
+        "deriva://config/deriva-ml-template",
         name="DerivaML Config Template",
         description="Hydra-zen configuration template for DerivaML connection",
         mime_type="text/x-python",
@@ -85,7 +85,7 @@ deriva_store(DerivaMLConf(
 '''
 
     @mcp.resource(
-        "deriva-ml://config/dataset-spec-template",
+        "deriva://config/dataset-spec-template",
         name="Dataset Spec Config Template",
         description="Hydra-zen configuration template for dataset specifications",
         mime_type="text/x-python",
@@ -116,7 +116,7 @@ datasets_store(validation_datasets, name="validation")
 '''
 
     @mcp.resource(
-        "deriva-ml://config/execution-template",
+        "deriva://config/execution-template",
         name="Execution Config Template",
         description="Hydra-zen configuration template for ML executions",
         mime_type="text/x-python",
@@ -154,7 +154,7 @@ exec_config = instantiate(exec_conf)
 '''
 
     @mcp.resource(
-        "deriva-ml://config/model-template",
+        "deriva://config/model-template",
         name="Model Config Template",
         description="Hydra-zen configuration template for ML models with zen_partial",
         mime_type="text/x-python",
@@ -211,7 +211,7 @@ model_store(ModelConfig, name="long", epochs=100, learning_rate=1e-4)
 '''
 
     @mcp.resource(
-        "deriva-ml://config/experiment-template",
+        "deriva://config/experiment-template",
         name="Experiment Config Template",
         description="Hydra-zen configuration template for experiment presets",
         mime_type="text/x-python",
@@ -292,7 +292,7 @@ experiment_store(
 '''
 
     @mcp.resource(
-        "deriva-ml://config/multirun-template",
+        "deriva://config/multirun-template",
         name="Multirun Config Template",
         description="Hydra-zen configuration template for multirun sweeps",
         mime_type="text/x-python",
@@ -431,7 +431,7 @@ multirun_config(
     # =========================================================================
 
     @mcp.resource(
-        "deriva-ml://catalog/schema",
+        "deriva://catalog/schema",
         name="Catalog Schema",
         description="Complete catalog schema structure including all tables, columns, foreign keys, features, and relationships in both domain and ML schemas",
         mime_type="application/json",
@@ -452,7 +452,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/vocabularies",
+        "deriva://catalog/vocabularies",
         name="Catalog Vocabularies",
         description="All vocabulary tables and their terms",
         mime_type="application/json",
@@ -479,7 +479,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/datasets",
+        "deriva://catalog/datasets",
         name="Catalog Datasets",
         description="All datasets in the current catalog",
         mime_type="application/json",
@@ -506,7 +506,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/dataset-element-types",
+        "deriva://catalog/dataset-element-types",
         name="Dataset Element Types",
         description="Tables that can contain dataset elements",
         mime_type="application/json",
@@ -526,7 +526,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/workflows",
+        "deriva://catalog/workflows",
         name="Catalog Workflows",
         description="All registered workflows in the catalog",
         mime_type="application/json",
@@ -554,7 +554,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/workflow-types",
+        "deriva://catalog/workflow-types",
         name="Workflow Types",
         description="Available workflow type vocabulary terms",
         mime_type="application/json",
@@ -572,7 +572,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/features",
+        "deriva://catalog/features",
         name="Catalog Features",
         description="All feature names defined in the catalog",
         mime_type="application/json",
@@ -591,7 +591,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/tables",
+        "deriva://catalog/tables",
         name="Catalog Tables",
         description="All tables in the domain schema with their properties",
         mime_type="application/json",
@@ -623,7 +623,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/dataset-types",
+        "deriva://catalog/dataset-types",
         name="Dataset Types",
         description="Available dataset type vocabulary terms",
         mime_type="application/json",
@@ -656,7 +656,7 @@ multirun_config(
     # =========================================================================
 
     @mcp.resource(
-        "deriva-ml://dataset/{dataset_rid}",
+        "deriva://dataset/{dataset_rid}",
         name="Dataset Details",
         description="Detailed information about a specific dataset including nested relationships",
         mime_type="application/json",
@@ -712,7 +712,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://dataset/{dataset_rid}/members",
+        "deriva://dataset/{dataset_rid}/members",
         name="Dataset Members",
         description="All elements (records) belonging to a specific dataset, grouped by table",
         mime_type="application/json",
@@ -743,7 +743,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://dataset/{dataset_rid}/versions",
+        "deriva://dataset/{dataset_rid}/versions",
         name="Dataset Version History",
         description="Complete version history for a dataset with semantic versions and snapshots",
         mime_type="application/json",
@@ -778,7 +778,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://dataset/{dataset_rid}/bag-preview",
+        "deriva://dataset/{dataset_rid}/bag-preview",
         name="Dataset Bag Preview",
         description="Preview what tables and FK paths would be included in a bag export for this dataset, without downloading",
         mime_type="application/json",
@@ -834,7 +834,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/element-type-paths",
+        "deriva://catalog/element-type-paths",
         name="Element Type FK Paths",
         description="FK paths from each dataset element type showing what tables are reachable in bag exports",
         mime_type="application/json",
@@ -884,7 +884,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://table/{table_name}/features",
+        "deriva://table/{table_name}/features",
         name="Table Features",
         description="Features defined for a specific table",
         mime_type="application/json",
@@ -915,7 +915,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://feature/{table_name}/{feature_name}",
+        "deriva://feature/{table_name}/{feature_name}",
         name="Feature Details",
         description="Detailed information about a specific feature including column types and requirements",
         mime_type="application/json",
@@ -988,7 +988,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://feature/{table_name}/{feature_name}/values",
+        "deriva://feature/{table_name}/{feature_name}/values",
         name="Feature Values",
         description="All feature values for a specific feature, with provenance",
         mime_type="application/json",
@@ -1011,7 +1011,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://table/{table_name}/feature-values",
+        "deriva://table/{table_name}/feature-values",
         name="Table Feature Values",
         description="All feature values for a table, grouped by feature name",
         mime_type="application/json",
@@ -1034,7 +1034,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://table/{table_name}/feature-values/newest",
+        "deriva://table/{table_name}/feature-values/newest",
         name="Table Feature Values (Newest)",
         description="Feature values for a table, deduplicated to newest per target object",
         mime_type="application/json",
@@ -1059,7 +1059,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://vocabulary/{vocab_name}",
+        "deriva://vocabulary/{vocab_name}",
         name="Vocabulary Terms",
         description="Terms in a specific vocabulary table",
         mime_type="application/json",
@@ -1087,7 +1087,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://vocabulary/{vocab_name}/{term_name}",
+        "deriva://vocabulary/{vocab_name}/{term_name}",
         name="Vocabulary Term",
         description="Details of a specific term in a vocabulary (supports lookup by name or synonym)",
         mime_type="application/json",
@@ -1113,7 +1113,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://table/{table_name}/schema",
+        "deriva://table/{table_name}/schema",
         name="Table Schema",
         description="Full schema of a table including columns, foreign keys, keys, annotations, and features",
         mime_type="application/json",
@@ -1219,7 +1219,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://table/{table_name}/assets",
+        "deriva://table/{table_name}/assets",
         name="Table Assets",
         description="All assets in a specific asset table",
         mime_type="application/json",
@@ -1251,7 +1251,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://workflow/{workflow_rid}",
+        "deriva://workflow/{workflow_rid}",
         name="Workflow Details",
         description="Full details of a workflow by RID",
         mime_type="application/json",
@@ -1285,7 +1285,7 @@ multirun_config(
     # =========================================================================
 
     @mcp.resource(
-        "deriva-ml://table/{table_name}/annotations",
+        "deriva://table/{table_name}/annotations",
         name="Table Annotations",
         description="Display-related annotations for a table (display, visible-columns, visible-foreign-keys, table-display)",
         mime_type="application/json",
@@ -1302,7 +1302,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://table/{table_name}/column/{column_name}/annotations",
+        "deriva://table/{table_name}/column/{column_name}/annotations",
         name="Column Annotations",
         description="Display-related annotations for a column (display, column-display)",
         mime_type="application/json",
@@ -1319,7 +1319,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://table/{table_name}/foreign-keys",
+        "deriva://table/{table_name}/foreign-keys",
         name="Table Foreign Keys",
         description="All foreign keys related to a table (outbound and inbound)",
         mime_type="application/json",
@@ -1336,7 +1336,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://docs/annotation-contexts",
+        "deriva://docs/annotation-contexts",
         name="Annotation Contexts Reference",
         description="Documentation of all valid annotation contexts and their usage",
         mime_type="application/json",
@@ -1428,7 +1428,7 @@ multirun_config(
 
     # DerivaML User Guide
     @mcp.resource(
-        "deriva-ml://docs/overview",
+        "deriva://docs/overview",
         name="DerivaML Overview",
         description="Overview of DerivaML concepts and architecture",
         mime_type="text/markdown",
@@ -1437,7 +1437,7 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/overview.md")
 
     @mcp.resource(
-        "deriva-ml://docs/datasets",
+        "deriva://docs/datasets",
         name="Datasets Guide",
         description="Guide to creating and managing datasets in DerivaML",
         mime_type="text/markdown",
@@ -1446,7 +1446,7 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/datasets.md")
 
     @mcp.resource(
-        "deriva-ml://docs/features",
+        "deriva://docs/features",
         name="Features Guide",
         description="Guide to defining and using features in DerivaML",
         mime_type="text/markdown",
@@ -1455,7 +1455,7 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/features.md")
 
     @mcp.resource(
-        "deriva-ml://docs/execution-configuration",
+        "deriva://docs/execution-configuration",
         name="Execution Configuration Guide",
         description="Guide to configuring ML executions with datasets and assets",
         mime_type="text/markdown",
@@ -1464,7 +1464,7 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/execution-configuration.md")
 
     @mcp.resource(
-        "deriva-ml://docs/hydra-zen",
+        "deriva://docs/hydra-zen",
         name="Hydra-zen Configuration Guide",
         description="Guide to using hydra-zen for configuration management",
         mime_type="text/markdown",
@@ -1473,7 +1473,7 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/hydra-zen-configuration.md")
 
     @mcp.resource(
-        "deriva-ml://docs/file-assets",
+        "deriva://docs/file-assets",
         name="File Assets Guide",
         description="Guide to managing file assets in DerivaML",
         mime_type="text/markdown",
@@ -1482,7 +1482,7 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/file-assets.md")
 
     @mcp.resource(
-        "deriva-ml://docs/notebooks",
+        "deriva://docs/notebooks",
         name="Notebooks Guide",
         description="Guide to using Jupyter notebooks with DerivaML",
         mime_type="text/markdown",
@@ -1491,7 +1491,7 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/notebooks.md")
 
     @mcp.resource(
-        "deriva-ml://docs/annotations",
+        "deriva://docs/annotations",
         name="Catalog Annotations Guide",
         description="Guide to configuring Chaise display using annotation builders",
         mime_type="text/markdown",
@@ -1500,7 +1500,7 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/annotations.md")
 
     @mcp.resource(
-        "deriva-ml://docs/identifiers",
+        "deriva://docs/identifiers",
         name="Identifiers Guide",
         description="Guide to RIDs, MINIDs and other identifiers in DerivaML",
         mime_type="text/markdown",
@@ -1509,7 +1509,7 @@ multirun_config(
         return fetch_doc("deriva-ml", "docs/user-guide/identifiers.md")
 
     @mcp.resource(
-        "deriva-ml://docs/install",
+        "deriva://docs/install",
         name="Installation Guide",
         description="Installation instructions for DerivaML",
         mime_type="text/markdown",
@@ -1519,7 +1519,7 @@ multirun_config(
 
     # ERMrest Documentation
     @mcp.resource(
-        "deriva-ml://docs/ermrest/data-api",
+        "deriva://docs/ermrest/data-api",
         name="ERMrest Data API",
         description="ERMrest REST API for data operations",
         mime_type="text/markdown",
@@ -1528,7 +1528,7 @@ multirun_config(
         return fetch_doc("ermrest", "docs/api-doc/data/rest.md")
 
     @mcp.resource(
-        "deriva-ml://docs/ermrest/naming",
+        "deriva://docs/ermrest/naming",
         name="ERMrest Naming Conventions",
         description="ERMrest URL naming conventions for entities and attributes",
         mime_type="text/markdown",
@@ -1537,7 +1537,7 @@ multirun_config(
         return fetch_doc("ermrest", "docs/api-doc/data/naming.md")
 
     @mcp.resource(
-        "deriva-ml://docs/ermrest/catalog",
+        "deriva://docs/ermrest/catalog",
         name="ERMrest Catalog API",
         description="ERMrest REST API for catalog operations",
         mime_type="text/markdown",
@@ -1547,7 +1547,7 @@ multirun_config(
 
     # Chaise Documentation
     @mcp.resource(
-        "deriva-ml://docs/chaise/config",
+        "deriva://docs/chaise/config",
         name="Chaise Configuration",
         description="Configuration options for the Chaise web UI",
         mime_type="text/markdown",
@@ -1556,7 +1556,7 @@ multirun_config(
         return fetch_doc("chaise", "docs/user-docs/chaise-config.md")
 
     @mcp.resource(
-        "deriva-ml://docs/chaise/query-parameters",
+        "deriva://docs/chaise/query-parameters",
         name="Chaise Query Parameters",
         description="URL query parameters for Chaise pages",
         mime_type="text/markdown",
@@ -1566,7 +1566,7 @@ multirun_config(
 
     # deriva-py Documentation
     @mcp.resource(
-        "deriva-ml://docs/deriva-py/install",
+        "deriva://docs/deriva-py/install",
         name="Deriva-py Installation",
         description="Installation guide for the deriva-py Python SDK",
         mime_type="text/markdown",
@@ -1575,7 +1575,7 @@ multirun_config(
         return fetch_doc("deriva-py", "docs/install.md")
 
     @mcp.resource(
-        "deriva-ml://docs/deriva-py/tutorial",
+        "deriva://docs/deriva-py/tutorial",
         name="Deriva-py Tutorial",
         description="Project tutorial for deriva-py",
         mime_type="text/markdown",
@@ -1588,7 +1588,7 @@ multirun_config(
     # =========================================================================
 
     @mcp.resource(
-        "deriva-ml://catalog/asset-tables",
+        "deriva://catalog/asset-tables",
         name="Asset Tables",
         description="List of all asset tables in the catalog",
         mime_type="application/json",
@@ -1608,7 +1608,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/assets",
+        "deriva://catalog/assets",
         name="Catalog Assets",
         description="Summary of all asset tables and their contents",
         mime_type="application/json",
@@ -1633,7 +1633,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://asset/{asset_rid}",
+        "deriva://asset/{asset_rid}",
         name="Asset Details",
         description="Detailed information about a specific asset including provenance",
         mime_type="application/json",
@@ -1679,7 +1679,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/executions",
+        "deriva://catalog/executions",
         name="Catalog Executions",
         description="Recent executions in the catalog",
         mime_type="application/json",
@@ -1711,7 +1711,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://execution/{execution_rid}",
+        "deriva://execution/{execution_rid}",
         name="Execution Details",
         description="Detailed information about a specific execution",
         mime_type="application/json",
@@ -1748,7 +1748,7 @@ multirun_config(
     # =========================================================================
 
     @mcp.resource(
-        "deriva-ml://catalog/info",
+        "deriva://catalog/info",
         name="Catalog Info",
         description="Details about the active catalog: hostname, schemas, project name",
         mime_type="application/json",
@@ -1777,7 +1777,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/users",
+        "deriva://catalog/users",
         name="Catalog Users",
         description="All users who have access to the active catalog",
         mime_type="application/json",
@@ -1795,7 +1795,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/connections",
+        "deriva://catalog/connections",
         name="Active Connections",
         description="All open catalog connections and which is active",
         mime_type="application/json",
@@ -1806,7 +1806,7 @@ multirun_config(
         return json.dumps(connections, indent=2)
 
     @mcp.resource(
-        "deriva-ml://chaise-url/{table_or_rid}",
+        "deriva://chaise-url/{table_or_rid}",
         name="Chaise URL",
         description="Web UI URL for viewing a table or specific record in Chaise",
         mime_type="application/json",
@@ -1834,7 +1834,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://rid/{rid}",
+        "deriva://rid/{rid}",
         name="RID Resolution",
         description="Find which table a RID belongs to and get its Chaise URL",
         mime_type="application/json",
@@ -1864,7 +1864,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://cite/{rid}",
+        "deriva://cite/{rid}",
         name="Citation URL",
         description="Generate a permanent citation URL for a RID with optional snapshot",
         mime_type="application/json",
@@ -1891,7 +1891,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://registry/{hostname}",
+        "deriva://registry/{hostname}",
         name="Catalog Registry",
         description="All catalogs and aliases available on a Deriva server",
         mime_type="application/json",
@@ -1944,7 +1944,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://alias/{hostname}/{alias_name}",
+        "deriva://alias/{hostname}/{alias_name}",
         name="Catalog Alias",
         description="Metadata for a catalog alias including target and owner",
         mime_type="application/json",
@@ -1972,7 +1972,7 @@ multirun_config(
     # =========================================================================
 
     @mcp.resource(
-        "deriva-ml://execution/{execution_rid}/inputs",
+        "deriva://execution/{execution_rid}/inputs",
         name="Execution Inputs",
         description="Input datasets and assets for an execution",
         mime_type="application/json",
@@ -2021,7 +2021,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://experiment/{execution_rid}",
+        "deriva://experiment/{execution_rid}",
         name="Experiment Details",
         description="Experiment analysis for an execution with Hydra configuration",
         mime_type="application/json",
@@ -2039,7 +2039,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://catalog/experiments",
+        "deriva://catalog/experiments",
         name="Catalog Experiments",
         description="All experiments (executions with Hydra config) in the catalog",
         mime_type="application/json",
@@ -2067,7 +2067,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://storage/summary",
+        "deriva://storage/summary",
         name="Storage Summary",
         description="Local storage usage summary for DerivaML",
         mime_type="application/json",
@@ -2085,7 +2085,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://storage/cache",
+        "deriva://storage/cache",
         name="Cache Size",
         description="Dataset cache directory size and statistics",
         mime_type="application/json",
@@ -2103,7 +2103,7 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
-        "deriva-ml://storage/execution-dirs",
+        "deriva://storage/execution-dirs",
         name="Execution Directories",
         description="List of execution working directories with sizes",
         mime_type="application/json",

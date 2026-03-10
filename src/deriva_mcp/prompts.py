@@ -712,14 +712,14 @@ This skill covers how to find, filter, and explore data in a Deriva catalog usin
 
 | Resource | Purpose |
 |----------|---------|
-| `deriva-ml://catalog/tables` | All tables with descriptions and row counts |
-| `deriva-ml://catalog/schema` | Full schema with relationships |
-| `deriva-ml://table/{name}/schema` | Column names, types, descriptions |
-| `deriva-ml://table/{name}/sample` | Sample rows |
-| `deriva-ml://table/{name}/features` | Features on a table |
-| `deriva-ml://vocabulary/{name}` | Vocabulary terms |
-| `deriva-ml://dataset/{rid}` | Dataset details and versions |
-| `deriva-ml://chaise-url/{table}/{rid}` | Web UI link |
+| `deriva://catalog/tables` | All tables with descriptions and row counts |
+| `deriva://catalog/schema` | Full schema with relationships |
+| `deriva://table/{name}/schema` | Column names, types, descriptions |
+| `deriva://table/{name}/sample` | Sample rows |
+| `deriva://table/{name}/features` | Features on a table |
+| `deriva://vocabulary/{name}` | Vocabulary terms |
+| `deriva://dataset/{rid}` | Dataset details and versions |
+| `deriva://chaise-url/{table}/{rid}` | Web UI link |
 
 ## Key Tools
 
@@ -775,15 +775,15 @@ Before querying, understand what tables and columns are available.
 
 Read these MCP resources to get oriented:
 
-- `deriva-ml://catalog/tables` -- Lists all tables in the current schema with descriptions and row counts.
-- `deriva-ml://catalog/schema` -- Full schema overview with table relationships.
+- `deriva://catalog/tables` -- Lists all tables in the current schema with descriptions and row counts.
+- `deriva://catalog/schema` -- Full schema overview with table relationships.
 
 ### Table-Level Details
 
 For a specific table:
 
-- `deriva-ml://table/{table_name}/schema` -- Column names, types, nullability, and descriptions.
-- `deriva-ml://table/{table_name}/sample` -- A few sample rows to understand the data shape.
+- `deriva://table/{table_name}/schema` -- Column names, types, nullability, and descriptions.
+- `deriva://table/{table_name}/sample` -- A few sample rows to understand the data shape.
 
 Use the `get_table` MCP tool for programmatic access to table metadata.
 
@@ -901,8 +901,8 @@ This downloads all dataset members and assets to a local directory.
 
 Deriva uses controlled vocabularies for categorical values. Look them up via MCP resources:
 
-- `deriva-ml://vocabulary/{vocab_name}` -- Lists all terms in a vocabulary with descriptions.
-- `deriva-ml://vocabulary/{vocab_name}/{term}` -- Details for a specific term.
+- `deriva://vocabulary/{vocab_name}` -- Lists all terms in a vocabulary with descriptions.
+- `deriva://vocabulary/{vocab_name}/{term}` -- Details for a specific term.
 
 Common vocabularies include dataset types, workflow types, species, and status values.
 
@@ -921,7 +921,7 @@ Features in DerivaML represent measured or computed properties of entities.
 
 Read the MCP resource:
 
-- `deriva-ml://table/{table_name}/features` -- Lists all features associated with a table.
+- `deriva://table/{table_name}/features` -- Lists all features associated with a table.
 
 ### Feature Structure
 
@@ -993,7 +993,7 @@ download_dataset(dataset_rid="2-B4C8", version=3)
 
 To see available versions, read:
 
-- `deriva-ml://dataset/{rid}` -- Includes version history.
+- `deriva://dataset/{rid}` -- Includes version history.
 
 Always pin to a specific version for reproducible experiments.
 
@@ -1001,8 +1001,8 @@ Always pin to a specific version for reproducible experiments.
 
 To get the Chaise (web UI) URL for any record, use the MCP resource:
 
-- `deriva-ml://chaise-url/{table_name}/{rid}` -- Direct URL to view a record in the browser.
-- `deriva-ml://chaise-url/{table_name}` -- URL to the table's record set view.
+- `deriva://chaise-url/{table_name}/{rid}` -- Direct URL to view a record in the browser.
+- `deriva://chaise-url/{table_name}` -- URL to the table's record set view.
 
 These URLs are useful for sharing records with collaborators or viewing complex relationships that are easier to navigate in the web interface.
 
@@ -1010,9 +1010,9 @@ These URLs are useful for sharing records with collaborators or viewing complex 
 
 Here is a typical workflow for exploring and extracting data from a catalog:
 
-1. **Orient yourself**: Read `deriva-ml://catalog/tables` to see what is available.
+1. **Orient yourself**: Read `deriva://catalog/tables` to see what is available.
 
-2. **Explore a table**: Read `deriva-ml://table/Subject/schema` to understand columns, then `get_table_sample_data(table_name="Subject")` for sample rows.
+2. **Explore a table**: Read `deriva://table/Subject/schema` to understand columns, then `get_table_sample_data(table_name="Subject")` for sample rows.
 
 3. **Count records**: `count_table(table_name="Subject")` and `count_table(table_name="Subject", filter={"Species": "Mouse"})`.
 
@@ -1022,11 +1022,11 @@ Here is a typical workflow for exploring and extracting data from a catalog:
 
 6. **Find related data**: `query_table(table_name="Image", filter={"Subject": "2-A1B2"})`.
 
-7. **Check features**: Read `deriva-ml://table/Image/features`, then `query_table(table_name="Image_Cell_Count", filter={"Image": "2-C3D4"})`.
+7. **Check features**: Read `deriva://table/Image/features`, then `query_table(table_name="Image_Cell_Count", filter={"Image": "2-C3D4"})`.
 
 8. **Get dataset for ML**: `denormalize_dataset(dataset_rid="2-B4C8")` for a flat view, or `download_dataset(dataset_rid="2-B4C8", version=3)` for a full local copy.
 
-9. **Share with a colleague**: Read `deriva-ml://chaise-url/Subject/2-A1B2` to get a shareable URL.
+9. **Share with a colleague**: Read `deriva://chaise-url/Subject/2-A1B2` to get a shareable URL.
 
 ## Asset Provenance
 
@@ -1770,14 +1770,14 @@ Before creating a new vocabulary, check what already exists.
 
 ```
 # MCP resource — lists all vocabulary tables with term counts
-Read resource: deriva-ml://catalog/vocabularies
+Read resource: deriva://catalog/vocabularies
 ```
 
 ### Browse terms in a vocabulary
 
 ```
 # MCP resource — lists all terms with descriptions and synonyms
-Read resource: deriva-ml://vocabulary/Species
+Read resource: deriva://vocabulary/Species
 
 # Or query directly
 query_table(table="Species")
@@ -1904,7 +1904,7 @@ DerivaML catalogs come with several built-in vocabularies:
 
 Browse them with:
 ```
-Read resource: deriva-ml://catalog/vocabularies
+Read resource: deriva://catalog/vocabularies
 ```
 
 ### Adding Types to Built-in Vocabularies
@@ -1969,7 +1969,7 @@ The FK to the vocabulary table enables dropdown selection in the Chaise entry fo
 2. **Check semantic-awareness** — the `semantic-awareness` skill auto-triggers to prevent duplicates
 3. **Add the term** with a meaningful description
 4. **Add synonyms** for common alternate names
-5. **Verify** — read `deriva-ml://vocabulary/{vocab_name}` to confirm
+5. **Verify** — read `deriva://vocabulary/{vocab_name}` to confirm
 
 ## Tips
 
@@ -2804,8 +2804,8 @@ Before extracting data, understand the schema of the tables involved.
 
 ```
 # Get table schema and columns via resources
-Read resource: deriva-ml://table/Image/schema
-Read resource: deriva-ml://table/Subject/schema
+Read resource: deriva://table/Image/schema
+Read resource: deriva://table/Subject/schema
 
 # View sample data
 query_table(table="Image", limit=5)
@@ -3640,8 +3640,8 @@ uv run deriva-ml-run +experiment=baseline model_config.learning_rate=1e-2,1e-3,1
 ## Verify Results
 
 After a run, check the execution was recorded:
-- Read `deriva-ml://execution/{rid}` for details
-- Read `deriva-ml://chaise-url/Execution/{rid}` for the web UI link
+- Read `deriva://execution/{rid}` for details
+- Read `deriva://chaise-url/Execution/{rid}` for the web UI link
 - Verify: status is "Complete", correct datasets linked, output assets attached, git hash matches
 
 For the full guide with troubleshooting table, Hydra override syntax, and multirun details, read `references/workflow.md`.
@@ -3830,8 +3830,8 @@ uv run deriva-ml-run +experiments=baseline,long_training --multirun
 
 After the run completes, verify the execution was recorded. Use the MCP resource:
 
-- Read `deriva-ml://executions` to list recent executions.
-- Read `deriva-ml://execution/{rid}` for details on a specific execution.
+- Read `deriva://executions` to list recent executions.
+- Read `deriva://execution/{rid}` for details on a specific execution.
 
 ### View in Chaise
 
@@ -3841,7 +3841,7 @@ Open the execution in the web interface. The Chaise URL is typically:
 https://{host}/chaise/record/#{catalog_id}/{schema}:Execution/RID={execution_rid}
 ```
 
-The MCP resource `deriva-ml://chaise-url/Execution/{rid}` provides the direct URL.
+The MCP resource `deriva://chaise-url/Execution/{rid}` provides the direct URL.
 
 Verify:
 - The execution status is "Complete".
@@ -3857,7 +3857,7 @@ Verify:
 | `Connection refused` | Wrong host or host is down | Verify `--host` value, check network |
 | `Authentication error` | Expired or missing credentials | Run `deriva-globus-auth-utils login --host {host}` |
 | `Dataset not found: RID=...` | RID does not exist in the target catalog | Verify RIDs match the target catalog (dev vs prod) |
-| `Version X not found for dataset` | Requested version does not exist | Check available versions with `deriva-ml://dataset/{rid}` |
+| `Version X not found for dataset` | Requested version does not exist | Check available versions with `deriva://dataset/{rid}` |
 | `Dirty git state warning` | Uncommitted changes when running | Commit changes before running |
 | `Lock file out of date` | `uv.lock` does not match `pyproject.toml` | Run `uv lock` and commit |
 | `ModuleNotFoundError` | Dependencies not installed | Run `uv sync` |
@@ -3945,7 +3945,7 @@ datasets_store(
 - `version` is **required** — always a semver string like `"0.9.0"`, not an integer
 - Use `with_description()` for non-default configs
 - Default configs use plain lists (no `with_description`) for merge compatibility
-- Find the current version via the `deriva-ml://dataset/{rid}` MCP resource
+- Find the current version via the `deriva://dataset/{rid}` MCP resource
 - If data has changed since the version was created, call `increment_dataset_version` first
 
 ## Assets (`configs/assets.py`)
@@ -4305,7 +4305,7 @@ Two mechanisms exist — use the right one for the context:
 | Multiruns | `description=` param on `multirun_config()` | `multirun_config("name", ..., description="...")` |
 | Notebooks | `description=` param on `notebook_config()` | `notebook_config("name", ..., description="...")` |
 
-Descriptions are recorded in execution metadata and make experiments self-documenting. Before writing descriptions, look up catalog details via `deriva-ml://dataset/{rid}` or `deriva-ml://asset/{rid}`.
+Descriptions are recorded in execution metadata and make experiments self-documenting. Before writing descriptions, look up catalog details via `deriva://dataset/{rid}` or `deriva://asset/{rid}`.
 
 ### Good Descriptions
 
@@ -4324,17 +4324,17 @@ For each config file, check:
 
 | Config Type | What to Validate | MCP Tool / Resource |
 |---|---|---|
-| `DatasetSpecConfig(rid=..., version=...)` | RID exists, version exists | `deriva-ml://dataset/{rid}` |
+| `DatasetSpecConfig(rid=..., version=...)` | RID exists, version exists | `deriva://dataset/{rid}` |
 | Asset RID strings `["3WS6"]` | RID exists in an asset table | `validate_rids(rids=[...])` |
 | `AssetSpecConfig(rid=...)` | RID exists | `validate_rids(rids=[...])` |
-| `workflow_type="Training"` | Workflow type term exists | `deriva-ml://catalog/workflow-types` |
+| `workflow_type="Training"` | Workflow type term exists | `deriva://catalog/workflow-types` |
 
 ### Validation Workflow
 
 1. **Connect to the catalog** using the same `deriva_ml` config the experiment will use
 2. **Read the config files** and extract all RIDs and versions
 3. **Validate RIDs** — use `validate_rids` to batch-check that all RIDs exist
-4. **Check dataset versions** — for each `DatasetSpecConfig`, read `deriva-ml://dataset/{rid}` and verify the version exists. If the version is older than `current_version`, the config may be using stale data
+4. **Check dataset versions** — for each `DatasetSpecConfig`, read `deriva://dataset/{rid}` and verify the version exists. If the version is older than `current_version`, the config may be using stale data
 5. **Report mismatches** — list any RIDs that don't exist, versions that are missing, or versions that are behind current
 
 ### Common Issues
@@ -5143,32 +5143,32 @@ Use MCP resources to retrieve candidates. Which resources depend on the entity t
 
 **Tables:**
 ```
-deriva-ml://catalog/schema          # All tables with columns and descriptions
-deriva-ml://table/<name>/schema     # Specific table details
+deriva://catalog/schema          # All tables with columns and descriptions
+deriva://table/<name>/schema     # Specific table details
 ```
 
 **Vocabulary terms:**
 ```
-deriva-ml://vocabulary/<vocab_name>              # All terms with descriptions and synonyms
-deriva-ml://vocabulary/<vocab_name>/<term_name>  # Lookup by name or synonym
+deriva://vocabulary/<vocab_name>              # All terms with descriptions and synonyms
+deriva://vocabulary/<vocab_name>/<term_name>  # Lookup by name or synonym
 ```
 
 **Features:**
 ```
-deriva-ml://table/<table_name>/features          # Features on a target table
-deriva-ml://feature/<table_name>/<feature_name>  # Feature details
-deriva-ml://catalog/features                     # All features across all tables
+deriva://table/<table_name>/features          # Features on a target table
+deriva://feature/<table_name>/<feature_name>  # Feature details
+deriva://catalog/features                     # All features across all tables
 ```
 
 **Datasets:**
 ```
-deriva-ml://catalog/datasets    # All datasets with types and descriptions
-deriva-ml://dataset/<rid>       # Specific dataset details
+deriva://catalog/datasets    # All datasets with types and descriptions
+deriva://dataset/<rid>       # Specific dataset details
 ```
 
 **Workflows:**
 ```
-deriva-ml://catalog/workflows   # All workflows with descriptions
+deriva://catalog/workflows   # All workflows with descriptions
 ```
 
 For queries that need actual data (counts, specific records, filtering), use the `query_table` or `count_table` MCP tools.
@@ -5252,7 +5252,7 @@ See the `generate-descriptions` skill for templates and detailed guidance.
 
 **Tables**: "Subject" vs "Patient" vs "Participant" — these are often the same concept. Check column structure and record count, not just names. A table with 500 records and 5 FK relationships is worth extending, not duplicating.
 
-**Vocabulary terms**: Always search synonyms. "X-ray" might have synonym "Xray" or "radiograph". The right action is usually `add_synonym`, not `add_term`. Use the `deriva-ml://vocabulary/<name>/<term>` resource which matches against synonyms automatically.
+**Vocabulary terms**: Always search synonyms. "X-ray" might have synonym "Xray" or "radiograph". The right action is usually `add_synonym`, not `add_term`. Use the `deriva://vocabulary/<name>/<term>` resource which matches against synonyms automatically.
 
 **Features**: A feature named "Quality" and one named "Image_Quality" on the same table are almost certainly duplicates. The combination of target table + vocabulary is the strongest duplicate signal. Check how many values already exist — a feature with thousands of values is definitely established.
 

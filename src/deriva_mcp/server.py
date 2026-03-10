@@ -92,15 +92,15 @@ Always call `connect_catalog` before using other tools. This establishes the con
 ## Common Workflows
 
 **Discovering available catalogs:**
-1. Read `deriva-ml://registry/{hostname}` resource - See all available catalogs and aliases
+1. Read `deriva://registry/{hostname}` resource - See all available catalogs and aliases
 2. `connect_catalog` - Connect using catalog ID or alias name
 
 **Exploring a catalog:**
 1. `connect_catalog` - Connect to the catalog
-2. Read `deriva-ml://catalog/schema` resource - Understand the full schema (tables, columns, FKs, features)
-3. Read `deriva-ml://catalog/datasets` resource - See available datasets
-4. Read `deriva-ml://catalog/vocabularies` resource - Explore controlled vocabularies
-5. Read `deriva-ml://catalog/features` resource - Examine feature definitions
+2. Read `deriva://catalog/schema` resource - Understand the full schema (tables, columns, FKs, features)
+3. Read `deriva://catalog/datasets` resource - See available datasets
+4. Read `deriva://catalog/vocabularies` resource - Explore controlled vocabularies
+5. Read `deriva://catalog/features` resource - Examine feature definitions
 
 **Creating a new catalog:**
 1. `create_catalog` - Create a new DerivaML catalog (optionally with an alias)
@@ -108,7 +108,7 @@ Always call `connect_catalog` before using other tools. This establishes the con
 
 **Managing catalog aliases:**
 - `create_catalog_alias` - Create an alias for a catalog (access by name instead of ID)
-- Read `deriva-ml://alias/{hostname}/{alias_name}` resource - Get alias metadata (target catalog, owner)
+- Read `deriva://alias/{hostname}/{alias_name}` resource - Get alias metadata (target catalog, owner)
 - `update_catalog_alias` - Change alias target or owner
 - `delete_catalog_alias` - Remove an alias (catalog is not deleted)
 
@@ -137,8 +137,8 @@ Executions require a workflow, and workflows require a workflow type. The hierar
 - **Execution** → instance of a workflow run
 
 Before creating an execution:
-1. Read `deriva-ml://catalog/workflow-types` resource - See available workflow types
-2. Read `deriva-ml://catalog/workflows` resource - Search for existing workflows
+1. Read `deriva://catalog/workflow-types` resource - See available workflow types
+2. Read `deriva://catalog/workflows` resource - Search for existing workflows
 3. `lookup_workflow_by_url()` - Check if workflow exists by URL
 4. `create_workflow()` - Create new workflow if needed (or let `create_execution` create it)
 5. `add_workflow_type()` - Add new workflow type if needed
@@ -212,7 +212,7 @@ DatasetSpecConfig(rid="28EA")  # ERROR: missing required 'version'
 ```
 
 **Finding the correct version:**
-- Read `deriva-ml://dataset/{dataset_rid}` resource to get dataset info including `current_version`
+- Read `deriva://dataset/{dataset_rid}` resource to get dataset info including `current_version`
 - If no specific version is needed, use the `current_version` from the resource result
 
 **Important: Dataset versions capture catalog state at creation time.**
@@ -403,16 +403,16 @@ After running experiments, use MCP resources and tools to discover generated ass
 
 ```
 # Browse all assets in a specific table
-Read resource: deriva-ml://table/{asset_table}/assets
+Read resource: deriva://table/{asset_table}/assets
 
 # Get details about a specific asset including provenance
-Read resource: deriva-ml://asset/{asset_rid}
+Read resource: deriva://asset/{asset_rid}
 
 # Find executions that created/used an asset
 list_asset_executions(asset_rid="<ASSET_RID>", asset_role="Output")
 
 # Get experiment details including inputs and outputs
-Read resource: deriva-ml://experiment/{execution_rid}
+Read resource: deriva://experiment/{execution_rid}
 ```
 
 This is useful for:
@@ -810,7 +810,7 @@ def create_server(host: str = "127.0.0.1", port: int = 8000) -> FastMCP:
         Configured FastMCP server instance
     """
     mcp = FastMCP(
-        "deriva-ml",
+        "deriva",
         host=host,
         port=port,
         instructions=SERVER_INSTRUCTIONS,

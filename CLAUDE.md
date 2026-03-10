@@ -93,11 +93,11 @@ def register_*_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
 | URI Pattern | Type | Description |
 |-------------|------|-------------|
-| `deriva-ml://config/*` | Static | Hydra-zen configuration templates |
-| `deriva-ml://catalog/*` | Dynamic | Current catalog state (requires connection) |
-| `deriva-ml://dataset/{rid}` | Template | Specific dataset details |
-| `deriva-ml://vocabulary/{name}` | Template | Specific vocabulary terms |
-| `deriva-ml://docs/*` | Dynamic | Documentation fetched from GitHub repos |
+| `deriva://config/*` | Static | Hydra-zen configuration templates |
+| `deriva://catalog/*` | Dynamic | Current catalog state (requires connection) |
+| `deriva://dataset/{rid}` | Template | Specific dataset details |
+| `deriva://vocabulary/{name}` | Template | Specific vocabulary terms |
+| `deriva://docs/*` | Dynamic | Documentation fetched from GitHub repos |
 
 ## Installation
 
@@ -123,7 +123,7 @@ Uses the published Docker image. No local setup required.
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "/bin/sh",
       "args": [
@@ -141,7 +141,7 @@ Uses the published Docker image. No local setup required.
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "/bin/sh",
       "args": [
@@ -182,7 +182,7 @@ If Deriva runs directly on the host (not in Docker), use `host-gateway`:
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "/bin/sh",
       "args": [
@@ -209,7 +209,7 @@ Then use it in the `--add-host` argument (replace `<WEBSERVER_IP>` with the actu
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "/bin/sh",
       "args": [
@@ -244,7 +244,7 @@ Run directly using `uv`. Use this when developing or modifying the MCP server.
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "uv",
       "args": ["--directory", "/path/to/deriva-mcp", "run", "deriva-mcp"],
@@ -259,7 +259,7 @@ Run directly using `uv`. Use this when developing or modifying the MCP server.
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "uv",
       "args": ["run", "deriva-mcp"],
@@ -313,7 +313,7 @@ Add to `resources.py` within `register_resources()`:
 
 ```python
 @mcp.resource(
-    "deriva-ml://my-resource/{param}",
+    "deriva://my-resource/{param}",
     name="My Resource",
     description="Description for LLM",
     mime_type="application/json",

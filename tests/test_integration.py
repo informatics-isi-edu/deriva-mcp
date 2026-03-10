@@ -309,7 +309,7 @@ class TestConnectionWorkflow:
         assert "execution_rid" in data
 
         # Get catalog info via resource
-        info_result = resources["deriva-ml://catalog/info"]()
+        info_result = resources["deriva://catalog/info"]()
         info = parse_json_result(info_result)
         assert info["hostname"] == catalog_host
         assert info["catalog_id"] == str(catalog_manager.catalog_id)
@@ -334,7 +334,7 @@ class TestConnectionWorkflow:
         register_resources(mcp_r, conn_manager)
 
         # Before connecting, list should be empty
-        conns_before = parse_json_result(resources["deriva-ml://catalog/connections"]())
+        conns_before = parse_json_result(resources["deriva://catalog/connections"]())
         assert len(conns_before) == 0
 
         # Connect
@@ -345,7 +345,7 @@ class TestConnectionWorkflow:
         )
 
         # After connecting, list should have one entry
-        conns_after = parse_json_result(resources["deriva-ml://catalog/connections"]())
+        conns_after = parse_json_result(resources["deriva://catalog/connections"]())
         assert len(conns_after) == 1
         assert conns_after[0]["hostname"] == catalog_host
         assert conns_after[0]["is_active"] is True
@@ -354,7 +354,7 @@ class TestConnectionWorkflow:
         await tools["disconnect_catalog"]()
 
         # After disconnect, list should be empty again
-        conns_final = parse_json_result(resources["deriva-ml://catalog/connections"]())
+        conns_final = parse_json_result(resources["deriva://catalog/connections"]())
         assert len(conns_final) == 0
 
     @pytest.mark.asyncio
@@ -520,7 +520,7 @@ class TestSchemaWorkflow:
         assert "Age" in data["columns"]
 
         # Verify via tables resource
-        tables_json = int_resources["deriva-ml://catalog/tables"]()
+        tables_json = int_resources["deriva://catalog/tables"]()
         tables = parse_json_result(tables_json)
         table_names = [t["name"] for t in tables]
         assert "IntTestSubject" in table_names
@@ -572,7 +572,7 @@ class TestDatasetWorkflow:
         dataset_rid = data["dataset_rid"]
 
         # Verify via datasets resource
-        datasets_json = populated_resources["deriva-ml://catalog/datasets"]()
+        datasets_json = populated_resources["deriva://catalog/datasets"]()
         datasets = parse_json_result(datasets_json)
         dataset_rids = [ds["rid"] for ds in datasets]
         assert dataset_rid in dataset_rids
@@ -647,7 +647,7 @@ class TestDatasetWorkflow:
         dataset_rid = ds_data["dataset_rid"]
 
         # Access the parameterized resource
-        detail_result = populated_resources[f"deriva-ml://dataset/{dataset_rid}"](dataset_rid)
+        detail_result = populated_resources[f"deriva://dataset/{dataset_rid}"](dataset_rid)
         detail = parse_json_result(detail_result)
         assert detail["rid"] == dataset_rid
         assert detail["description"] == "Resource test dataset"
@@ -788,7 +788,7 @@ class TestFeatureWorkflow:
         """find_features returns features defined on a table in a feature-enabled catalog."""
         # The feature catalog already has features defined via ensure_features()
         # Check the table features resource for Image
-        features_json = feature_resources["deriva-ml://table/Image/features"]("Image")
+        features_json = feature_resources["deriva://table/Image/features"]("Image")
         features = parse_json_result(features_json)
         assert isinstance(features, list)
         # The demo catalog creates features on Image (e.g., BoundingBox, Quality)
@@ -798,7 +798,7 @@ class TestFeatureWorkflow:
     async def test_feature_details_resource(self, feature_resources):
         """Feature details resource returns column types and requirements."""
         # Get features for Image first
-        features_json = feature_resources["deriva-ml://table/Image/features"]("Image")
+        features_json = feature_resources["deriva://table/Image/features"]("Image")
         features = parse_json_result(features_json)
         assert len(features) > 0
 
@@ -806,7 +806,7 @@ class TestFeatureWorkflow:
         first_feature = features[0]
         feature_name = first_feature["name"]
         detail_json = feature_resources[
-            f"deriva-ml://feature/Image/{feature_name}"
+            f"deriva://feature/Image/{feature_name}"
         ]("Image", feature_name)
         detail = parse_json_result(detail_json)
         assert detail["feature_name"] == feature_name
@@ -1126,7 +1126,7 @@ class TestResourceAccessWorkflow:
 
     def test_catalog_schema_resource(self, int_resources):
         """Catalog schema resource returns valid schema information."""
-        result = int_resources["deriva-ml://catalog/schema"]()
+        result = int_resources["deriva://catalog/schema"]()
         data = parse_json_result(result)
         assert "hostname" in data
         assert "catalog_id" in data
@@ -1135,7 +1135,7 @@ class TestResourceAccessWorkflow:
 
     def test_catalog_vocabularies_resource(self, int_resources):
         """Catalog vocabularies resource returns vocabulary data."""
-        result = int_resources["deriva-ml://catalog/vocabularies"]()
+        result = int_resources["deriva://catalog/vocabularies"]()
         data = parse_json_result(result)
         assert isinstance(data, dict)
         # ML schema always has some vocabularies
@@ -1143,14 +1143,14 @@ class TestResourceAccessWorkflow:
 
     def test_catalog_tables_resource(self, int_resources):
         """Catalog tables resource returns table metadata."""
-        result = int_resources["deriva-ml://catalog/tables"]()
+        result = int_resources["deriva://catalog/tables"]()
         data = parse_json_result(result)
         assert isinstance(data, list)
 
     def test_vocabulary_resource(self, int_resources):
         """Vocabulary resource returns terms for a specific vocabulary."""
         # Workflow_Type is always present in ML schema
-        result = int_resources["deriva-ml://vocabulary/Workflow_Type"]("Workflow_Type")
+        result = int_resources["deriva://vocabulary/Workflow_Type"]("Workflow_Type")
         data = parse_json_result(result)
         assert isinstance(data, list)
         # At minimum, DerivaML MCP type exists from the connection
@@ -1161,7 +1161,7 @@ class TestResourceAccessWorkflow:
     def test_table_schema_resource(self, int_resources):
         """Table schema resource returns column details for a table."""
         # Dataset table always exists in ML schema
-        result = int_resources["deriva-ml://table/Dataset/schema"]("Dataset")
+        result = int_resources["deriva://table/Dataset/schema"]("Dataset")
         data = parse_json_result(result)
         assert data["name"] == "Dataset"
         assert "columns" in data
@@ -1170,14 +1170,14 @@ class TestResourceAccessWorkflow:
 
     def test_server_version_resource(self, int_resources):
         """Server version resource returns version info."""
-        result = int_resources["deriva-ml://server/version"]()
+        result = int_resources["deriva://server/version"]()
         data = parse_json_result(result)
         assert "name" in data
         assert "version" in data
 
     def test_dataset_element_types_resource(self, populated_resources):
         """Dataset element types resource lists registered element types."""
-        result = populated_resources["deriva-ml://catalog/dataset-element-types"]()
+        result = populated_resources["deriva://catalog/dataset-element-types"]()
         data = parse_json_result(result)
         assert isinstance(data, list)
         # Populated catalog should have Image and Subject as element types
@@ -1186,7 +1186,7 @@ class TestResourceAccessWorkflow:
 
     def test_catalog_info_resource(self, int_resources):
         """Catalog info resource returns connection details."""
-        result = int_resources["deriva-ml://catalog/info"]()
+        result = int_resources["deriva://catalog/info"]()
         data = parse_json_result(result)
         assert "hostname" in data
         assert "catalog_id" in data
@@ -1195,7 +1195,7 @@ class TestResourceAccessWorkflow:
 
     def test_workflow_types_resource(self, int_resources):
         """Workflow types resource returns available workflow types."""
-        result = int_resources["deriva-ml://catalog/workflow-types"]()
+        result = int_resources["deriva://catalog/workflow-types"]()
         data = parse_json_result(result)
         assert isinstance(data, list)
         # At minimum, DerivaML MCP type should exist
@@ -1204,7 +1204,7 @@ class TestResourceAccessWorkflow:
 
     def test_connections_resource(self, int_resources):
         """Connections resource shows the active connection."""
-        result = int_resources["deriva-ml://catalog/connections"]()
+        result = int_resources["deriva://catalog/connections"]()
         data = parse_json_result(result)
         assert isinstance(data, list)
         assert len(data) >= 1
@@ -1255,7 +1255,7 @@ class TestWorkflowTools:
         )
 
         # Check resource
-        result = int_resources["deriva-ml://catalog/workflows"]()
+        result = int_resources["deriva://catalog/workflows"]()
         data = parse_json_result(result)
         assert isinstance(data, list)
         assert len(data) > 0

@@ -187,7 +187,7 @@ Uses Docker for both MCP servers - most consistent setup:
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "/bin/sh",
       "args": [
@@ -236,7 +236,7 @@ Uses pip-installed DerivaML MCP with GitHub's hosted server:
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "deriva-mcp",
       "env": {}
@@ -260,7 +260,7 @@ For development or customization:
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "uv",
       "args": [
@@ -294,7 +294,7 @@ If you don't need GitHub integration:
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "/bin/sh",
       "args": [
@@ -312,7 +312,7 @@ Or with direct install:
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "deriva-mcp",
       "env": {}
@@ -330,7 +330,7 @@ Add to `~/.mcp.json` (global) or your project's `.mcp.json` file:
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "/bin/sh",
       "args": [
@@ -360,7 +360,7 @@ Add to `~/.mcp.json` (global) or your project's `.mcp.json` file:
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "deriva-mcp",
       "env": {}
@@ -382,7 +382,7 @@ Then enable in `.claude/settings.local.json`:
 ```json
 {
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["deriva-ml", "github"]
+  "enabledMcpjsonServers": ["deriva", "github"]
 }
 ```
 
@@ -439,7 +439,7 @@ deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "http",
       "url": "http://localhost:8000/mcp"
     }
@@ -452,7 +452,7 @@ deriva-mcp --transport streamable-http --host 0.0.0.0 --port 8000
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "http",
       "url": "http://localhost:8000/mcp"
     }
@@ -486,7 +486,7 @@ Add to your MCP configuration (typically `.vscode/mcp.json`):
 {
   "mcp": {
     "servers": {
-      "deriva-ml": {
+      "deriva": {
         "type": "stdio",
         "command": "/bin/sh",
         "args": [
@@ -546,7 +546,7 @@ After configuration, verify both servers are working:
 User: What MCP servers are available?
 
 Claude: I have access to two MCP servers:
-1. deriva-ml - For managing ML workflows in Deriva catalogs
+1. deriva - For managing ML workflows in Deriva catalogs
 2. github - For managing GitHub repositories and configurations
 
 User: Connect to the deriva catalog at example.org with ID 42
@@ -701,10 +701,10 @@ These resources provide code templates for configuring DerivaML with hydra-zen:
 
 | Resource URI | Description |
 |--------------|-------------|
-| `deriva-ml://config/deriva-ml-template` | Hydra-zen configuration template for DerivaML connection |
-| `deriva-ml://config/dataset-spec-template` | Configuration template for dataset specifications |
-| `deriva-ml://config/execution-template` | Configuration template for ML executions |
-| `deriva-ml://config/model-template` | Configuration template for ML models with zen_partial |
+| `deriva://config/deriva-ml-template` | Hydra-zen configuration template for DerivaML connection |
+| `deriva://config/dataset-spec-template` | Configuration template for dataset specifications |
+| `deriva://config/execution-template` | Configuration template for ML executions |
+| `deriva://config/model-template` | Configuration template for ML models with zen_partial |
 
 ### Dynamic Resources - Catalog Information
 
@@ -712,11 +712,11 @@ These resources return current catalog state (requires active connection):
 
 | Resource URI | Description |
 |--------------|-------------|
-| `deriva-ml://catalog/schema` | Current catalog schema structure in JSON |
-| `deriva-ml://catalog/vocabularies` | All vocabulary tables and their terms |
-| `deriva-ml://catalog/datasets` | All datasets in the current catalog |
-| `deriva-ml://catalog/workflows` | All registered workflows |
-| `deriva-ml://catalog/features` | All feature names defined in the catalog |
+| `deriva://catalog/schema` | Current catalog schema structure in JSON |
+| `deriva://catalog/vocabularies` | All vocabulary tables and their terms |
+| `deriva://catalog/datasets` | All datasets in the current catalog |
+| `deriva://catalog/workflows` | All registered workflows |
+| `deriva://catalog/features` | All feature names defined in the catalog |
 
 ### Template Resources - Parameterized
 
@@ -724,9 +724,9 @@ These resources accept parameters to return specific information:
 
 | Resource URI | Description |
 |--------------|-------------|
-| `deriva-ml://dataset/{dataset_rid}` | Detailed information about a specific dataset |
-| `deriva-ml://table/{table_name}/features` | Features defined for a specific table |
-| `deriva-ml://vocabulary/{vocab_name}` | Terms in a specific vocabulary table |
+| `deriva://dataset/{dataset_rid}` | Detailed information about a specific dataset |
+| `deriva://table/{table_name}/features` | Features defined for a specific table |
+| `deriva://vocabulary/{vocab_name}` | Terms in a specific vocabulary table |
 
 ### Documentation Resources
 
@@ -734,18 +734,18 @@ Documentation is fetched dynamically from GitHub repositories with 1-hour cachin
 
 | Resource URI | Description |
 |--------------|-------------|
-| `deriva-ml://docs/overview` | DerivaML overview and architecture |
-| `deriva-ml://docs/datasets` | Guide to creating and managing datasets |
-| `deriva-ml://docs/features` | Guide to defining and using features |
-| `deriva-ml://docs/execution-configuration` | Guide to configuring ML executions |
-| `deriva-ml://docs/hydra-zen` | Guide to hydra-zen configuration |
-| `deriva-ml://docs/file-assets` | Guide to managing file assets |
-| `deriva-ml://docs/notebooks` | Guide to Jupyter notebook integration |
-| `deriva-ml://docs/identifiers` | Guide to RIDs, MINIDs, and identifiers |
-| `deriva-ml://docs/install` | Installation instructions |
-| `deriva-ml://docs/ermrest/*` | ERMrest API documentation |
-| `deriva-ml://docs/chaise/*` | Chaise UI documentation |
-| `deriva-ml://docs/deriva-py/*` | Deriva Python SDK documentation |
+| `deriva://docs/overview` | DerivaML overview and architecture |
+| `deriva://docs/datasets` | Guide to creating and managing datasets |
+| `deriva://docs/features` | Guide to defining and using features |
+| `deriva://docs/execution-configuration` | Guide to configuring ML executions |
+| `deriva://docs/hydra-zen` | Guide to hydra-zen configuration |
+| `deriva://docs/file-assets` | Guide to managing file assets |
+| `deriva://docs/notebooks` | Guide to Jupyter notebook integration |
+| `deriva://docs/identifiers` | Guide to RIDs, MINIDs, and identifiers |
+| `deriva://docs/install` | Installation instructions |
+| `deriva://docs/ermrest/*` | ERMrest API documentation |
+| `deriva://docs/chaise/*` | Chaise UI documentation |
+| `deriva://docs/deriva-py/*` | Deriva Python SDK documentation |
 
 ### Using Resources
 
@@ -754,12 +754,12 @@ Resources are accessed differently than tools - they provide static or semi-stat
 ```
 User: Show me the DerivaML configuration template
 
-Claude: [Reads deriva-ml://config/deriva-ml-template resource]
+Claude: [Reads deriva://config/deriva-ml-template resource]
 Here's a hydra-zen configuration template for DerivaML...
 
 User: What datasets are in the catalog?
 
-Claude: [Reads deriva-ml://catalog/datasets resource]
+Claude: [Reads deriva://catalog/datasets resource]
 Found the following datasets in your catalog...
 ```
 
@@ -827,7 +827,7 @@ Found 5 datasets:
 User: Create a new hydra-zen config for training on the cell-images dataset
 
 Claude: I'll create a configuration file for you.
-[Reads deriva-ml://config/model-template resource for template]
+[Reads deriva://config/model-template resource for template]
 [Uses GitHub create_or_update_file to save configs/cell_training.py]
 
 Created configs/cell_training.py with:
@@ -993,7 +993,7 @@ If your Deriva server is running directly on the host machine (not in Docker), u
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "/bin/sh",
       "args": [
@@ -1020,7 +1020,7 @@ Then use it in the `--add-host` argument (replace `<WEBSERVER_IP>` with the actu
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "stdio",
       "command": "/bin/sh",
       "args": [
@@ -1111,7 +1111,7 @@ Then configure your MCP client to use HTTP:
 ```json
 {
   "mcpServers": {
-    "deriva-ml": {
+    "deriva": {
       "type": "http",
       "url": "http://localhost:8000/mcp"
     }

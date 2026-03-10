@@ -153,14 +153,14 @@ class TestServerVersion:
     """Tests for the server version resource."""
 
     def test_returns_version_info(self, captured_resources):
-        result = captured_resources["deriva-ml://server/version"]()
+        result = captured_resources["deriva://server/version"]()
         data = json.loads(result)
         assert data["name"] == "deriva-mcp"
         assert data["version"] == __version__
 
     def test_no_connection_still_works(self, captured_resources_disconnected):
         """Server version does not require a connection."""
-        result = captured_resources_disconnected["deriva-ml://server/version"]()
+        result = captured_resources_disconnected["deriva://server/version"]()
         data = json.loads(result)
         assert data["name"] == "deriva-mcp"
         assert data["version"] == __version__
@@ -172,12 +172,12 @@ class TestServerVersion:
 
 
 CONFIG_TEMPLATE_URIS = [
-    "deriva-ml://config/deriva-ml-template",
-    "deriva-ml://config/dataset-spec-template",
-    "deriva-ml://config/execution-template",
-    "deriva-ml://config/model-template",
-    "deriva-ml://config/experiment-template",
-    "deriva-ml://config/multirun-template",
+    "deriva://config/deriva-ml-template",
+    "deriva://config/dataset-spec-template",
+    "deriva://config/execution-template",
+    "deriva://config/model-template",
+    "deriva://config/experiment-template",
+    "deriva://config/multirun-template",
 ]
 
 
@@ -199,28 +199,28 @@ class TestConfigTemplates:
         assert len(result) > 50
 
     def test_deriva_ml_template_contains_key_imports(self, captured_resources):
-        result = captured_resources["deriva-ml://config/deriva-ml-template"]()
+        result = captured_resources["deriva://config/deriva-ml-template"]()
         assert "hydra_zen" in result
         assert "DerivaMLConfig" in result
 
     def test_dataset_spec_template_content(self, captured_resources):
-        result = captured_resources["deriva-ml://config/dataset-spec-template"]()
+        result = captured_resources["deriva://config/dataset-spec-template"]()
         assert "DatasetSpecConfig" in result
 
     def test_execution_template_content(self, captured_resources):
-        result = captured_resources["deriva-ml://config/execution-template"]()
+        result = captured_resources["deriva://config/execution-template"]()
         assert "ExecutionConfiguration" in result
 
     def test_model_template_content(self, captured_resources):
-        result = captured_resources["deriva-ml://config/model-template"]()
+        result = captured_resources["deriva://config/model-template"]()
         assert "zen_partial" in result
 
     def test_experiment_template_content(self, captured_resources):
-        result = captured_resources["deriva-ml://config/experiment-template"]()
+        result = captured_resources["deriva://config/experiment-template"]()
         assert "experiment" in result.lower()
 
     def test_multirun_template_content(self, captured_resources):
-        result = captured_resources["deriva-ml://config/multirun-template"]()
+        result = captured_resources["deriva://config/multirun-template"]()
         assert "multirun_config" in result
 
 
@@ -249,7 +249,7 @@ class TestCatalogSchema:
         self._setup_schema(mock_ml)
         mock_ml.model.is_vocabulary.return_value = False
 
-        result = captured_resources["deriva-ml://catalog/schema"]()
+        result = captured_resources["deriva://catalog/schema"]()
         data = json.loads(result)
 
         assert data["hostname"] == "test.example.org"
@@ -267,7 +267,7 @@ class TestCatalogSchema:
         self._setup_schema(mock_ml, tables={"Diagnosis": table})
         mock_ml.model.is_vocabulary.return_value = True
 
-        result = captured_resources["deriva-ml://catalog/schema"]()
+        result = captured_resources["deriva://catalog/schema"]()
         data = json.loads(result)
 
         assert data["tables"][0]["is_vocabulary"] is True
@@ -278,7 +278,7 @@ class TestCatalogSchema:
         self._setup_schema(mock_ml)
         mock_ml.model.is_vocabulary.return_value = False
 
-        result = captured_resources["deriva-ml://catalog/schema"]()
+        result = captured_resources["deriva://catalog/schema"]()
         data = json.loads(result)
 
         assert data["tables"][0]["is_vocabulary"] is False
@@ -292,14 +292,14 @@ class TestCatalogSchema:
         # The resource code must call ml.model.is_vocabulary(table), not table.is_vocabulary.
         mock_ml.model.is_vocabulary.return_value = False
 
-        result = captured_resources["deriva-ml://catalog/schema"]()
+        result = captured_resources["deriva://catalog/schema"]()
         # This would raise json.JSONDecodeError if the result contains non-serializable objects
         data = json.loads(result)
         assert "error" not in data
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/schema"]()
+            captured_resources_disconnected["deriva://catalog/schema"]()
 
 
 class TestCatalogVocabularies:
@@ -321,7 +321,7 @@ class TestCatalogVocabularies:
         mock_term = _make_term(name="Training", description="Training data")
         mock_ml.list_vocabulary_terms.return_value = [mock_term]
 
-        result = captured_resources["deriva-ml://catalog/vocabularies"]()
+        result = captured_resources["deriva://catalog/vocabularies"]()
         data = json.loads(result)
 
         assert "Dataset_Type" in data
@@ -329,7 +329,7 @@ class TestCatalogVocabularies:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/vocabularies"]()
+            captured_resources_disconnected["deriva://catalog/vocabularies"]()
 
 
 class TestCatalogDatasets:
@@ -339,7 +339,7 @@ class TestCatalogDatasets:
         ds = _make_dataset()
         mock_ml.find_datasets.return_value = [ds]
 
-        result = captured_resources["deriva-ml://catalog/datasets"]()
+        result = captured_resources["deriva://catalog/datasets"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -348,13 +348,13 @@ class TestCatalogDatasets:
 
     def test_empty_datasets(self, captured_resources, mock_ml):
         mock_ml.find_datasets.return_value = []
-        result = captured_resources["deriva-ml://catalog/datasets"]()
+        result = captured_resources["deriva://catalog/datasets"]()
         data = json.loads(result)
         assert data == []
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/datasets"]()
+            captured_resources_disconnected["deriva://catalog/datasets"]()
 
 
 class TestDatasetElementTypes:
@@ -364,7 +364,7 @@ class TestDatasetElementTypes:
         table = _make_table(name="Image", schema_name="test_schema", comment="Image table")
         mock_ml.list_dataset_element_types.return_value = [table]
 
-        result = captured_resources["deriva-ml://catalog/dataset-element-types"]()
+        result = captured_resources["deriva://catalog/dataset-element-types"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -373,7 +373,7 @@ class TestDatasetElementTypes:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/dataset-element-types"]()
+            captured_resources_disconnected["deriva://catalog/dataset-element-types"]()
 
 
 class TestCatalogWorkflows:
@@ -383,7 +383,7 @@ class TestCatalogWorkflows:
         wf = _make_workflow()
         mock_ml.find_workflows.return_value = [wf]
 
-        result = captured_resources["deriva-ml://catalog/workflows"]()
+        result = captured_resources["deriva://catalog/workflows"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -392,7 +392,7 @@ class TestCatalogWorkflows:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/workflows"]()
+            captured_resources_disconnected["deriva://catalog/workflows"]()
 
 
 class TestWorkflowTypes:
@@ -402,7 +402,7 @@ class TestWorkflowTypes:
         term = _make_term(name="ML Pipeline", description="ML workflow type", rid="WT-001")
         mock_ml.list_vocabulary_terms.return_value = [term]
 
-        result = captured_resources["deriva-ml://catalog/workflow-types"]()
+        result = captured_resources["deriva://catalog/workflow-types"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -411,7 +411,7 @@ class TestWorkflowTypes:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/workflow-types"]()
+            captured_resources_disconnected["deriva://catalog/workflow-types"]()
 
 
 class TestCatalogFeatures:
@@ -421,7 +421,7 @@ class TestCatalogFeatures:
         term = _make_term(name="BoundingBox", description="Object bounding box")
         mock_ml.list_vocabulary_terms.return_value = [term]
 
-        result = captured_resources["deriva-ml://catalog/features"]()
+        result = captured_resources["deriva://catalog/features"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -429,7 +429,7 @@ class TestCatalogFeatures:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/features"]()
+            captured_resources_disconnected["deriva://catalog/features"]()
 
 
 class TestCatalogTables:
@@ -444,7 +444,7 @@ class TestCatalogTables:
         mock_ml.model.is_vocabulary.return_value = False
         mock_ml.model.is_asset.return_value = False
 
-        result = captured_resources["deriva-ml://catalog/tables"]()
+        result = captured_resources["deriva://catalog/tables"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -454,7 +454,7 @@ class TestCatalogTables:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/tables"]()
+            captured_resources_disconnected["deriva://catalog/tables"]()
 
 
 class TestDatasetTypes:
@@ -464,7 +464,7 @@ class TestDatasetTypes:
         term = _make_term(name="Training", description="Training data", synonyms=("train",), rid="DT-001")
         mock_ml.list_vocabulary_terms.return_value = [term]
 
-        result = captured_resources["deriva-ml://catalog/dataset-types"]()
+        result = captured_resources["deriva://catalog/dataset-types"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -474,7 +474,7 @@ class TestDatasetTypes:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/dataset-types"]()
+            captured_resources_disconnected["deriva://catalog/dataset-types"]()
 
 
 class TestAssetTables:
@@ -484,7 +484,7 @@ class TestAssetTables:
         table = _make_table(name="Model", schema_name="test_schema", comment="Model assets")
         mock_ml.list_asset_tables.return_value = [table]
 
-        result = captured_resources["deriva-ml://catalog/asset-tables"]()
+        result = captured_resources["deriva://catalog/asset-tables"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -493,7 +493,7 @@ class TestAssetTables:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/asset-tables"]()
+            captured_resources_disconnected["deriva://catalog/asset-tables"]()
 
 
 class TestCatalogAssets:
@@ -512,7 +512,7 @@ class TestCatalogAssets:
         asset = _make_asset()
         mock_ml.list_assets.return_value = [asset]
 
-        result = captured_resources["deriva-ml://catalog/assets"]()
+        result = captured_resources["deriva://catalog/assets"]()
         data = json.loads(result)
 
         assert "Model" in data
@@ -522,7 +522,7 @@ class TestCatalogAssets:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/assets"]()
+            captured_resources_disconnected["deriva://catalog/assets"]()
 
 
 class TestCatalogExecutions:
@@ -551,7 +551,7 @@ class TestCatalogExecutions:
         mock_ml.pathBuilder.return_value = mock_pb
         mock_ml.ml_schema = "deriva-ml"
 
-        result = captured_resources["deriva-ml://catalog/executions"]()
+        result = captured_resources["deriva://catalog/executions"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -560,7 +560,7 @@ class TestCatalogExecutions:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/executions"]()
+            captured_resources_disconnected["deriva://catalog/executions"]()
 
 
 class TestCatalogExperiments:
@@ -571,7 +571,7 @@ class TestCatalogExperiments:
         mock_exp.summary.return_value = {"rid": "EXP-001", "description": "Experiment 1"}
         mock_ml.find_experiments.return_value = [mock_exp]
 
-        result = captured_resources["deriva-ml://catalog/experiments"]()
+        result = captured_resources["deriva://catalog/experiments"]()
         data = json.loads(result)
 
         assert data["count"] == 1
@@ -579,14 +579,14 @@ class TestCatalogExperiments:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/experiments"]()
+            captured_resources_disconnected["deriva://catalog/experiments"]()
 
 
 class TestCatalogInfo:
     """Tests for the catalog info resource."""
 
     def test_success(self, captured_resources, mock_ml, mock_conn_manager):
-        result = captured_resources["deriva-ml://catalog/info"]()
+        result = captured_resources["deriva://catalog/info"]()
         data = json.loads(result)
 
         assert data["hostname"] == "test.example.org"
@@ -597,7 +597,7 @@ class TestCatalogInfo:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/info"]()
+            captured_resources_disconnected["deriva://catalog/info"]()
 
 
 class TestCatalogUsers:
@@ -609,7 +609,7 @@ class TestCatalogUsers:
             {"id": "user2", "display_name": "Bob"},
         ]
 
-        result = captured_resources["deriva-ml://catalog/users"]()
+        result = captured_resources["deriva://catalog/users"]()
         data = json.loads(result)
 
         assert len(data) == 2
@@ -617,7 +617,7 @@ class TestCatalogUsers:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://catalog/users"]()
+            captured_resources_disconnected["deriva://catalog/users"]()
 
 
 class TestCatalogConnections:
@@ -628,7 +628,7 @@ class TestCatalogConnections:
             {"hostname": "test.example.org", "catalog_id": "1", "active": True}
         ]
 
-        result = captured_resources["deriva-ml://catalog/connections"]()
+        result = captured_resources["deriva://catalog/connections"]()
         data = json.loads(result)
 
         assert len(data) == 1
@@ -637,7 +637,7 @@ class TestCatalogConnections:
     def test_works_without_connection(self, captured_resources_disconnected, disconnected_conn_manager):
         """Connections resource does not call get_active_or_raise, so it works even disconnected."""
         disconnected_conn_manager.list_connections.return_value = []
-        result = captured_resources_disconnected["deriva-ml://catalog/connections"]()
+        result = captured_resources_disconnected["deriva://catalog/connections"]()
         data = json.loads(result)
         assert data == []
 
@@ -647,21 +647,21 @@ class TestCatalogConnections:
 # =============================================================================
 
 DYNAMIC_CATALOG_URIS = [
-    "deriva-ml://catalog/schema",
-    "deriva-ml://catalog/vocabularies",
-    "deriva-ml://catalog/datasets",
-    "deriva-ml://catalog/dataset-element-types",
-    "deriva-ml://catalog/workflows",
-    "deriva-ml://catalog/workflow-types",
-    "deriva-ml://catalog/features",
-    "deriva-ml://catalog/tables",
-    "deriva-ml://catalog/dataset-types",
-    "deriva-ml://catalog/asset-tables",
-    "deriva-ml://catalog/assets",
-    "deriva-ml://catalog/executions",
-    "deriva-ml://catalog/experiments",
-    "deriva-ml://catalog/info",
-    "deriva-ml://catalog/users",
+    "deriva://catalog/schema",
+    "deriva://catalog/vocabularies",
+    "deriva://catalog/datasets",
+    "deriva://catalog/dataset-element-types",
+    "deriva://catalog/workflows",
+    "deriva://catalog/workflow-types",
+    "deriva://catalog/features",
+    "deriva://catalog/tables",
+    "deriva://catalog/dataset-types",
+    "deriva://catalog/asset-tables",
+    "deriva://catalog/assets",
+    "deriva://catalog/executions",
+    "deriva://catalog/experiments",
+    "deriva://catalog/info",
+    "deriva://catalog/users",
 ]
 
 
@@ -690,7 +690,7 @@ class TestDatasetDetails:
         ds.list_dataset_parents.return_value = []
         mock_ml.lookup_dataset.return_value = ds
 
-        result = captured_resources["deriva-ml://dataset/{dataset_rid}"]("DS-100")
+        result = captured_resources["deriva://dataset/{dataset_rid}"]("DS-100")
         data = json.loads(result)
 
         assert data["rid"] == "DS-100"
@@ -707,7 +707,7 @@ class TestDatasetDetails:
         ds.list_dataset_parents.return_value = [parent]
         mock_ml.lookup_dataset.return_value = ds
 
-        result = captured_resources["deriva-ml://dataset/{dataset_rid}"]("DS-200")
+        result = captured_resources["deriva://dataset/{dataset_rid}"]("DS-200")
         data = json.loads(result)
 
         assert len(data["children"]) == 1
@@ -717,7 +717,7 @@ class TestDatasetDetails:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://dataset/{dataset_rid}"]("DS-100")
+            captured_resources_disconnected["deriva://dataset/{dataset_rid}"]("DS-100")
 
 
 class TestDatasetMembers:
@@ -731,7 +731,7 @@ class TestDatasetMembers:
         }
         mock_ml.lookup_dataset.return_value = ds
 
-        result = captured_resources["deriva-ml://dataset/{dataset_rid}/members"]("DS-300")
+        result = captured_resources["deriva://dataset/{dataset_rid}/members"]("DS-300")
         data = json.loads(result)
 
         assert data["dataset_rid"] == "DS-300"
@@ -740,7 +740,7 @@ class TestDatasetMembers:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://dataset/{dataset_rid}/members"]("DS-300")
+            captured_resources_disconnected["deriva://dataset/{dataset_rid}/members"]("DS-300")
 
 
 class TestDatasetVersions:
@@ -755,7 +755,7 @@ class TestDatasetVersions:
         ds.dataset_history.return_value = [history_entry]
         mock_ml.lookup_dataset.return_value = ds
 
-        result = captured_resources["deriva-ml://dataset/{dataset_rid}/versions"]("DS-400")
+        result = captured_resources["deriva://dataset/{dataset_rid}/versions"]("DS-400")
         data = json.loads(result)
 
         assert data["dataset_rid"] == "DS-400"
@@ -764,7 +764,7 @@ class TestDatasetVersions:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://dataset/{dataset_rid}/versions"]("DS-400")
+            captured_resources_disconnected["deriva://dataset/{dataset_rid}/versions"]("DS-400")
 
 
 class TestTableFeatures:
@@ -786,7 +786,7 @@ class TestTableFeatures:
 
         mock_ml.find_features.return_value = [feature]
 
-        result = captured_resources["deriva-ml://table/{table_name}/features"]("Image")
+        result = captured_resources["deriva://table/{table_name}/features"]("Image")
         data = json.loads(result)
 
         assert len(data) == 1
@@ -795,7 +795,7 @@ class TestTableFeatures:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://table/{table_name}/features"]("Image")
+            captured_resources_disconnected["deriva://table/{table_name}/features"]("Image")
 
 
 class TestFeatureDetails:
@@ -821,7 +821,7 @@ class TestFeatureDetails:
 
         mock_ml.lookup_feature.return_value = feature
 
-        result = captured_resources["deriva-ml://feature/{table_name}/{feature_name}"]("Image", "Quality")
+        result = captured_resources["deriva://feature/{table_name}/{feature_name}"]("Image", "Quality")
         data = json.loads(result)
 
         assert data["feature_name"] == "Quality"
@@ -831,7 +831,7 @@ class TestFeatureDetails:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://feature/{table_name}/{feature_name}"]("Image", "Quality")
+            captured_resources_disconnected["deriva://feature/{table_name}/{feature_name}"]("Image", "Quality")
 
 
 class TestFeatureValues:
@@ -842,7 +842,7 @@ class TestFeatureValues:
             {"Image": "IMG-1", "score": 0.95, "Execution": "EXE-1"},
         ]
 
-        result = captured_resources["deriva-ml://feature/{table_name}/{feature_name}/values"]("Image", "Quality")
+        result = captured_resources["deriva://feature/{table_name}/{feature_name}/values"]("Image", "Quality")
         data = json.loads(result)
 
         assert len(data) == 1
@@ -851,7 +851,7 @@ class TestFeatureValues:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://feature/{table_name}/{feature_name}/values"]("Image", "Quality")
+            captured_resources_disconnected["deriva://feature/{table_name}/{feature_name}/values"]("Image", "Quality")
 
 
 class TestVocabularyTerms:
@@ -861,7 +861,7 @@ class TestVocabularyTerms:
         term = _make_term(name="Training", description="Training data", synonyms=("train",))
         mock_ml.list_vocabulary_terms.return_value = [term]
 
-        result = captured_resources["deriva-ml://vocabulary/{vocab_name}"]("Dataset_Type")
+        result = captured_resources["deriva://vocabulary/{vocab_name}"]("Dataset_Type")
         data = json.loads(result)
 
         assert len(data) == 1
@@ -870,7 +870,7 @@ class TestVocabularyTerms:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://vocabulary/{vocab_name}"]("Dataset_Type")
+            captured_resources_disconnected["deriva://vocabulary/{vocab_name}"]("Dataset_Type")
 
 
 class TestVocabularyTerm:
@@ -880,7 +880,7 @@ class TestVocabularyTerm:
         term = _make_term(name="Training", description="Training data", synonyms=("train",), rid="T-001")
         mock_ml.lookup_term.return_value = term
 
-        result = captured_resources["deriva-ml://vocabulary/{vocab_name}/{term_name}"]("Dataset_Type", "Training")
+        result = captured_resources["deriva://vocabulary/{vocab_name}/{term_name}"]("Dataset_Type", "Training")
         data = json.loads(result)
 
         assert data["name"] == "Training"
@@ -889,7 +889,7 @@ class TestVocabularyTerm:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://vocabulary/{vocab_name}/{term_name}"]("Dataset_Type", "Training")
+            captured_resources_disconnected["deriva://vocabulary/{vocab_name}/{term_name}"]("Dataset_Type", "Training")
 
 
 class TestTableSchema:
@@ -908,7 +908,7 @@ class TestTableSchema:
         mock_ml.model.is_vocabulary.return_value = False
         mock_ml.model.is_asset.return_value = False
 
-        result = captured_resources["deriva-ml://table/{table_name}/schema"]("Subject")
+        result = captured_resources["deriva://table/{table_name}/schema"]("Subject")
         data = json.loads(result)
 
         assert data["name"] == "Subject"
@@ -919,7 +919,7 @@ class TestTableSchema:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://table/{table_name}/schema"]("Subject")
+            captured_resources_disconnected["deriva://table/{table_name}/schema"]("Subject")
 
 
 class TestTableAssets:
@@ -929,7 +929,7 @@ class TestTableAssets:
         asset = _make_asset(asset_rid="AST-100")
         mock_ml.list_assets.return_value = [asset]
 
-        result = captured_resources["deriva-ml://table/{table_name}/assets"]("Model")
+        result = captured_resources["deriva://table/{table_name}/assets"]("Model")
         data = json.loads(result)
 
         assert len(data) == 1
@@ -938,7 +938,7 @@ class TestTableAssets:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://table/{table_name}/assets"]("Model")
+            captured_resources_disconnected["deriva://table/{table_name}/assets"]("Model")
 
 
 class TestWorkflowDetails:
@@ -948,7 +948,7 @@ class TestWorkflowDetails:
         wf = _make_workflow(rid="WF-100", name="Test WF", is_notebook=True)
         mock_ml.lookup_workflow.return_value = wf
 
-        result = captured_resources["deriva-ml://workflow/{workflow_rid}"]("WF-100")
+        result = captured_resources["deriva://workflow/{workflow_rid}"]("WF-100")
         data = json.loads(result)
 
         assert data["rid"] == "WF-100"
@@ -957,7 +957,7 @@ class TestWorkflowDetails:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://workflow/{workflow_rid}"]("WF-100")
+            captured_resources_disconnected["deriva://workflow/{workflow_rid}"]("WF-100")
 
 
 class TestTableAnnotations:
@@ -966,14 +966,14 @@ class TestTableAnnotations:
     def test_success(self, captured_resources, mock_ml):
         mock_ml.get_table_annotations.return_value = {"display": {"name": "My Table"}}
 
-        result = captured_resources["deriva-ml://table/{table_name}/annotations"]("Subject")
+        result = captured_resources["deriva://table/{table_name}/annotations"]("Subject")
         data = json.loads(result)
 
         assert data["display"]["name"] == "My Table"
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://table/{table_name}/annotations"]("Subject")
+            captured_resources_disconnected["deriva://table/{table_name}/annotations"]("Subject")
 
 
 class TestColumnAnnotations:
@@ -982,14 +982,14 @@ class TestColumnAnnotations:
     def test_success(self, captured_resources, mock_ml):
         mock_ml.get_column_annotations.return_value = {"column-display": {"*": {"markdown_pattern": "test"}}}
 
-        result = captured_resources["deriva-ml://table/{table_name}/column/{column_name}/annotations"]("Subject", "Name")
+        result = captured_resources["deriva://table/{table_name}/column/{column_name}/annotations"]("Subject", "Name")
         data = json.loads(result)
 
         assert "column-display" in data
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://table/{table_name}/column/{column_name}/annotations"]("Subject", "Name")
+            captured_resources_disconnected["deriva://table/{table_name}/column/{column_name}/annotations"]("Subject", "Name")
 
 
 class TestTableForeignKeys:
@@ -1001,7 +1001,7 @@ class TestTableForeignKeys:
             "inbound": [],
         }
 
-        result = captured_resources["deriva-ml://table/{table_name}/foreign-keys"]("Subject")
+        result = captured_resources["deriva://table/{table_name}/foreign-keys"]("Subject")
         data = json.loads(result)
 
         assert len(data["outbound"]) == 1
@@ -1009,7 +1009,7 @@ class TestTableForeignKeys:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://table/{table_name}/foreign-keys"]("Subject")
+            captured_resources_disconnected["deriva://table/{table_name}/foreign-keys"]("Subject")
 
 
 class TestAssetDetails:
@@ -1021,7 +1021,7 @@ class TestAssetDetails:
         mock_ml.lookup_asset.return_value = asset
         mock_ml.list_asset_executions.return_value = [exe_record]
 
-        result = captured_resources["deriva-ml://asset/{asset_rid}"]("AST-200")
+        result = captured_resources["deriva://asset/{asset_rid}"]("AST-200")
         data = json.loads(result)
 
         assert data["rid"] == "AST-200"
@@ -1032,7 +1032,7 @@ class TestAssetDetails:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://asset/{asset_rid}"]("AST-200")
+            captured_resources_disconnected["deriva://asset/{asset_rid}"]("AST-200")
 
 
 class TestExecutionDetails:
@@ -1050,7 +1050,7 @@ class TestExecutionDetails:
         exe.list_parent_executions.return_value = [{"Execution": "EXE-499"}]
         mock_ml.lookup_execution.return_value = exe
 
-        result = captured_resources["deriva-ml://execution/{execution_rid}"]("EXE-500")
+        result = captured_resources["deriva://execution/{execution_rid}"]("EXE-500")
         data = json.loads(result)
 
         assert data["rid"] == "EXE-500"
@@ -1060,7 +1060,7 @@ class TestExecutionDetails:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://execution/{execution_rid}"]("EXE-500")
+            captured_resources_disconnected["deriva://execution/{execution_rid}"]("EXE-500")
 
 
 class TestExecutionInputs:
@@ -1079,7 +1079,7 @@ class TestExecutionInputs:
 
         mock_ml.lookup_execution.return_value = exe
 
-        result = captured_resources["deriva-ml://execution/{execution_rid}/inputs"]("EXE-600")
+        result = captured_resources["deriva://execution/{execution_rid}/inputs"]("EXE-600")
         data = json.loads(result)
 
         assert data["execution_rid"] == "EXE-600"
@@ -1090,7 +1090,7 @@ class TestExecutionInputs:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://execution/{execution_rid}/inputs"]("EXE-600")
+            captured_resources_disconnected["deriva://execution/{execution_rid}/inputs"]("EXE-600")
 
 
 class TestExperimentDetails:
@@ -1101,14 +1101,14 @@ class TestExperimentDetails:
         exp.summary.return_value = {"rid": "EXP-100", "description": "Experiment details"}
         mock_ml.lookup_experiment.return_value = exp
 
-        result = captured_resources["deriva-ml://experiment/{execution_rid}"]("EXP-100")
+        result = captured_resources["deriva://experiment/{execution_rid}"]("EXP-100")
         data = json.loads(result)
 
         assert data["rid"] == "EXP-100"
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://experiment/{execution_rid}"]("EXP-100")
+            captured_resources_disconnected["deriva://experiment/{execution_rid}"]("EXP-100")
 
 
 class TestChaiseUrl:
@@ -1117,7 +1117,7 @@ class TestChaiseUrl:
     def test_success_table_name(self, captured_resources, mock_ml):
         mock_ml.chaise_url.return_value = "https://test.example.org/chaise/recordset/#1/test_schema:Subject"
 
-        result = captured_resources["deriva-ml://chaise-url/{table_or_rid}"]("Subject")
+        result = captured_resources["deriva://chaise-url/{table_or_rid}"]("Subject")
         data = json.loads(result)
 
         assert "url" in data
@@ -1133,7 +1133,7 @@ class TestChaiseUrl:
         mock_result.rid = "ABC-123"
         mock_ml.resolve_rid.return_value = mock_result
 
-        result = captured_resources["deriva-ml://chaise-url/{table_or_rid}"]("ABC-123")
+        result = captured_resources["deriva://chaise-url/{table_or_rid}"]("ABC-123")
         data = json.loads(result)
 
         assert "url" in data
@@ -1141,7 +1141,7 @@ class TestChaiseUrl:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://chaise-url/{table_or_rid}"]("Subject")
+            captured_resources_disconnected["deriva://chaise-url/{table_or_rid}"]("Subject")
 
 
 class TestResolveRid:
@@ -1156,7 +1156,7 @@ class TestResolveRid:
         mock_result.rid = "SUB-001"
         mock_ml.resolve_rid.return_value = mock_result
 
-        result = captured_resources["deriva-ml://rid/{rid}"]("SUB-001")
+        result = captured_resources["deriva://rid/{rid}"]("SUB-001")
         data = json.loads(result)
 
         assert data["rid"] == "SUB-001"
@@ -1166,7 +1166,7 @@ class TestResolveRid:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://rid/{rid}"]("SUB-001")
+            captured_resources_disconnected["deriva://rid/{rid}"]("SUB-001")
 
 
 class TestCitationUrl:
@@ -1178,7 +1178,7 @@ class TestCitationUrl:
             else "https://test.example.org/permanent/SUB-001"
         )
 
-        result = captured_resources["deriva-ml://cite/{rid}"]("SUB-001")
+        result = captured_resources["deriva://cite/{rid}"]("SUB-001")
         data = json.loads(result)
 
         assert data["rid"] == "SUB-001"
@@ -1187,7 +1187,7 @@ class TestCitationUrl:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://cite/{rid}"]("SUB-001")
+            captured_resources_disconnected["deriva://cite/{rid}"]("SUB-001")
 
 
 class TestRegistryResource:
@@ -1220,7 +1220,7 @@ class TestRegistryResource:
         # we need to patch at the correct location
         with patch("deriva.core.DerivaServer", mock_server_cls), \
              patch("deriva.core.get_credential", mock_get_cred):
-            result = captured_resources["deriva-ml://registry/{hostname}"]("test.example.org")
+            result = captured_resources["deriva://registry/{hostname}"]("test.example.org")
 
         data = json.loads(result)
         assert data["hostname"] == "test.example.org"
@@ -1241,7 +1241,7 @@ class TestAliasResource:
 
         with patch("deriva.core.DerivaServer", mock_server_cls), \
              patch("deriva.core.get_credential", MagicMock(return_value={"token": "t"})):
-            result = captured_resources["deriva-ml://alias/{hostname}/{alias_name}"]("test.example.org", "my-alias")
+            result = captured_resources["deriva://alias/{hostname}/{alias_name}"]("test.example.org", "my-alias")
 
         data = json.loads(result)
         assert data["hostname"] == "test.example.org"
@@ -1253,27 +1253,27 @@ class TestAliasResource:
 # =============================================================================
 
 PARAMETERIZED_URIS_WITH_ARGS = [
-    ("deriva-ml://dataset/{dataset_rid}", ("DS-001",)),
-    ("deriva-ml://dataset/{dataset_rid}/members", ("DS-001",)),
-    ("deriva-ml://dataset/{dataset_rid}/versions", ("DS-001",)),
-    ("deriva-ml://table/{table_name}/features", ("Image",)),
-    ("deriva-ml://feature/{table_name}/{feature_name}", ("Image", "Quality")),
-    ("deriva-ml://feature/{table_name}/{feature_name}/values", ("Image", "Quality")),
-    ("deriva-ml://vocabulary/{vocab_name}", ("Dataset_Type",)),
-    ("deriva-ml://vocabulary/{vocab_name}/{term_name}", ("Dataset_Type", "Training")),
-    ("deriva-ml://table/{table_name}/schema", ("Subject",)),
-    ("deriva-ml://table/{table_name}/assets", ("Model",)),
-    ("deriva-ml://workflow/{workflow_rid}", ("WF-001",)),
-    ("deriva-ml://table/{table_name}/annotations", ("Subject",)),
-    ("deriva-ml://table/{table_name}/column/{column_name}/annotations", ("Subject", "Name")),
-    ("deriva-ml://table/{table_name}/foreign-keys", ("Subject",)),
-    ("deriva-ml://asset/{asset_rid}", ("AST-001",)),
-    ("deriva-ml://execution/{execution_rid}", ("EXE-001",)),
-    ("deriva-ml://execution/{execution_rid}/inputs", ("EXE-001",)),
-    ("deriva-ml://experiment/{execution_rid}", ("EXP-001",)),
-    ("deriva-ml://chaise-url/{table_or_rid}", ("Subject",)),
-    ("deriva-ml://rid/{rid}", ("SUB-001",)),
-    ("deriva-ml://cite/{rid}", ("SUB-001",)),
+    ("deriva://dataset/{dataset_rid}", ("DS-001",)),
+    ("deriva://dataset/{dataset_rid}/members", ("DS-001",)),
+    ("deriva://dataset/{dataset_rid}/versions", ("DS-001",)),
+    ("deriva://table/{table_name}/features", ("Image",)),
+    ("deriva://feature/{table_name}/{feature_name}", ("Image", "Quality")),
+    ("deriva://feature/{table_name}/{feature_name}/values", ("Image", "Quality")),
+    ("deriva://vocabulary/{vocab_name}", ("Dataset_Type",)),
+    ("deriva://vocabulary/{vocab_name}/{term_name}", ("Dataset_Type", "Training")),
+    ("deriva://table/{table_name}/schema", ("Subject",)),
+    ("deriva://table/{table_name}/assets", ("Model",)),
+    ("deriva://workflow/{workflow_rid}", ("WF-001",)),
+    ("deriva://table/{table_name}/annotations", ("Subject",)),
+    ("deriva://table/{table_name}/column/{column_name}/annotations", ("Subject", "Name")),
+    ("deriva://table/{table_name}/foreign-keys", ("Subject",)),
+    ("deriva://asset/{asset_rid}", ("AST-001",)),
+    ("deriva://execution/{execution_rid}", ("EXE-001",)),
+    ("deriva://execution/{execution_rid}/inputs", ("EXE-001",)),
+    ("deriva://experiment/{execution_rid}", ("EXP-001",)),
+    ("deriva://chaise-url/{table_or_rid}", ("Subject",)),
+    ("deriva://rid/{rid}", ("SUB-001",)),
+    ("deriva://cite/{rid}", ("SUB-001",)),
 ]
 
 
@@ -1295,7 +1295,7 @@ class TestAnnotationContextsDoc:
     """Tests for the static annotation contexts documentation resource."""
 
     def test_returns_valid_json(self, captured_resources):
-        result = captured_resources["deriva-ml://docs/annotation-contexts"]()
+        result = captured_resources["deriva://docs/annotation-contexts"]()
         data = json.loads(result)
 
         assert "visible_columns_contexts" in data
@@ -1304,7 +1304,7 @@ class TestAnnotationContextsDoc:
         assert "column_display_contexts" in data
 
     def test_contains_key_contexts(self, captured_resources):
-        result = captured_resources["deriva-ml://docs/annotation-contexts"]()
+        result = captured_resources["deriva://docs/annotation-contexts"]()
         data = json.loads(result)
 
         contexts = data["visible_columns_contexts"]["contexts"]
@@ -1315,29 +1315,29 @@ class TestAnnotationContextsDoc:
 
     def test_no_connection_still_works(self, captured_resources_disconnected):
         """Annotation contexts is static, no connection needed."""
-        result = captured_resources_disconnected["deriva-ml://docs/annotation-contexts"]()
+        result = captured_resources_disconnected["deriva://docs/annotation-contexts"]()
         data = json.loads(result)
         assert "visible_columns_contexts" in data
 
 
 DOC_URIS_AND_FETCH_ARGS = [
-    ("deriva-ml://docs/overview", "deriva-ml", "docs/user-guide/overview.md"),
-    ("deriva-ml://docs/datasets", "deriva-ml", "docs/user-guide/datasets.md"),
-    ("deriva-ml://docs/features", "deriva-ml", "docs/user-guide/features.md"),
-    ("deriva-ml://docs/execution-configuration", "deriva-ml", "docs/user-guide/execution-configuration.md"),
-    ("deriva-ml://docs/hydra-zen", "deriva-ml", "docs/user-guide/hydra-zen-configuration.md"),
-    ("deriva-ml://docs/file-assets", "deriva-ml", "docs/user-guide/file-assets.md"),
-    ("deriva-ml://docs/notebooks", "deriva-ml", "docs/user-guide/notebooks.md"),
-    ("deriva-ml://docs/annotations", "deriva-ml", "docs/user-guide/annotations.md"),
-    ("deriva-ml://docs/identifiers", "deriva-ml", "docs/user-guide/identifiers.md"),
-    ("deriva-ml://docs/install", "deriva-ml", "docs/user-guide/install.md"),
-    ("deriva-ml://docs/ermrest/data-api", "ermrest", "docs/api-doc/data/rest.md"),
-    ("deriva-ml://docs/ermrest/naming", "ermrest", "docs/api-doc/data/naming.md"),
-    ("deriva-ml://docs/ermrest/catalog", "ermrest", "docs/api-doc/rest-catalog.md"),
-    ("deriva-ml://docs/chaise/config", "chaise", "docs/user-docs/chaise-config.md"),
-    ("deriva-ml://docs/chaise/query-parameters", "chaise", "docs/user-docs/query-parameters.md"),
-    ("deriva-ml://docs/deriva-py/install", "deriva-py", "docs/install.md"),
-    ("deriva-ml://docs/deriva-py/tutorial", "deriva-py", "docs/project-tutorial.md"),
+    ("deriva://docs/overview", "deriva-ml", "docs/user-guide/overview.md"),
+    ("deriva://docs/datasets", "deriva-ml", "docs/user-guide/datasets.md"),
+    ("deriva://docs/features", "deriva-ml", "docs/user-guide/features.md"),
+    ("deriva://docs/execution-configuration", "deriva-ml", "docs/user-guide/execution-configuration.md"),
+    ("deriva://docs/hydra-zen", "deriva-ml", "docs/user-guide/hydra-zen-configuration.md"),
+    ("deriva://docs/file-assets", "deriva-ml", "docs/user-guide/file-assets.md"),
+    ("deriva://docs/notebooks", "deriva-ml", "docs/user-guide/notebooks.md"),
+    ("deriva://docs/annotations", "deriva-ml", "docs/user-guide/annotations.md"),
+    ("deriva://docs/identifiers", "deriva-ml", "docs/user-guide/identifiers.md"),
+    ("deriva://docs/install", "deriva-ml", "docs/user-guide/install.md"),
+    ("deriva://docs/ermrest/data-api", "ermrest", "docs/api-doc/data/rest.md"),
+    ("deriva://docs/ermrest/naming", "ermrest", "docs/api-doc/data/naming.md"),
+    ("deriva://docs/ermrest/catalog", "ermrest", "docs/api-doc/rest-catalog.md"),
+    ("deriva://docs/chaise/config", "chaise", "docs/user-docs/chaise-config.md"),
+    ("deriva://docs/chaise/query-parameters", "chaise", "docs/user-docs/query-parameters.md"),
+    ("deriva://docs/deriva-py/install", "deriva-py", "docs/install.md"),
+    ("deriva://docs/deriva-py/tutorial", "deriva-py", "docs/project-tutorial.md"),
 ]
 
 
@@ -1376,7 +1376,7 @@ class TestStorageSummary:
             "execution_size": "1.0 GB",
         }
 
-        result = captured_resources["deriva-ml://storage/summary"]()
+        result = captured_resources["deriva://storage/summary"]()
         data = json.loads(result)
 
         assert data["total_size"] == "1.5 GB"
@@ -1384,7 +1384,7 @@ class TestStorageSummary:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://storage/summary"]()
+            captured_resources_disconnected["deriva://storage/summary"]()
 
 
 class TestCacheStats:
@@ -1397,7 +1397,7 @@ class TestCacheStats:
             "file_count": 10,
         }
 
-        result = captured_resources["deriva-ml://storage/cache"]()
+        result = captured_resources["deriva://storage/cache"]()
         data = json.loads(result)
 
         assert data["size_bytes"] == 500000
@@ -1405,7 +1405,7 @@ class TestCacheStats:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://storage/cache"]()
+            captured_resources_disconnected["deriva://storage/cache"]()
 
 
 class TestExecutionDirs:
@@ -1416,7 +1416,7 @@ class TestExecutionDirs:
             {"path": "/tmp/exe-001", "size": 1024, "modified": datetime(2024, 1, 1, 12, 0, 0)},
         ]
 
-        result = captured_resources["deriva-ml://storage/execution-dirs"]()
+        result = captured_resources["deriva://storage/execution-dirs"]()
         data = json.loads(result)
 
         assert data["count"] == 1
@@ -1426,7 +1426,7 @@ class TestExecutionDirs:
 
     def test_no_connection(self, captured_resources_disconnected):
         with pytest.raises(DerivaMLException):
-            captured_resources_disconnected["deriva-ml://storage/execution-dirs"]()
+            captured_resources_disconnected["deriva://storage/execution-dirs"]()
 
 
 # =============================================================================
@@ -1439,78 +1439,78 @@ class TestResourceRegistration:
 
     EXPECTED_URIS = [
         # Server info
-        "deriva-ml://server/version",
+        "deriva://server/version",
         # Config templates
-        "deriva-ml://config/deriva-ml-template",
-        "deriva-ml://config/dataset-spec-template",
-        "deriva-ml://config/execution-template",
-        "deriva-ml://config/model-template",
-        "deriva-ml://config/experiment-template",
-        "deriva-ml://config/multirun-template",
+        "deriva://config/deriva-ml-template",
+        "deriva://config/dataset-spec-template",
+        "deriva://config/execution-template",
+        "deriva://config/model-template",
+        "deriva://config/experiment-template",
+        "deriva://config/multirun-template",
         # Dynamic catalog resources
-        "deriva-ml://catalog/schema",
-        "deriva-ml://catalog/vocabularies",
-        "deriva-ml://catalog/datasets",
-        "deriva-ml://catalog/dataset-element-types",
-        "deriva-ml://catalog/workflows",
-        "deriva-ml://catalog/workflow-types",
-        "deriva-ml://catalog/features",
-        "deriva-ml://catalog/tables",
-        "deriva-ml://catalog/dataset-types",
-        "deriva-ml://catalog/asset-tables",
-        "deriva-ml://catalog/assets",
-        "deriva-ml://catalog/executions",
-        "deriva-ml://catalog/experiments",
-        "deriva-ml://catalog/info",
-        "deriva-ml://catalog/users",
-        "deriva-ml://catalog/connections",
+        "deriva://catalog/schema",
+        "deriva://catalog/vocabularies",
+        "deriva://catalog/datasets",
+        "deriva://catalog/dataset-element-types",
+        "deriva://catalog/workflows",
+        "deriva://catalog/workflow-types",
+        "deriva://catalog/features",
+        "deriva://catalog/tables",
+        "deriva://catalog/dataset-types",
+        "deriva://catalog/asset-tables",
+        "deriva://catalog/assets",
+        "deriva://catalog/executions",
+        "deriva://catalog/experiments",
+        "deriva://catalog/info",
+        "deriva://catalog/users",
+        "deriva://catalog/connections",
         # Parameterized resources
-        "deriva-ml://dataset/{dataset_rid}",
-        "deriva-ml://dataset/{dataset_rid}/members",
-        "deriva-ml://dataset/{dataset_rid}/versions",
-        "deriva-ml://table/{table_name}/features",
-        "deriva-ml://feature/{table_name}/{feature_name}",
-        "deriva-ml://feature/{table_name}/{feature_name}/values",
-        "deriva-ml://vocabulary/{vocab_name}",
-        "deriva-ml://vocabulary/{vocab_name}/{term_name}",
-        "deriva-ml://table/{table_name}/schema",
-        "deriva-ml://table/{table_name}/assets",
-        "deriva-ml://workflow/{workflow_rid}",
-        "deriva-ml://table/{table_name}/annotations",
-        "deriva-ml://table/{table_name}/column/{column_name}/annotations",
-        "deriva-ml://table/{table_name}/foreign-keys",
-        "deriva-ml://asset/{asset_rid}",
-        "deriva-ml://execution/{execution_rid}",
-        "deriva-ml://execution/{execution_rid}/inputs",
-        "deriva-ml://experiment/{execution_rid}",
-        "deriva-ml://chaise-url/{table_or_rid}",
-        "deriva-ml://rid/{rid}",
-        "deriva-ml://cite/{rid}",
-        "deriva-ml://registry/{hostname}",
-        "deriva-ml://alias/{hostname}/{alias_name}",
+        "deriva://dataset/{dataset_rid}",
+        "deriva://dataset/{dataset_rid}/members",
+        "deriva://dataset/{dataset_rid}/versions",
+        "deriva://table/{table_name}/features",
+        "deriva://feature/{table_name}/{feature_name}",
+        "deriva://feature/{table_name}/{feature_name}/values",
+        "deriva://vocabulary/{vocab_name}",
+        "deriva://vocabulary/{vocab_name}/{term_name}",
+        "deriva://table/{table_name}/schema",
+        "deriva://table/{table_name}/assets",
+        "deriva://workflow/{workflow_rid}",
+        "deriva://table/{table_name}/annotations",
+        "deriva://table/{table_name}/column/{column_name}/annotations",
+        "deriva://table/{table_name}/foreign-keys",
+        "deriva://asset/{asset_rid}",
+        "deriva://execution/{execution_rid}",
+        "deriva://execution/{execution_rid}/inputs",
+        "deriva://experiment/{execution_rid}",
+        "deriva://chaise-url/{table_or_rid}",
+        "deriva://rid/{rid}",
+        "deriva://cite/{rid}",
+        "deriva://registry/{hostname}",
+        "deriva://alias/{hostname}/{alias_name}",
         # Doc resources
-        "deriva-ml://docs/annotation-contexts",
-        "deriva-ml://docs/overview",
-        "deriva-ml://docs/datasets",
-        "deriva-ml://docs/features",
-        "deriva-ml://docs/execution-configuration",
-        "deriva-ml://docs/hydra-zen",
-        "deriva-ml://docs/file-assets",
-        "deriva-ml://docs/notebooks",
-        "deriva-ml://docs/annotations",
-        "deriva-ml://docs/identifiers",
-        "deriva-ml://docs/install",
-        "deriva-ml://docs/ermrest/data-api",
-        "deriva-ml://docs/ermrest/naming",
-        "deriva-ml://docs/ermrest/catalog",
-        "deriva-ml://docs/chaise/config",
-        "deriva-ml://docs/chaise/query-parameters",
-        "deriva-ml://docs/deriva-py/install",
-        "deriva-ml://docs/deriva-py/tutorial",
+        "deriva://docs/annotation-contexts",
+        "deriva://docs/overview",
+        "deriva://docs/datasets",
+        "deriva://docs/features",
+        "deriva://docs/execution-configuration",
+        "deriva://docs/hydra-zen",
+        "deriva://docs/file-assets",
+        "deriva://docs/notebooks",
+        "deriva://docs/annotations",
+        "deriva://docs/identifiers",
+        "deriva://docs/install",
+        "deriva://docs/ermrest/data-api",
+        "deriva://docs/ermrest/naming",
+        "deriva://docs/ermrest/catalog",
+        "deriva://docs/chaise/config",
+        "deriva://docs/chaise/query-parameters",
+        "deriva://docs/deriva-py/install",
+        "deriva://docs/deriva-py/tutorial",
         # Storage resources
-        "deriva-ml://storage/summary",
-        "deriva-ml://storage/cache",
-        "deriva-ml://storage/execution-dirs",
+        "deriva://storage/summary",
+        "deriva://storage/cache",
+        "deriva://storage/execution-dirs",
     ]
 
     @pytest.mark.parametrize("uri", EXPECTED_URIS)
