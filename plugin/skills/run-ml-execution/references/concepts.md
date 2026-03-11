@@ -309,3 +309,12 @@ Use dry runs to:
 - **Analysis** — run new analysis on the same inputs without re-configuring
 
 The restored execution becomes the active execution, so subsequent MCP tool calls (`get_execution_working_dir`, `asset_file_path`, etc.) operate on it.
+
+### Finding execution RIDs to restore
+
+You need the execution's RID to restore it. Several ways to find it:
+
+- **From the catalog**: Read `deriva://execution/{execution_rid}` if you know the RID, or query the `Execution` table via `query_table` to search by workflow, status, or description.
+- **From local storage**: Call `list_storage_contents` with `filter`: `"executions"` to see execution working directories that still exist locally. Each entry includes the execution RID, a label, size, and modification time.
+- **From provenance**: Call `list_asset_executions` with an asset RID to find which execution produced it, or `list_dataset_executions` with a dataset RID to find executions that used it.
+- **From the web UI**: Browse executions in Chaise and copy the RID from the record page.
