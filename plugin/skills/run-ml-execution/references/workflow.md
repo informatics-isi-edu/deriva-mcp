@@ -184,6 +184,14 @@ Call `upload_execution_outputs` with `clean_folder` (optional, default `true`) t
 
 For creating new asset tables and managing asset types, see the `work-with-assets` skill.
 
+### Feature values vs output files
+
+An execution can also record **feature values** (e.g., per-image predictions, classification labels). Unlike output files, feature values are written to the catalog immediately — they are not staged or batched through `upload_execution_outputs`.
+
+In MCP tools, call `add_feature_value` or `add_feature_value_record` during the execution. In Python, call `execution.add_features(records)`. Both automatically associate the values with the current execution for provenance.
+
+For creating features and populating values, see the `create-feature` skill.
+
 ## Inspecting Executions
 
 ### Get execution details

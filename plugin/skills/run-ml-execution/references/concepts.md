@@ -189,13 +189,25 @@ After the execution's work is complete, call `upload_execution_outputs` to uploa
 
 Until `upload_execution_outputs` is called, output files exist only locally. This is a deliberate design — it allows the execution to complete (or fail) without partial uploads.
 
+### Recording feature values
+
+An execution can also produce **feature values** — structured annotations on catalog records (e.g., per-image classification labels, confidence scores). These behave differently from output files:
+
+- **Feature values are written to the catalog immediately** when `add_feature_value` (MCP) or `execution.add_features()` (Python) is called. They are not staged or batched.
+- **Output files are staged locally** and only uploaded when `upload_execution_outputs` is called after the execution completes.
+
+Both are linked to the execution for provenance — you can trace which execution produced a given feature value or asset. But the timing is different: feature writes happen during the execution, file uploads happen after it.
+
+For creating features and adding values, see the `create-feature` skill.
+
 ### The complete flow
 
 ```
 Create execution → Start → Download inputs → Do work → Register outputs → Stop → Upload
-                            ↓                                    ↓
-                     Working directory                    Staging area
-                     (downloaded data)                 (files to upload)
+                            ↓                    ↓               ↓
+                     Working directory     Feature values   Staging area
+                     (downloaded data)   (written to catalog  (files uploaded
+                                          immediately)        after stop)
 ```
 
 ## Creating and Managing Executions
