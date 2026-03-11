@@ -45,6 +45,41 @@ Example: `uv run deriva-ml-run +experiment=cifar10_quick` loads base defaults, t
 
 For the full project structure, `base.py` template, and setup walkthrough, read `references/workflow.md`.
 
+## Multiruns
+
+A multirun runs multiple experiment configurations in a single command — parameter sweeps, model comparisons, or any combination. DerivaML creates a **parent execution** that links to one **child execution** per parameter combination, so results are grouped and traceable.
+
+Two ways to define multiruns:
+
+**Named multiruns** (`multirun_config` in `configs/multiruns.py`) — reproducible, documented sweeps:
+
+```python
+from deriva_ml.execution import multirun_config
+
+multirun_config(
+    "lr_sweep",
+    overrides=[
+        "+experiment=cifar10_quick",
+        "model_config.learning_rate=0.0001,0.001,0.01,0.1",
+    ],
+    description="Learning rate sweep on small labeled split",
+)
+```
+
+```bash
+uv run deriva-ml-run +multirun=lr_sweep
+```
+
+**Ad-hoc multiruns** — comma-separated values on the CLI with `--multirun`:
+
+```bash
+uv run deriva-ml-run +experiment=quick,extended --multirun
+```
+
+Named multiruns are preferred because they're committed to the repo, self-documenting (the `description` appears on the parent execution), and don't require remembering the `--multirun` flag.
+
+For the full `multirun_config` API, see the `write-hydra-config` skill.
+
 ## Update Experiments.md
 
 After adding or modifying experiment or multirun configs, regenerate `Experiments.md` in the project root. This file is a human-readable summary of all defined experiments — it should always reflect the current state of the config code.

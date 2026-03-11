@@ -169,6 +169,82 @@ uv run deriva-ml-run +experiment=quick,extended --multirun  # Ad-hoc multirun
 uv run deriva-ml-run --info                            # Inspect resolved config
 ```
 
+## Multiruns
+
+A multirun runs multiple experiment configurations in a single invocation. DerivaML creates a parent-child execution hierarchy:
+
+```
+Parent execution ("lr_sweep")
+├── Child 1 (lr=0.0001)
+├── Child 2 (lr=0.001)
+├── Child 3 (lr=0.01)
+└── Child 4 (lr=0.1)
+```
+
+The parent execution stores the multirun description and links to all children. Each child is a full execution with its own inputs, outputs, and provenance.
+
+### Named multiruns
+
+Define reusable sweeps in `configs/multiruns.py` using `multirun_config`:
+
+```python
+from deriva_ml.execution import multirun_config
+
+multirun_config(
+    "lr_sweep",
+    overrides=[
+        "+experiment=cifar10_quick",
+        "model_config.learning_rate=0.0001,0.001,0.01,0.1",
+    ],
+    description="Learning rate sweep on small labeled split",
+)
+
+multirun_config(
+    "quick_vs_extended",
+    overrides=[
+        "+experiment=cifar10_quick,cifar10_extended",
+    ],
+    description="Compare quick and extended training configs",
+)
+```
+
+Run with:
+```bash
+uv run deriva-ml-run +multirun=lr_sweep
+```
+
+The `--multirun` flag is not needed — `multirun_config` enables it automatically.
+
+### Ad-hoc multiruns
+
+For one-off sweeps, use comma-separated values with `--multirun`:
+
+```bash
+uv run deriva-ml-run +experiment=quick,extended --multirun
+uv run deriva-ml-run +experiment=cifar10_quick model_config.epochs=3,10,50 --multirun
+```
+
+### Override syntax
+
+Overrides use Hydra's syntax. Comma-separated values create the sweep:
+
+- `+experiment=a,b,c` — sweep over three experiments
+- `model_config.learning_rate=0.001,0.01` — sweep a single parameter
+- Combine both for a grid: each experiment runs with each parameter value
+
+### When to use multiruns
+
+- **Parameter sweeps** — learning rate, batch size, architecture variants
+- **Model comparisons** — same data, different model configs
+- **Ablation studies** — systematically vary one factor while holding others constant
+- **Cross-validation** — one child per fold (use `sequence` to order)
+
+### Navigating multirun results
+
+- `list_nested_executions` with the parent execution RID — see all children
+- `list_parent_executions` with a child RID — find the parent
+- Read `deriva://experiment/{parent_rid}` — see the full multirun with description and children
+
 ## Best Practices
 
 - **Pin dataset versions** so runs are reproducible
