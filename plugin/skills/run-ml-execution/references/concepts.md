@@ -10,6 +10,7 @@ Background on executions, workflows, and provenance in DerivaML. For the step-by
 - [Execution Statuses](#execution-statuses)
 - [Workflows and Workflow Types](#workflows-and-workflow-types)
 - [Nested Executions](#nested-executions)
+- [Execution Data Flow](#execution-data-flow)
 - [Creating and Managing Executions](#creating-and-managing-executions)
 - [ExecutionConfiguration](#executionconfiguration)
 - [The Execution Context Manager](#the-execution-context-manager)
@@ -94,19 +95,37 @@ The execution context manager automatically transitions through `Initializing` �
 
 ## Workflows and Workflow Types
 
-Every execution references a **workflow** — a reusable definition of a kind of work. Workflows exist in a two-level hierarchy:
+Every execution references a **workflow** — a reusable definition of a kind of work.
+
+A workflow can represent many things:
+- **A program** — a Python script, a trained model pipeline, a CLI tool
+- **A person performing a process** — a pathologist annotating slides, a curator reviewing data quality
+- **A workflow manager** — an Airflow DAG, a Nextflow pipeline, a Snakemake workflow
+- **A notebook** — a Jupyter notebook performing analysis or visualization
+
+What matters is that it identifies *what kind of work* was done, so that executions are traceable and reproducible.
 
 **Workflow_Type** is a controlled vocabulary term that categorizes workflows broadly — for example, "Training", "Inference", "Analysis", "ETL", "Annotation". These are terms in the `Workflow_Type` vocabulary.
 
 **Workflow** is the specific workflow definition. It has:
 - A **name** (e.g., "CIFAR-10 CNN Training")
-- A **URL** (typically a GitHub repository)
+- A **URL** (typically a GitHub repository, but could be a documentation page or any identifier)
 - One or more **workflow types**
 - A **description** of what it does
 
 Workflows are created once and reused across many executions. For example, the same "CIFAR-10 CNN Training" workflow might be used for hundreds of training runs with different hyperparameters — each run is a separate execution.
 
-Before creating an execution, you need a workflow. Before creating a workflow, the workflow type must exist in the vocabulary.
+### Finding and creating workflows
+
+Before creating an execution, you need a workflow. Check for existing workflows first:
+- Read `deriva://catalog/workflows` to list all workflows
+- Call `lookup_workflow_by_url` with the repository URL to find a workflow by its source
+
+If no suitable workflow exists, create one:
+- Call `create_workflow` with `name`, `workflow_type`, and optionally `description`
+- If the workflow type doesn't exist yet, call `add_workflow_type` with `type_name` and `description` first
+
+When using MCP tools, `create_execution` can find or create the workflow for you — pass `workflow_name` and `workflow_type` and it handles the lookup/creation automatically.
 
 ## Nested Executions
 
@@ -131,9 +150,57 @@ Navigation:
 - From child → parent: `list_parent_executions`
 - Both support `recurse` for deep hierarchies
 
+## Execution Data Flow
+
+An execution consumes inputs, does work in a local working directory, and produces outputs that get uploaded back to the catalog. Understanding this flow is key to working with executions.
+
+### Consuming inputs
+
+An execution's inputs are **datasets** and **assets** specified when the execution is created. During execution, you download these to a local working directory:
+
+- **Datasets** are downloaded as BDBags (versioned archives) containing all member records, asset files, and feature values. Call `download_execution_dataset` with a dataset RID and version.
+- **Individual assets** (e.g., pretrained model weights) are downloaded directly. Call `download_asset` with an asset RID.
+
+Both operations automatically record provenance — the downloaded dataset or asset is linked to the execution with role "Input".
+
+### The working directory
+
+Each execution gets a local working directory where all downloaded inputs and staged outputs live. This directory is created automatically and persists until cleaned up. Access it via `get_execution_working_dir` (MCP) or `execution.working_dir` (Python). See [Execution Working Directory](#execution-working-directory) for the layout.
+
+### Producing outputs
+
+Output files (model weights, predictions, plots, etc.) must be **registered** before they can be uploaded to the catalog. Registration is done via `asset_file_path`, which:
+
+1. Takes an asset table name (e.g., `"Execution_Asset"`) and filename
+2. Stages the file in the execution's working directory
+3. Returns a file path — write your output to this path, or pass an existing file to be staged
+4. Records the file's metadata (asset types, table) for upload
+
+Registered files are **not yet in the catalog** — they exist only in the local staging area.
+
+### Uploading outputs
+
+After the execution's work is complete, call `upload_execution_outputs` to upload all registered files to the catalog in one batch. This:
+
+1. Uploads each staged file to Hatrac (Deriva's file storage)
+2. Creates asset records in the appropriate asset tables
+3. Links each asset to the execution with role "Output"
+4. Optionally cleans up the local staging directory
+
+Until `upload_execution_outputs` is called, output files exist only locally. This is a deliberate design — it allows the execution to complete (or fail) without partial uploads.
+
+### The complete flow
+
+```
+Create execution → Start → Download inputs → Do work → Register outputs → Stop → Upload
+                            ↓                                    ↓
+                     Working directory                    Staging area
+                     (downloaded data)                 (files to upload)
+```
+
 ## Creating and Managing Executions
 
-Execution records are created and managed by the **Execution** class in the Python API, or by the MCP execution lifecycle tools. Unlike `ExecutionRecord` (read-only lookup), the `Execution` class is the active object that:
+Execution records are created and managed by the **Execution** class in the Python API, or by the MCP execution lifecycle tools. Unlike `ExecutionRecord` (read-only lookup), the `Execution` class is the active object that drives the data flow described above:
 
 - Creates the execution record in the catalog
 - Manages the local working directory
