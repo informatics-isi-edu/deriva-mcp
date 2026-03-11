@@ -1,59 +1,67 @@
 ---
 name: work-with-assets
-description: "Discover, query, and download Deriva assets (files, images, model weights, CSVs) — find asset tables, check provenance, download files, trace which executions created an asset. For uploading assets, see run-ml-execution."
+description: "ALWAYS use this skill when working with file assets in DerivaML — discovering, downloading, uploading, inspecting, or managing images, model weights, CSVs, or any file-based catalog records. Triggers on: 'download asset', 'upload files', 'asset table', 'find images', 'model weights', 'what created this file', 'asset provenance', 'asset types', 'create asset table'."
 disable-model-invocation: true
 ---
 
-# Working with Deriva Assets
+# Working with Assets in DerivaML
 
-Assets in DerivaML are managed files (images, CSVs, models, etc.) stored in asset tables. Each asset table has standard columns: `URL`, `Filename`, `Length`, `MD5`, `Description`, plus any custom columns.
+An asset is a file-based record in a Deriva catalog — it combines a file (stored in Hatrac) with catalog metadata like filename, size, MD5 checksum, and description. Assets live in asset tables, which have standard file-tracking columns plus optional custom metadata. Every asset has a unique RID for stable referencing across the system.
 
-## Discovering and Querying Assets
+For background on asset tables, types, RIDs, Hatrac storage, caching, and provenance, see `references/concepts.md`.
 
-Use the catalog resources and query tools to find assets:
+## Critical Rules
 
-```
-# List all tables — asset tables have URL, Filename, Length, MD5 columns
-query_table(table_name="Slide_Image", limit=5)
+1. **Use RIDs to reference assets** — not filenames or URLs. RIDs are immutable and unique.
+2. **Upload within an execution** — assets must be registered with `asset_file_path` and uploaded with `upload_execution_outputs` inside an active execution for provenance tracking.
+3. **Download records provenance automatically** — calling `download_asset` within an execution links the asset as an "Input" to that execution.
+4. **Create the asset table before uploading** — the table must exist before you can register files for upload to it.
 
-# Search assets with filters
-query_table(table_name="Slide_Image", filters={"Subject": "2-A1B2"})
+## Workflow Summary
 
-# Look up a specific asset
-get_record(table_name="Slide_Image", rid="2-IMG1")
-```
+### Discovering and inspecting assets
 
-See the `query-catalog-data` skill for comprehensive querying patterns.
+1. Read `deriva://catalog/asset-tables` or `deriva://catalog/assets` — find asset tables and counts
+2. Read `deriva://table/{table_name}/assets` — browse assets in a table
+3. Read `deriva://asset/{asset_rid}` — inspect a specific asset (metadata, types, provenance, Chaise URL)
+4. `list_asset_executions` — find which execution created or used an asset
 
-## Asset Provenance
+### Downloading assets
 
-Every asset can be traced to the execution(s) that produced or consumed it:
+1. `download_asset` — download a single asset by RID
+2. `download_execution_dataset` — download a dataset as a BDBag with all asset files (within an execution)
+3. `restructure_assets` — organize downloaded assets into ML-ready directory layouts
 
-```
-list_asset_executions(asset_rid="2-IMG1")
-# Returns executions with role "Output" (created it) or "Input" (consumed it)
-```
+### Creating asset tables
 
-## Downloading Assets
+1. `create_asset_table` — define a new asset table with optional custom columns and FK references
 
-```
-# Download a specific asset by RID
-download_asset(asset_rid="2-IMG1")
+### Uploading assets (within an execution)
 
-# Download a dataset version as a BDBag (within an active execution)
-download_execution_dataset(dataset_rid="2-DS01", version="1.0.0")
+1. `create_execution` + `start_execution` — start provenance tracking
+2. `asset_file_path` — register each output file for upload (returns a path to write to)
+3. `upload_execution_outputs` — upload all registered files to Hatrac and catalog
+4. `stop_execution` — finalize
 
-# Find where downloaded assets are located (uses active execution)
-get_execution_working_dir()
-```
+### Managing asset types
+
+1. `add_asset_type` — create a new term in the Asset_Type vocabulary
+2. `add_asset_type_to_asset` / `remove_asset_type_from_asset` — tag or untag assets
+
+For the full step-by-step guide with MCP tool parameters and Python API examples, see `references/workflow.md`.
 
 ## Reference Resources
 
-- `deriva://docs/file-assets` — Full guide to asset tables, types, uploading, and provenance tracking. Read this for detailed examples and edge cases beyond what this skill covers.
-- `deriva://catalog/asset-tables` — List all asset tables in the catalog
-- `deriva://table/{table_name}/assets` — Browse assets in a specific table
-- `deriva://asset/{rid}` — Asset details and provenance
+- `references/concepts.md` — What assets are, asset tables, RIDs, types, Hatrac, caching, provenance
+- `references/workflow.md` — Step-by-step MCP and Python API workflows
+- `deriva://docs/file-assets` — Full user guide to file assets in DerivaML
+- `deriva://catalog/asset-tables` — List all asset tables
+- `deriva://catalog/assets` — Asset tables with record counts
+- `deriva://table/{table_name}/assets` — Browse assets in a table
+- `deriva://asset/{asset_rid}` — Asset details and provenance
 
-## Uploading Assets and Creating Asset Tables
+## Related Skills
 
-For uploading assets as execution outputs, creating new asset tables, and managing asset types, see the `run-ml-execution` skill. Assets should always be uploaded within an execution context for provenance tracking.
+- **`run-ml-execution`** — Full execution lifecycle including asset upload patterns
+- **`prepare-training-data`** — Downloading and restructuring assets for ML training
+- **`create-dataset`** — Datasets organize assets into versioned collections for reproducibility
