@@ -7,55 +7,17 @@ disable-model-invocation: true
 
 # Create a New DerivaML Model
 
-This skill covers the end-to-end process of adding a new model to a DerivaML project: writing the model function, creating its config, defining a workflow, and wiring it into experiments.
+A DerivaML model is a plain Python function. The framework injects a DerivaML instance and an execution context at runtime — everything else becomes a configurable hyperparameter via hydra-zen. The runner handles the execution lifecycle (create, start, stop, upload), so the model function focuses on doing the work.
 
-For the config file syntax details, see the `write-hydra-config` skill.
-For project structure and config group architecture, see the `configure-experiment` skill.
+For how the runner interfaces with the model, data access patterns, and `restructure_assets`, see `references/runner-interface.md`.
 
-## Model Function Signature
+## Critical Rules
 
-DerivaML models are plain Python functions. The framework injects `ml_instance` and `execution` at runtime — everything else becomes a configurable hyperparameter via hydra-zen.
-
-```python
-def my_model(
-    # Your hyperparameters (become configurable)
-    learning_rate: float = 1e-3,
-    epochs: int = 10,
-    batch_size: int = 64,
-    # Framework-injected (always present, always last)
-    ml_instance: DerivaML = None,
-    execution: Execution | None = None,
-) -> None:
-    ...
-```
-
-The `ml_instance` and `execution` parameters must have default `None` — `builds(..., zen_partial=True)` in the config defers their injection to runtime.
-
-## Working with Execution Assets
-
-Inside the model function, use the execution object for all I/O:
-
-```python
-def my_model(
-    learning_rate: float = 1e-3,
-    ml_instance: DerivaML = None,
-    execution: Execution | None = None,
-) -> None:
-    # Access downloaded dataset files
-    for table, assets in execution.asset_paths.items():
-        for asset_path in assets:
-            # asset_path is a Path with .asset_rid attribute
-            data = load_data(asset_path)
-
-    # Create output files — ALWAYS use asset_file_path
-    output_path = execution.asset_file_path("Execution_Asset", "predictions.csv")
-    save_predictions(output_path)
-
-    metrics_path = execution.asset_file_path("Execution_Asset", "metrics.json")
-    save_metrics(metrics_path)
-```
-
-`asset_file_path("Execution_Asset", filename)` both creates the file path and registers the file as an execution output. Use `"Execution_Asset"` for all model-produced files (predictions, metrics, checkpoints, plots). `"Execution_Metadata"` is reserved for framework-generated files (configs, environment snapshots) — never use it for model outputs.
+1. **`ml_instance` and `execution` go last** — they must have default `None` and are injected at runtime via `zen_partial=True`.
+2. **Use `execution.asset_file_path()` for all outputs** — this both creates the file path and registers it for upload. Never write directly to the working directory.
+3. **Use `"Execution_Asset"` for model outputs** — predictions, weights, plots. `"Execution_Metadata"` is reserved for framework-generated files.
+4. **Access data through the execution object** — `execution.datasets` for downloaded bags, `execution.asset_paths` for individual assets. Never fetch data from the catalog directly.
+5. **The model function returns `None`** — results are captured through registered output files, not return values.
 
 ## Steps
 
@@ -69,31 +31,27 @@ from deriva_ml.execution import Execution
 
 
 def my_model(
+    # Your hyperparameters (become configurable)
     learning_rate: float = 1e-3,
     epochs: int = 10,
     batch_size: int = 64,
     hidden_size: int = 128,
+    # Framework-injected (always last, always default None)
     ml_instance: DerivaML = None,
     execution: Execution | None = None,
 ) -> None:
-    """Train my model on the provided datasets.
-
-    Args:
-        learning_rate: Optimizer learning rate.
-        epochs: Number of training epochs.
-        batch_size: Training batch size.
-        hidden_size: Hidden layer dimension.
-        ml_instance: Injected DerivaML instance.
-        execution: Injected execution context.
-    """
+    """Train my model on the provided datasets."""
     # Load data from execution datasets
-    for table, assets in execution.asset_paths.items():
-        for asset_path in assets:
-            print(f"Processing {asset_path} (RID: {asset_path.asset_rid})")
+    for dataset in execution.datasets:
+        dataset.restructure_assets(
+            asset_table="Image",
+            output_dir=execution.working_dir / "data",
+            group_by=["My_Feature"],
+        )
 
     # ... training logic ...
 
-    # Save outputs
+    # Save outputs — ALWAYS use asset_file_path
     output_path = execution.asset_file_path("Execution_Asset", "results.csv")
     # ... write results to output_path ...
 ```
@@ -134,7 +92,7 @@ model_store(
 )
 ```
 
-See the `write-hydra-config` skill for the full config API reference and rules.
+See the `write-hydra-config` skill for the full config API reference.
 
 ### 3. Create a workflow
 
@@ -196,6 +154,6 @@ uv run deriva-ml-run +experiment=my_model_quick dry_run=true
 ## Related Skills
 
 - **`write-hydra-config`** — Config file syntax for every config group
-- **`configure-experiment`** — Project structure and config group architecture
-- **`run-experiment`** — Pre-flight checklist and CLI commands
-- **`run-ml-execution`** — Execution lifecycle and provenance details
+- **`run-experiment`** — Pre-flight checklist and CLI commands for `deriva-ml-run`
+- **`run-ml-execution`** — Execution lifecycle, provenance, and output upload details
+- **`prepare-training-data`** — Dataset downloading, splitting, and restructuring
