@@ -1,36 +1,45 @@
 ---
 name: run-ml-execution
-description: "ALWAYS use this skill when running ML executions with provenance tracking in DerivaML — the execution lifecycle, context managers, output registration, and nested executions. Triggers on: 'create execution', 'run with provenance', 'upload outputs', 'asset_file_path', 'execution lifecycle', 'track my work'."
+description: "ALWAYS use this skill when running ML executions with provenance tracking in DerivaML — the execution lifecycle, context managers, registering outputs, downloading inputs, nested executions, workflows, and execution status. Triggers on: 'create execution', 'run with provenance', 'upload outputs', 'asset_file_path', 'execution lifecycle', 'track my work', 'create workflow', 'nested execution', 'restore execution'."
 disable-model-invocation: true
 ---
 
-# Running an ML Execution with Provenance
+# Running ML Executions with Provenance
 
-Every data transformation, model training run, or analysis in DerivaML should be wrapped in an execution to track inputs, outputs, and provenance.
+An execution is the fundamental unit of provenance in DerivaML. It records what work was done, with what inputs (datasets, assets), what outputs were produced (files, data), and what code and configuration were used. Every execution references a workflow, which itself has a workflow type.
 
-## Execution Lifecycle
-
-```
-create_execution → start → work → stop → upload_execution_outputs
-```
+For background on the execution hierarchy, statuses, nested executions, dry run mode, and the working directory layout, see `references/concepts.md`.
 
 ## Critical Rules
 
-1. **Every execution needs a workflow** — Create or find one with `create_workflow` first.
-2. **Use the context manager in Python** — `with ml.create_execution(config) as exe:` auto-starts and auto-stops.
-3. **Upload AFTER the with block** — `exe.upload_execution_outputs()` must be called after exiting the context manager, never inside it.
-4. **Use `asset_file_path()` for all outputs** — This both creates the path and registers the file as an output asset. Never manually place files in the working directory.
-5. **Failed executions are tracked** — If an exception occurs in the with block, status is set to "Failed" automatically.
+1. **Every execution needs a workflow** — find one with `lookup_workflow_by_url` or create one with `create_workflow` before creating the execution. When using MCP tools, `create_execution` can find or create the workflow for you.
+2. **Use the context manager in Python** — `with ml.create_execution(config) as exe:` auto-starts and auto-stops, and sets status to "Failed" on exception.
+3. **Upload AFTER the with block** — `exe.upload_execution_outputs()` must be called after exiting the context manager, not inside it. When using `deriva-ml-run`, upload is handled automatically.
+4. **Use `asset_file_path` for all outputs** — this both stages the file and registers it as an output asset. Never manually place files in the working directory.
+5. **Commit code before running** — DerivaML records the git commit hash for code provenance. Uncommitted changes mean no valid code reference.
 
-## Python API (Recommended)
+## Lifecycle Summary
+
+### MCP tools
+
+1. `create_execution` — create the execution (finds/creates workflow automatically)
+2. `start_execution` — set status to Running, record start time
+3. `download_execution_dataset` / `download_asset` — download inputs
+4. Do your work
+5. `asset_file_path` — register each output file for upload
+6. `stop_execution` — set status to Completed, record stop time
+7. `upload_execution_outputs` — upload all registered files to catalog
+
+Steps 2-7 operate on the **active execution** — no `execution_rid` parameter needed.
+
+### Python API
 
 ```python
-from deriva_ml import DerivaML, ExecutionConfiguration
-
 config = ExecutionConfiguration(
     workflow=workflow,
     datasets=["2-ABC1"],
     assets=["2-DEF2"],
+    description="Train CNN on labeled images"
 )
 with ml.create_execution(config) as exe:
     exe.download_execution_dataset()
@@ -40,29 +49,33 @@ with ml.create_execution(config) as exe:
 exe.upload_execution_outputs()
 ```
 
-## MCP Tools
+## Key Tools Beyond the Lifecycle
 
-```
-create_execution(workflow_name="...", workflow_type="...", description="...", dataset_rids=[...])
-start_execution()
-download_execution_dataset(dataset_rid="...", version="...")
-# ... do work ...
-asset_file_path(asset_name="Execution_Asset", file_name="results.csv")
-stop_execution()
-upload_execution_outputs()
-```
+- `get_execution_info` — details of the active execution (no parameters)
+- `update_execution_status` — track progress with status and message
+- `set_execution_description` — update an execution's description
+- `restore_execution` — re-download a previous execution's inputs for debugging or re-analysis
+- `add_nested_execution` — link parent and child executions for multi-step pipelines
+- `list_nested_executions` / `list_parent_executions` — navigate execution hierarchies
+- `create_execution_dataset` — create an output dataset linked to the active execution
 
-## Key Tools
-
-- `restore_execution` — Re-download a previous execution's assets for debugging
-- `add_nested_execution` — Multi-step pipelines with parent-child structure
-- `list_nested_executions` / `list_parent_executions` — Navigate execution hierarchy
-- `add_asset_type` / `create_asset_table` — Manage asset categories and tables
+For the full step-by-step guide with all parameters, see `references/workflow.md`.
 
 ## Reference Resources
 
-- `deriva://docs/execution-configuration` — Full guide to the execution lifecycle and configuration parameters. Read this for detailed examples and edge cases beyond what this skill covers.
-- `deriva://execution/{rid}` — Execution details and status
-- `deriva://catalog/workflows` — Available workflows for execution context
+- `references/concepts.md` — What executions are, the hierarchy, statuses, nested executions, dry run, working directory
+- `references/workflow.md` — Step-by-step MCP and Python API workflows with complete examples
+- `deriva://docs/execution-configuration` — Full guide to execution lifecycle and configuration
+- `deriva://execution/{execution_rid}` — Execution details, status, and timing
+- `deriva://experiment/{execution_rid}` — Rich view with Hydra config, model params, inputs/outputs
+- `deriva://execution/{execution_rid}/inputs` — Input datasets and assets
+- `deriva://catalog/workflows` — Available workflows
+- `deriva://catalog/workflow-types` — Workflow type vocabulary terms
+- `deriva://workflow/{workflow_rid}` — Workflow details
 
-For the full guide with ExecutionConfiguration details, nested executions, asset management, and inspection tools, read `references/workflow.md`.
+## Related Skills
+
+- **`work-with-assets`** — Discovering, downloading, creating asset tables, and managing asset types
+- **`run-experiment`** — Running experiments via the `deriva-ml-run` CLI with pre-flight checks
+- **`configure-experiment`** — Writing Hydra-zen experiment configurations
+- **`prepare-training-data`** — Downloading and restructuring data for ML frameworks

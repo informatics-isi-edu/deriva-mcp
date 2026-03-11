@@ -1,31 +1,100 @@
-# Running an ML Execution with Provenance
+# Execution Workflow Reference
 
-An execution is the fundamental unit of provenance in DerivaML. Every data transformation, model training run, or analysis should be wrapped in an execution to track what was done, with what inputs, and what outputs were produced.
+Step-by-step MCP tool and Python API examples for running executions. For background on the execution hierarchy, statuses, nested executions, and dry run mode, see `concepts.md`.
 
 ## Table of Contents
 
-- [Concepts](#concepts)
-- [Python API: Context Manager Pattern](#python-api-context-manager-pattern)
-- [MCP Tools Workflow](#mcp-tools-workflow)
-- [ExecutionConfiguration Details](#executionconfiguration-details)
-- [Downloading Execution Datasets](#downloading-execution-datasets)
-- [Registering Output Files](#registering-output-files)
-- [Useful Inspection and Management Tools](#useful-inspection-and-management-tools)
-- [Managing Asset Types](#managing-asset-types)
-- [Creating New Asset Tables](#creating-new-asset-tables)
-- [Tips](#tips)
+1. [Setting Up a Workflow](#setting-up-a-workflow)
+2. [MCP Tools: Full Execution Lifecycle](#mcp-tools-full-execution-lifecycle)
+3. [Python API: Context Manager Pattern](#python-api-context-manager-pattern)
+4. [Downloading Input Data](#downloading-input-data)
+5. [Registering and Uploading Outputs](#registering-and-uploading-outputs)
+6. [Inspecting Executions](#inspecting-executions)
+7. [Updating Execution State](#updating-execution-state)
+8. [Nested Executions](#nested-executions)
+9. [Restoring a Previous Execution](#restoring-a-previous-execution)
+10. [Creating an Output Dataset](#creating-an-output-dataset)
+11. [Complete Example: MCP Workflow](#complete-example-mcp-workflow)
+12. [Complete Example: Python API](#complete-example-python-api)
 
 ---
 
-## Concepts
+## Setting Up a Workflow
 
-- **Execution**: A recorded unit of work with inputs (datasets, assets), outputs (files, new data), and metadata (workflow, description, status).
-- **Workflow**: A reusable definition of a type of work (e.g., "Image Classification Training"). Executions reference a workflow.
-- **ExecutionConfiguration**: Specifies the workflow, input datasets, and assets for an execution.
+Every execution needs a workflow. Before creating an execution, check if a suitable workflow already exists.
+
+### Check existing workflows
+
+Read `deriva://catalog/workflows` to list all registered workflows with their names, types, descriptions, and URLs.
+
+Read `deriva://catalog/workflow-types` to see available workflow type vocabulary terms.
+
+### Find a workflow by URL
+
+Call `lookup_workflow_by_url` with `url` set to the repository URL (e.g., `"https://github.com/org/repo"`).
+
+### Create a new workflow
+
+Call `create_workflow` with:
+- `name` (required): human-readable name (e.g., `"CIFAR-10 CNN Training"`)
+- `workflow_type` (required): a term from the `Workflow_Type` vocabulary (e.g., `"Training"`)
+- `description` (optional): what this workflow does
+
+### Add a new workflow type
+
+If the workflow type you need doesn't exist, call `add_workflow_type` with `type_name` and `description`.
+
+### Set or update a workflow description
+
+Call `set_workflow_description` with `workflow_rid` and `description`.
+
+## MCP Tools: Full Execution Lifecycle
+
+The MCP workflow mirrors the Python context manager but uses explicit tool calls for each step.
+
+**Step 1: Create the execution.**
+
+Call `create_execution` with:
+- `workflow_name` (required): workflow name — creates the workflow if it doesn't exist
+- `workflow_type` (required): workflow type vocabulary term
+- `description` (optional): what this specific execution does
+- `dataset_rids` (optional): list of input dataset RIDs
+- `asset_rids` (optional): list of input asset RIDs
+- `dry_run` (optional, default `false`): skip catalog writes for testing
+
+Returns the execution RID. This execution becomes the **active execution** — subsequent lifecycle tools operate on it automatically.
+
+**Step 2: Start the execution.**
+
+Call `start_execution`. No parameters — operates on the active execution. Sets status to "Running" and records the start time.
+
+**Step 3: Download input data.**
+
+Call `download_execution_dataset` with `dataset_rid` and `version` to download a dataset as a BDBag. See [Downloading Input Data](#downloading-input-data) for full parameter details.
+
+Call `download_asset` with `asset_rid` to download individual input assets.
+
+**Step 4: Do your work.**
+
+Run notebooks, scripts, or interactive analysis. Use `get_execution_working_dir` to find the local working directory.
+
+**Step 5: Register output files.**
+
+Call `asset_file_path` to register each output file for upload. See [Registering and Uploading Outputs](#registering-and-uploading-outputs) for full parameter details.
+
+**Step 6: Stop the execution.**
+
+Call `stop_execution`. Sets status to "Completed" and records the stop time.
+
+**Step 7: Upload outputs.**
+
+Call `upload_execution_outputs` to upload all registered files to the catalog. Optionally set `clean_folder` to `false` to keep local staging files.
+
+**Important:** Steps 2-7 operate on the **active execution** — they take no `execution_rid` parameter. Only one execution can be active at a time.
 
 ## Python API: Context Manager Pattern
 
-The recommended approach uses a `with` block that auto-starts and auto-stops the execution:
+The recommended Python approach uses a `with` block that auto-starts and auto-stops:
 
 ```python
 from deriva_ml import DerivaML, ExecutionConfiguration
@@ -43,203 +112,207 @@ workflow = ml.create_workflow(
 # 2. Configure the execution
 config = ExecutionConfiguration(
     workflow=workflow,
-    datasets=["2-ABC1"],          # Dataset RIDs to use as input
-    assets=["2-DEF2", "2-GHI3"]  # Individual asset RIDs
+    datasets=["2-ABC1"],
+    assets=["2-DEF2"],
+    description="Training run on labeled images"
 )
 
 # 3. Run within context manager
 with ml.create_execution(config) as exe:
-    # Execution is automatically started
+    # Execution auto-starts (status → Running)
 
     # Download input datasets
     exe.download_execution_dataset()
 
-    # Do your work...
+    # Do your work
     results = train_model(exe.working_dir)
 
-    # Write output files using asset_file_path()
+    # Register output files
     output_path = exe.asset_file_path("Execution_Asset", "model_weights.pt")
     save_model(results, output_path)
 
-    metrics_path = exe.asset_file_path("Execution_Asset", "metrics.json")
-    save_metrics(results, metrics_path)
+    # Execution auto-stops on exit (status → Completed, or Failed on exception)
 
 # 4. Upload AFTER exiting the context manager
 exe.upload_execution_outputs()
 ```
 
-**Key points about the context manager:**
-- `with` block automatically calls `start_execution()` on entry and `stop_execution()` on exit.
-- If an exception occurs inside the block, the execution status is set to "Failed".
-- You MUST call `upload_execution_outputs()` AFTER exiting the `with` block, not inside it.
-- Use `asset_file_path(asset_table, filename)` to register output files -- this both creates the file path and registers it as an output asset.
+**Key points:**
+- The `with` block automatically calls `start_execution()` on entry and `stop_execution()` on exit.
+- If an exception occurs inside the block, status is set to "Failed" automatically.
+- Call `upload_execution_outputs()` **after** exiting the `with` block, not inside it.
+- When using `deriva-ml-run`, upload is handled automatically by the runner.
 
-## MCP Tools Workflow
+## Downloading Input Data
 
-For interactive use or when working through the MCP interface:
+### Download a dataset within an execution
 
-```
-Step 1: Create the execution (also finds/creates the workflow)
-  -> create_execution(
-       workflow_name="Image Classification Training",
-       workflow_type="Training",
-       description="Training run on labeled images",
-       dataset_rids=["2-ABC1"],
-       asset_rids=["2-DEF2"]
-     )
-  Returns: execution RID
+Call `download_execution_dataset` with:
+- `dataset_rid` (required): RID of the dataset
+- `version` (required): semantic version string (e.g., `"1.0.0"`)
+- `materialize` (optional, default `true`): set to `false` for metadata only
+- `exclude_tables` (optional): list of table names to skip during FK path traversal
+- `timeout` (optional): `[connect_timeout, read_timeout]` in seconds
 
-Step 2: Start the execution
-  -> start_execution()
+The dataset is downloaded as a BDBag to the execution's working directory, and the dataset is recorded as an input for provenance.
 
-Step 3: Download input data
-  -> download_execution_dataset(dataset_rid="2-ABC1", version="1.0.0")
+### Download a single asset
 
-Step 4: Do your work
-  (run notebooks, scripts, generate outputs)
+Call `download_asset` with `asset_rid`. Optionally set `dest_dir` to specify the destination (defaults to the execution's working directory). The asset is recorded as an input.
 
-Step 5: Register output files
-  -> asset_file_path(asset_name="Execution_Asset", file_name="results.csv")
+### Find the working directory
 
-Step 6: Stop the execution
-  -> stop_execution()
+Call `get_execution_working_dir` to get the local path where downloads are stored.
 
-Step 7: Upload outputs
-  -> upload_execution_outputs()
-```
+## Registering and Uploading Outputs
 
-**Important:** MCP execution lifecycle tools (`start_execution`, `stop_execution`, `get_execution_working_dir`, `upload_execution_outputs`) operate on the **active execution** -- they take no `execution_rid` parameter.
+### Register files for upload
 
-## ExecutionConfiguration Details
+Call `asset_file_path` with:
+- `asset_name` (required): target asset table (e.g., `"Execution_Asset"`, `"Image"`, `"Model"`)
+- `file_name` (required): path to an existing file to stage, or a filename for a new file to create
+- `asset_types` (optional): list of `Asset_Type` vocabulary terms (defaults to `[asset_name]`)
+- `copy_file` (optional, default `false`): `true` to copy, `false` to symlink
+- `rename_file` (optional): rename the file during staging
+
+Returns a `file_path`. If `file_name` is a path to an existing file, it's symlinked (or copied) to the staging area. If it's just a filename, write your output to the returned path.
+
+### Upload all registered files
+
+Call `upload_execution_outputs` with `clean_folder` (optional, default `true`) to upload all staged files to the catalog, create asset records, and link them to the execution with role "Output".
+
+**`Execution_Asset` vs domain asset tables:** Use `Execution_Asset` (the default) for general outputs like model weights, predictions, and plots. Use a domain asset table (e.g., `Image`, `Model`) when outputs should be queryable as first-class catalog entities with custom metadata.
+
+For creating new asset tables and managing asset types, see the `work-with-assets` skill.
+
+## Inspecting Executions
+
+### Get execution details
+
+Read `deriva://execution/{execution_rid}` to get an execution's workflow, status, description, timing, and linked datasets/assets.
+
+Read `deriva://experiment/{execution_rid}` for a richer view that includes Hydra configuration choices, model parameters, and input/output summaries.
+
+Read `deriva://execution/{execution_rid}/inputs` to see just the input datasets and assets.
+
+### Get active execution info
+
+Call `get_execution_info` — operates on the active execution (no parameters). Returns workflow, status, datasets, assets, nested executions, and timestamps.
+
+### Find executions for a dataset or asset
+
+Call `list_dataset_executions` with `dataset_rid` to find all executions that used a dataset.
+
+Call `list_asset_executions` with `asset_rid` to find executions that created or used an asset. Optionally filter with `asset_role`: `"Output"` or `"Input"`.
+
+## Updating Execution State
+
+### Update status with a message
+
+Call `update_execution_status` with `status` and `message`. Valid statuses: `"Pending"`, `"Running"`, `"Complete"`, `"Failed"`. Useful for tracking progress during long-running work (e.g., `"Running"`, `"Processing batch 3 of 10"`).
+
+### Set or update the description
+
+Call `set_execution_description` with `execution_rid` and `description`. The description supports Markdown.
+
+## Nested Executions
+
+### Link a child to a parent
+
+Call `add_nested_execution` with:
+- `parent_execution_rid` (required): RID of the parent execution
+- `child_execution_rid` (required): RID of the child execution
+- `sequence` (optional): integer for ordering children
+
+### Navigate the hierarchy
+
+Call `list_nested_executions` with `execution_rid` to get children. Set `recurse` to `true` for the full tree.
+
+Call `list_parent_executions` with `execution_rid` to get parents. Set `recurse` to `true` to walk up the full chain.
+
+## Restoring a Previous Execution
+
+Call `restore_execution` with `execution_rid` to re-download a previous execution's datasets and assets. The restored execution becomes the active execution.
+
+Use this for:
+- **Debugging** — inspect the data a failed execution was working with
+- **Continuing work** — resume from where a previous execution left off
+- **Re-analysis** — run new analysis on the same inputs
+
+## Creating an Output Dataset
+
+Call `create_execution_dataset` to create a new dataset linked to the active execution as an output:
+- `description` (optional): dataset description
+- `dataset_types` (optional): list of dataset type terms
+
+This is useful when an execution's output is a curated set of records (not just files).
+
+## Complete Example: MCP Workflow
+
+End-to-end MCP workflow: set up a workflow, run an execution, upload outputs.
+
+**Step 1:** Read `deriva://catalog/workflows` to check for existing workflows.
+
+**Step 2:** Call `create_execution` with `workflow_name`: `"Image Classification"`, `workflow_type`: `"Training"`, `description`: `"Train CNN on labeled CIFAR-10 subset"`, `dataset_rids`: `["2-ABC1"]`.
+
+**Step 3:** Call `start_execution`.
+
+**Step 4:** Call `download_execution_dataset` with `dataset_rid`: `"2-ABC1"`, `version`: `"1.0.0"`.
+
+**Step 5:** Call `get_execution_working_dir` to find the local data path. Run your training script.
+
+**Step 6:** Call `asset_file_path` with `asset_name`: `"Execution_Asset"`, `file_name`: `"model_weights.pt"`, `asset_types`: `["Model_Weights"]`. Write the weights to the returned path.
+
+**Step 7:** Call `asset_file_path` with `asset_name`: `"Execution_Asset"`, `file_name`: `"predictions.csv"`, `asset_types`: `["Predictions"]`. Write the predictions to the returned path.
+
+**Step 8:** Call `stop_execution`.
+
+**Step 9:** Call `upload_execution_outputs`.
+
+## Complete Example: Python API
 
 ```python
-from deriva_ml import ExecutionConfiguration
+from deriva_ml import DerivaML, ExecutionConfiguration
+from deriva_ml.asset.aux_classes import AssetSpec
 
+ml = DerivaML(hostname, catalog_id)
+
+# Find or create workflow
+workflow = ml.create_workflow(
+    name="CIFAR-10 CNN Training",
+    url="https://github.com/org/cifar10-project",
+    workflow_type="Training",
+    description="Train 2-layer CNN on CIFAR-10 images"
+)
+
+# Configure with cached pretrained weights
 config = ExecutionConfiguration(
-    workflow=workflow_object,              # Required: Workflow object from create_workflow/lookup
-    datasets=["2-ABC1", "2-ABC2"],        # Optional: input dataset RIDs
-    assets=["2-DEF1"],                    # Optional: input asset RIDs
-    description="Run description",         # Optional: execution description
+    workflow=workflow,
+    datasets=["2-ABC1"],
+    assets=[AssetSpec(rid="3-JSE4", cache=True)],
+    description="Training run with pretrained initialization"
 )
-```
 
-## Downloading Execution Datasets
-
-Once an execution is started, download all configured input datasets:
-
-```python
-# Python API
 with ml.create_execution(config) as exe:
-    dataset_paths = exe.download_execution_dataset()
-    # Returns dict mapping dataset RID -> local directory path
+    # Download datasets (auto-recorded as inputs)
+    exe.download_execution_dataset()
+
+    # Access working directory
+    data_dir = exe.working_dir
+
+    # ... training code ...
+
+    # Register outputs
+    weights_path = exe.asset_file_path(
+        "Execution_Asset", "model_weights.pt", ["Model_Weights"]
+    )
+    torch.save(model.state_dict(), weights_path)
+
+    preds_path = exe.asset_file_path(
+        "Execution_Asset", "predictions.csv", ["Predictions"]
+    )
+    predictions_df.to_csv(preds_path, index=False)
+
+# Upload after context manager exits
+exe.upload_execution_outputs()
 ```
-
-```
-# MCP tools
-download_execution_dataset(dataset_rid="2-ABC1", version="1.0.0")
-```
-
-The downloaded data lands in the execution's working directory under a structured layout.
-
-## Registering Output Files
-
-Use `asset_file_path()` to both get the correct output path and register the file as an execution output:
-
-```python
-# Python API — two required args: asset_table and filename
-output_path = exe.asset_file_path("Execution_Asset", "predictions.csv")
-# Write your data to output_path
-df.to_csv(output_path, index=False)
-```
-
-```
-# MCP tools
-asset_file_path(asset_name="Execution_Asset", file_name="predictions.csv")
-```
-
-## Useful Inspection and Management Tools
-
-### Get execution info
-```
-# MCP tool
-get_execution_info(execution_rid="2-YYYY")
-# Returns: workflow, status, datasets, assets, nested executions, timestamps
-```
-
-### Update execution status
-```
-# MCP tool
-update_execution_status(status="Running", message="Processing batch 3")
-# Valid statuses: Pending, Running, Complete, Failed
-```
-
-### Restore a previous execution
-```
-# MCP tool
-restore_execution(execution_rid="2-YYYY")
-# Re-downloads execution assets and datasets to local working directory
-# Useful for debugging or continuing work from a previous execution
-```
-
-### Get execution working directory
-```
-# MCP tool (operates on active execution, no params)
-get_execution_working_dir()
-```
-
-### Nested executions
-For multi-step pipelines, create nested executions within a parent:
-
-```
-# MCP tools
-# First, create both parent and child executions, then link them:
-add_nested_execution(parent_execution_rid="2-PARENT", child_execution_rid="2-CHILD")
-```
-
-### List related executions
-```
-list_nested_executions(execution_rid="2-YYYY")   # Child executions
-list_parent_executions(execution_rid="2-YYYY")    # Parent executions
-list_dataset_executions(dataset_rid="2-ABC1")     # Executions that used this dataset
-list_asset_executions(asset_rid="2-DEF2")         # Executions that used this asset
-```
-
-## Managing Asset Types
-
-Asset Types are vocabulary terms that categorize assets (e.g., "Raw Image", "Trained Model", "Preprocessed CSV").
-
-```
-# Create a new asset type
-add_asset_type(type_name="Normalized Image", description="Image after intensity normalization")
-
-# Tag an asset with a type
-add_asset_type_to_asset(asset_rid="2-IMG1", asset_type="Normalized Image")
-
-# Remove a type tag
-remove_asset_type_from_asset(asset_rid="2-IMG1", asset_type="Normalized Image")
-```
-
-## Creating New Asset Tables
-
-When you need a new category of files:
-
-```
-create_asset_table(
-    asset_name="Processed_Image",
-    columns=[{"name": "Resolution", "type": "text", "nullok": true, "comment": "Image resolution"}],
-    referenced_tables=["Subject"],
-    comment="Processed microscopy images"
-)
-```
-
-This creates the table with standard asset columns (URL, Filename, Length, MD5, Description) plus any custom columns.
-
-## Tips
-
-- Always wrap work in an execution for provenance tracking.
-- Upload outputs AFTER the `with` block exits, never inside it.
-- Use `asset_file_path()` for every output file -- do not manually place files in the working directory.
-- Set meaningful descriptions on workflows, executions, and output assets.
-- For long-running work, use `update_execution_status()` to track progress.
-- Use `restore_execution()` to resume or inspect a completed execution's local state.
-- Nested executions are ideal for multi-phase pipelines (preprocessing, training, evaluation).
