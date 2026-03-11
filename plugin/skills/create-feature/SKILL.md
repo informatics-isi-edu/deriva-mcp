@@ -6,9 +6,9 @@ disable-model-invocation: true
 
 # Creating and Populating Features in DerivaML
 
-Features link domain objects (e.g., Image, Subject) to vocabulary terms, assets, or computed values, creating a structured annotation system for ML with full provenance tracking. Features are inherently multivalued — the same record can be labeled multiple times by different annotators, model runs, or workflows, enabling inter-annotator agreement, model comparison, and audit trails.
+Features link domain objects (e.g., Image, Subject) to a set of values — controlled vocabulary terms, computed values, or assets. Every feature value is associated with an execution, so you can differentiate between multiple values by execution RID, workflow, description, or timestamp. Features are inherently multivalued, enabling inter-annotator agreement, model comparison, and audit trails.
 
-Common uses include classification labels, quality scores, segmentation masks, derived data representations, and any structured annotation that needs provenance.
+Common uses include classification labels, transformed data, statistical aggregates, quality scores, segmentation masks, and any structured annotation that needs provenance.
 
 For background on feature types, metadata columns, multivalued features, and feature selection, see `references/concepts.md`.
 
