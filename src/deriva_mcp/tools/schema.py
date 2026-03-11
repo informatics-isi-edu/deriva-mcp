@@ -29,6 +29,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         columns: list[dict] | None = None,
         foreign_keys: list[dict] | None = None,
         comment: str = "",
+        schema: str | None = None,
     ) -> str:
         """Create a new table in the domain schema.
 
@@ -56,6 +57,8 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 - referenced_column (str): Column in referenced table (default: "RID")
                 - on_delete (str): Action on delete - "NO ACTION", "CASCADE", "SET NULL" (default: "NO ACTION")
             comment: Description of the table's purpose.
+            schema: Schema to create the table in. If not provided, uses the default
+                domain schema. Useful when a catalog has multiple domain schemas.
 
         Returns:
             JSON with status, table_name, schema, columns.
@@ -126,7 +129,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 fkey_defs=fkey_defs,
                 comment=comment,
             )
-            table = ml.create_table(table_def)
+            table = ml.create_table(table_def, schema=schema)
             return json.dumps({
                 "status": "created",
                 "table_name": table.name,
@@ -143,6 +146,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
         columns: list[dict] | None = None,
         referenced_tables: list[str] | None = None,
         comment: str = "",
+        schema: str | None = None,
     ) -> str:
         """Create a new asset table for file management with automatic URL/checksum tracking.
 
@@ -154,6 +158,8 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             columns: Additional columns beyond standard asset columns.
             referenced_tables: Tables this asset should have foreign keys to.
             comment: Description of the asset table's purpose.
+            schema: Schema to create the table in. If not provided, uses the default
+                domain schema.
 
         Returns:
             JSON with status, table_name, schema, columns.
@@ -197,6 +203,7 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 column_defs=col_defs if col_defs else None,
                 referenced_tables=ref_tables if ref_tables else None,
                 comment=comment,
+                schema=schema,
             )
             return json.dumps({
                 "status": "created",

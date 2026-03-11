@@ -158,35 +158,46 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     async def add_feature_value(
         table_name: str,
         feature_name: str,
-        target_rid: str,
-        value: str,
+        entries: list[dict[str, str]],
         execution_rid: str | None = None,
     ) -> str:
-        """Add a feature value to a domain object.
+        """Add feature values to one or more domain objects.
 
-        Associates a feature value (term, asset, or other) with a target record.
+        Associates feature values (terms, assets, or other) with target records.
+        Accepts a list of entries, each mapping a target RID to a value. All entries
+        are inserted in a single batch for efficiency.
+
         If an execution is active, it will be used for provenance. Otherwise,
         provide an execution_rid explicitly.
 
         **For simple features** (single term or asset column):
-        Use this tool with a single `value` string.
+        Use this tool — each entry needs only `target_rid` and `value`.
 
-        **For complex features** (multiple columns):
-        Use `add_feature_value_record` instead, which accepts a dictionary of
-        field values. Use `lookup_feature` first to see what fields are available.
+        **For complex features** (multiple columns per record):
+        Use `add_feature_value_record` instead, which accepts arbitrary field dicts.
 
         Args:
-            table_name: Table the target record belongs to (e.g., "Image").
+            table_name: Table the target records belong to (e.g., "Image").
             feature_name: Name of the feature (e.g., "Diagnosis").
-            target_rid: RID of the target record to annotate.
-            value: The feature value - either a term name or asset RID.
+            entries: List of dicts, each with:
+                - target_rid (str): RID of the target record to annotate.
+                - value (str): The feature value — a term name or asset RID.
             execution_rid: Execution RID for provenance (uses active if not provided).
 
         Returns:
-            JSON with status, target_rid, feature_name, value.
+            JSON with status, feature_name, count, execution_rid, rids.
 
-        Example:
-            add_feature_value("Image", "Diagnosis", "1-ABC", "Normal")
+        Examples:
+            # Single value
+            add_feature_value("Image", "Diagnosis",
+                [{"target_rid": "1-ABC", "value": "Normal"}])
+
+            # Batch values
+            add_feature_value("Image", "Diagnosis", [
+                {"target_rid": "1-ABC", "value": "Normal"},
+                {"target_rid": "1-DEF", "value": "Abnormal"},
+                {"target_rid": "1-GHI", "value": "Normal"},
+            ])
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -234,76 +245,74 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     }
                 )
 
-            # Build the record dict
-            record_dict = {
-                feature.target_table.name: target_rid,
-                "Feature_Name": feature_name,
-                "Execution": exe_rid,
-                value_column: value,
-            }
+            # Build record dicts for batch insert
+            records = []
+            for entry in entries:
+                records.append({
+                    feature.target_table.name: entry["target_rid"],
+                    "Feature_Name": feature_name,
+                    "Execution": exe_rid,
+                    value_column: entry["value"],
+                })
 
-            # Insert the record
+            # Batch insert all records
             pb = ml.pathBuilder()
             path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
-            result = list(path.insert([record_dict]))
+            result = list(path.insert(records))
 
             return json.dumps(
                 {
                     "status": "added",
-                    "target_rid": target_rid,
                     "feature_name": feature_name,
-                    value_column: value,
+                    "count": len(result),
                     "execution_rid": exe_rid,
-                    "rid": result[0].get("RID") if result else None,
+                    "rids": [r.get("RID") for r in result],
                 }
             )
         except Exception as e:
-            logger.error(f"Failed to add feature value: {e}")
+            logger.error(f"Failed to add feature values: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def add_feature_value_record(
         table_name: str,
         feature_name: str,
-        target_rid: str,
-        values: dict[str, str | int | float],
+        entries: list[dict],
         execution_rid: str | None = None,
     ) -> str:
-        """Add a feature value with multiple fields to a domain object.
+        """Add feature values with multiple fields to one or more domain objects.
 
         For features with multiple columns (e.g., a diagnosis with confidence score),
-        use this tool to provide values for each field. Use `lookup_feature` first
-        to see the available fields and their types.
+        use this tool to provide values for each field. Accepts a list of entries
+        for batch insertion. Use `lookup_feature` first to see available fields.
 
         **Feature columns are dynamically generated** based on the feature definition:
         - `term_columns`: Accept vocabulary term names (strings)
         - `asset_columns`: Accept asset RIDs (strings)
         - `value_columns`: Accept direct values (strings, numbers)
 
-        The feature's dynamically generated Pydantic class (accessible via
-        `feature_record_class()` in Python) validates all values automatically.
-
         Args:
-            table_name: Table the target record belongs to (e.g., "Image").
+            table_name: Table the target records belong to (e.g., "Image").
             feature_name: Name of the feature (e.g., "Diagnosis").
-            target_rid: RID of the target record to annotate.
-            values: Dictionary mapping column names to values. Use `lookup_feature`
-                to see available columns and their types.
+            entries: List of dicts, each with:
+                - target_rid (str, required): RID of the target record.
+                - Plus any feature column names mapped to their values.
+                  Use `lookup_feature` to see available columns and types.
             execution_rid: Execution RID for provenance (uses active if not provided).
 
         Returns:
-            JSON with status, target_rid, feature_name, values, rid.
+            JSON with status, feature_name, count, execution_rid, rids.
 
         Example:
             # First check the feature structure:
             lookup_feature("Image", "Diagnosis")
-            # -> {"term_columns": {"Diagnosis_Type": {...}}, "value_columns": {"confidence": {"type": "float4"}}}
+            # -> {"term_columns": {"Diagnosis_Type": {...}}, "value_columns": {"confidence": {...}}}
 
-            # Then add a value with all fields:
-            add_feature_value_record(
-                "Image", "Diagnosis", "1-ABC",
-                {"Diagnosis_Type": "Normal", "confidence": 0.95}
-            )
+            # Then add values (single or batch):
+            add_feature_value_record("Image", "Diagnosis", [
+                {"target_rid": "1-ABC", "Diagnosis_Type": "Normal", "confidence": 0.95},
+                {"target_rid": "1-DEF", "Diagnosis_Type": "Abnormal", "confidence": 0.87},
+            ])
         """
         try:
             ml = conn_manager.get_active_or_raise()
@@ -333,33 +342,36 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Look up the feature
             feature = ml.lookup_feature(table_name, feature_name)
 
-            # Build the record dict with required fields
-            record_dict = {
-                feature.target_table.name: target_rid,
-                "Feature_Name": feature_name,
-                "Execution": exe_rid,
-            }
+            # Build record dicts for batch insert
+            records = []
+            for entry in entries:
+                record_dict = {
+                    feature.target_table.name: entry["target_rid"],
+                    "Feature_Name": feature_name,
+                    "Execution": exe_rid,
+                }
+                # Add all user-provided values (everything except target_rid)
+                for k, v in entry.items():
+                    if k != "target_rid":
+                        record_dict[k] = v
+                records.append(record_dict)
 
-            # Add user-provided values
-            record_dict.update(values)
-
-            # Insert the record
+            # Batch insert all records
             pb = ml.pathBuilder()
             path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
-            result = list(path.insert([record_dict]))
+            result = list(path.insert(records))
 
             return json.dumps(
                 {
                     "status": "added",
-                    "target_rid": target_rid,
                     "feature_name": feature_name,
-                    "values": values,
+                    "count": len(result),
                     "execution_rid": exe_rid,
-                    "rid": result[0].get("RID") if result else None,
+                    "rids": [r.get("RID") for r in result],
                 }
             )
         except Exception as e:
-            logger.error(f"Failed to add feature value record: {e}")
+            logger.error(f"Failed to add feature value records: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()

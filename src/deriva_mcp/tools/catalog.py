@@ -522,7 +522,7 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             include_associations: If True, auto-include association tables.
             include_vocabularies: If True, auto-include vocabulary tables.
             table_concurrency: Max concurrent table copies during fill phase.
-                Lower values reduce server load. Default: 2.
+                Lower values reduce server load. Default: 1.
 
         Returns:
             JSON with status, source info, destination info, and

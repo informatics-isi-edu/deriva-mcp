@@ -1076,8 +1076,8 @@ Features link domain objects (e.g., Image, Subject) to vocabulary terms, assets,
 1. **Vocabulary must exist first** — Create the vocabulary table and add terms before creating a feature that references it.
 2. **Feature values require an active execution** — This is a hard requirement for provenance. Use `create_execution` first.
 3. **Use the right tool for the job**:
-   - `add_feature_value` — Simple features with a single term or asset column
-   - `add_feature_value_record` — Features with multiple columns (e.g., term + confidence score)
+   - `add_feature_value` — Simple features with a single term or asset column. Accepts a list of entries.
+   - `add_feature_value_record` — Features with multiple columns (e.g., term + confidence score). Accepts a list of entries.
 4. **Always provide term descriptions** — They appear in the UI and help annotators understand labels.
 5. **Multiple values per record are allowed** — An image can be labeled by multiple annotators, each in a separate execution.
 
@@ -1272,23 +1272,19 @@ start_execution()
 add_feature_value(
     table_name="Image",
     feature_name="Tumor_Classification",
-    target_rid="2-IMG1",
-    value="Grade II"
-)
-
-add_feature_value(
-    table_name="Image",
-    feature_name="Tumor_Classification",
-    target_rid="2-IMG2",
-    value="Grade III"
+    entries=[
+        {"target_rid": "2-IMG1", "value": "Grade II"},
+        {"target_rid": "2-IMG2", "value": "Grade III"},
+    ]
 )
 
 # For features with multiple columns (e.g., term + confidence), use add_feature_value_record:
 add_feature_value_record(
     table_name="Image",
     feature_name="Diagnosis",
-    target_rid="2-IMG1",
-    values={"Diagnosis_Type": "Normal", "confidence": 0.95}
+    entries=[
+        {"target_rid": "2-IMG1", "Diagnosis_Type": "Normal", "confidence": 0.95},
+    ]
 )
 
 # Step 4: Stop timing
@@ -1312,27 +1308,23 @@ config = ExecutionConfiguration(
 )
 
 with ml.create_execution(config) as exe:
-    exe.add_feature_value(
-        feature_name="Tumor_Classification",
-        target_rid="2-IMG1",
-        term_name="Grade II",
-        comment="Clear moderately differentiated pattern"
-    )
+    # Look up the feature and get the record class
+    feature = exe.catalog.lookup_feature("Image", "Tumor_Classification")
+    RecordClass = feature.feature_record_class()
 
-    exe.add_feature_value(
-        feature_name="Tumor_Classification",
-        target_rid="2-IMG2",
-        term_name="Grade III",
-        comment="Poorly differentiated with high mitotic rate"
-    )
+    # Insert feature values — Execution RID is set automatically by exe.add_features()
+    records = [
+        RecordClass(Image="2-IMG1", Tumor_Grade="Grade II"),
+        RecordClass(Image="2-IMG2", Tumor_Grade="Grade III"),
+    ]
+    exe.add_features(records)
 
     # Bulk feature values
-    for image_rid, grade in labeling_results.items():
-        exe.add_feature_value(
-            feature_name="Tumor_Classification",
-            target_rid=image_rid,
-            term_name=grade
-        )
+    bulk_records = [
+        RecordClass(Image=image_rid, Tumor_Grade=grade)
+        for image_rid, grade in labeling_results.items()
+    ]
+    exe.add_features(bulk_records)
 
 exe.upload_execution_outputs()
 ```
@@ -1392,15 +1384,10 @@ start_execution()
 add_feature_value(
     table_name="Image",
     feature_name="Cell_Classification",
-    target_rid="2-IMG1",
-    value="Epithelial"
-)
-
-add_feature_value(
-    table_name="Image",
-    feature_name="Cell_Classification",
-    target_rid="2-IMG2",
-    value="Immune"
+    entries=[
+        {"target_rid": "2-IMG1", "value": "Epithelial"},
+        {"target_rid": "2-IMG2", "value": "Immune"},
+    ]
 )
 
 stop_execution()
@@ -4456,8 +4443,8 @@ Adds an item to an existing entity.
 | `add_asset_type_to_asset` | Assign type to specific asset |
 | `add_term` | Add term to vocabulary |
 | `add_synonym` | Add synonym to term |
-| `add_feature_value` | Add feature value |
-| `add_feature_value_record` | Add individual feature value record |
+| `add_feature_value` | Add feature values (batch, simple features) |
+| `add_feature_value_record` | Add feature values (batch, multi-column features) |
 | `add_visible_column` | Add column to visible columns |
 | `add_visible_foreign_key` | Add FK to visible foreign keys |
 | `add_column` | Add column to table |
@@ -4653,16 +4640,24 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
 ### Feature Creation and Population
 
 ```python
+# Create the feature (on ml, not execution)
+ml.create_feature(
+    target_table="Image",
+    feature_name="Severity",
+    terms=["Severity_Grade"],
+    comment="Severity grading for chest X-ray findings.",
+)
+
 with ml.create_execution(config, dry_run=args.dry_run) as execution:
-    feature = execution.create_feature(
-        name="Severity",
-        target_table="Image",
-        vocabulary="Severity_Grade",
-        description="Severity grading for chest X-ray findings.",
-    )
-    for image_rid, severity in annotations.items():
-        execution.add_feature_value(feature.name, image_rid, severity)
-    execution.upload_execution_outputs()
+    feature = execution.catalog.lookup_feature("Image", "Severity")
+    RecordClass = feature.feature_record_class()
+
+    records = [
+        RecordClass(Image=rid, Severity_Grade=severity)
+        for rid, severity in annotations.items()
+    ]
+    execution.add_features(records)  # Execution RID set automatically
+execution.upload_execution_outputs()
 ```
 
 ### ETL / Data Loading

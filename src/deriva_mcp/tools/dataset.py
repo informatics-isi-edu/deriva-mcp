@@ -1231,17 +1231,21 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         from pathlib import Path
 
         try:
+            from deriva_ml.dataset.aux_classes import DatasetSpec
+
             ml = conn_manager.get_active_or_raise()
 
-            # Download the dataset as a bag
-            dataset = ml.lookup_dataset(dataset_rid)
-            if version:
-                dataset = dataset.set_version(version)
+            # Resolve the version if not provided
+            if not version:
+                dataset = ml.lookup_dataset(dataset_rid)
+                version = str(dataset.current_version)
 
-            bag = dataset.to_bag(materialize=materialize)
+            # Download the dataset as a bag using the correct API
+            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
+            bag = ml.download_dataset_bag(spec)
 
             # Restructure the assets
-            result_path = bag.restructure_assets(
+            file_map = bag.restructure_assets(
                 asset_table=asset_table,
                 output_dir=Path(output_dir),
                 group_by=group_by or [],
@@ -1249,14 +1253,14 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 enforce_vocabulary=enforce_vocabulary,
             )
 
-            # Count the files created
-            file_count = sum(1 for _ in result_path.rglob("*") if _.is_file() or _.is_symlink())
+            # file_map is a dict[Path, Path] mapping source -> dest
+            file_count = len(file_map)
 
             return json.dumps({
                 "status": "success",
                 "dataset_rid": dataset_rid,
-                "version": str(dataset.current_version) if dataset.current_version else None,
-                "output_dir": str(result_path),
+                "version": version,
+                "output_dir": str(output_dir),
                 "asset_table": asset_table,
                 "group_by": group_by or [],
                 "file_count": file_count,
