@@ -10,6 +10,7 @@ Background on features in DerivaML. For the step-by-step guide, see `workflow.md
 - [Multivalued Features](#multivalued-features)
 - [Feature Selection](#feature-selection)
 - [Feature Value Table Naming](#feature-value-table-naming)
+- [Feature Records (Python API)](#feature-records-python-api)
 - [Operations Summary](#operations-summary)
 
 ---
@@ -116,6 +117,31 @@ This table contains columns for:
 - Each asset column (FK to the asset table)
 - Each metadata column
 - `Execution` (FK to the Execution table — provenance)
+
+## Feature Records (Python API)
+
+In the Python API, feature values are represented as **FeatureRecord** objects. Each feature has a dynamically generated record class whose fields match the feature's columns (target table, vocabulary terms, assets, metadata).
+
+To get the record class for a feature:
+
+```python
+feature = exe.catalog.lookup_feature("Image", "Tumor_Classification")
+RecordClass = feature.feature_record_class()
+```
+
+The returned `RecordClass` is a Pydantic model. Construct instances by passing column values as keyword arguments, where each key is a column name from the feature value table:
+
+```python
+record = RecordClass(Image="2-IMG1", Tumor_Grade="Grade II")
+```
+
+- The target table column (e.g., `Image`) takes the record's RID
+- Vocabulary term columns (e.g., `Tumor_Grade`) take the term name
+- Asset columns take the asset RID
+- Metadata columns take the appropriate typed value (e.g., `confidence=0.95`)
+- The `Execution` column is set automatically when you call `exe.add_features()`
+
+Add records in batch with `exe.add_features(records)`. The execution RID is populated automatically from the active execution context.
 
 ## Operations Summary
 
