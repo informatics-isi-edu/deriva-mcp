@@ -1,7 +1,7 @@
 ---
 name: check-versions
 description: "Run this skill proactively at the START of every new conversation to check if the DerivaML ecosystem is up to date. Also use when the user asks about versions, updates, or whether their environment is current. Triggers on: session start, 'check versions', 'am I up to date', 'update deriva', 'what version', 'upgrade packages'."
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Check and Update DerivaML Ecosystem
