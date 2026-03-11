@@ -6,55 +6,30 @@ disable-model-invocation: true
 
 # Creating and Managing Datasets in DerivaML
 
-Datasets are the primary unit for organizing data in DerivaML. A dataset is a named, versioned collection of records (members) drawn from one or more catalog tables, with full provenance tracking through executions.
+Datasets are the primary unit for organizing data in DerivaML. A dataset is a versioned collection of records (members) drawn from one or more catalog tables, with full provenance tracking through executions.
 
-## Key Concepts
-
-- **Element types** — Tables registered as allowed member sources for a dataset. Must be registered before adding members from that table.
-- **Members** — Individual records (by RID) included in the dataset. Can be added in bulk by RID list or grouped by table.
-- **Types** — Labels describing purpose: Training, Testing, Validation, Complete, Labeled, Unlabeled. Custom types can also be created.
-- **Versioning** — Monotonically increasing version number. Increment after any modification (add/remove members, change element types).
-- **Nested datasets** — Parent-child relationships. Used for train/test/validation splits. `split_dataset` creates these automatically.
-- **Provenance** — Datasets are created within executions, linking them to workflows and tracking lineage.
-
-## Splitting Datasets
-
-`split_dataset` follows scikit-learn's `train_test_split` conventions:
-
-| Strategy | Use Case | Key Parameters |
-|----------|----------|----------------|
-| Random (default) | General train/test/val splits | `test_size`, `val_size`, `seed` |
-| Stratified | Preserve label distribution | `test_size`, `val_size`, `stratify_by_column`, `include_tables`, `seed` |
-
-Two-way (train/test) by default. Add `val_size` for three-way (train/val/test). Use `*_types=["Labeled"]` when splits need ground truth labels. Use `dry_run=true` to preview before committing.
-
-## Critical Rules and Gotchas
-
-1. **Always create datasets within an execution** — Use `create_dataset` (which requires an active execution) to maintain provenance.
-2. **Register element types before adding members** — `add_dataset_element_type(table_name=...)` is a catalog-level operation; call it for each source table before `add_dataset_members`.
-3. **FK traversal in bag exports** — Downloaded bags include all FK-reachable records from registered element types. The export walks all foreign key paths (both directions) from member records, with vocabulary tables as natural terminators. Deep join chains (Image -> Sample -> Subject -> Study) can cause timeouts. Three fixes in order of preference: (a) increase `timeout` (default read timeout is 610s, e.g. `timeout=[10, 1800]` for 30 min), (b) use `exclude_tables` to prune specific tables from the FK graph, or (c) add intermediate table records as direct members to flatten the traversal.
-4. **Version after every modification** — Call `increment_dataset_version` after adding/removing members or changing element types.
-5. **Validate RIDs first** — Use `validate_rids` before `add_dataset_members` to catch invalid RIDs early.
-6. **Set seeds on splits** — Always pass `seed` to `split_dataset` for reproducibility.
-7. **Deleting a dataset removes only the container** — Member records (images, subjects, etc.) are not deleted, only the dataset and its member associations.
+For background on what datasets are, how versioning and element types work, nested datasets, and FK traversal in bag exports, see `references/concepts.md`.
 
 ## Workflow Summary
 
 The standard sequence for creating a dataset:
 
-1. Create execution (with a workflow for provenance)
+1. `create_execution` — start an execution for provenance
 2. `create_dataset` — create the dataset within the active execution
-3. `add_dataset_type` — label the dataset (Training, Complete, etc.)
-4. `add_dataset_element_type` — register source tables (catalog-level)
-5. `add_dataset_members` — add records by RID (auto-increments version)
-6. `split_dataset` (optional) — create train/test/val child datasets
-7. `stop_execution` + `upload_execution_outputs` — finalize
+3. `add_dataset_type` — label the dataset (Training, Complete, Labeled, etc.)
+4. `add_dataset_element_type` — register source tables (catalog-level, before adding members)
+5. `validate_rids` — check RIDs exist before adding
+6. `add_dataset_members` — add records by RID (auto-increments version)
+7. `split_dataset` (optional) — create train/test/val children (auto-increments version). Use `dry_run=true` to preview, `seed` for reproducibility, `*_types=["Labeled"]` when splits need ground truth.
+8. `stop_execution` — finalize (no `upload_execution_outputs` needed — dataset operations don't produce output files)
 
-For the full step-by-step guide with code examples (both Python API and MCP tools), see `references/workflow.md`.
+For the full step-by-step guide with code examples (both MCP tools and Python API), see `references/workflow.md`.
 
 ## Reference Resources
 
-- `deriva://docs/datasets` — Full guide to dataset creation, versioning, downloading, and restructuring. Read this for detailed examples and edge cases beyond what this skill covers.
+- `references/concepts.md` — What datasets are, versioning, element types, nested datasets
+- `references/bags.md` — BDBag exports: what they contain, FK traversal, timeouts, caching
+- `references/workflow.md` — Step-by-step how-to with MCP and Python examples
 - `deriva://catalog/datasets` — Browse existing datasets before creating new ones
 - `deriva://dataset/{rid}` — Dataset details including current version
 - `deriva://catalog/dataset-element-types` — Check which element types are registered
@@ -63,3 +38,4 @@ For the full step-by-step guide with code examples (both Python API and MCP tool
 
 - **`prepare-training-data`** — Downloading, extracting, and preparing dataset data for ML training pipelines.
 - **`debug-bag-contents`** — Diagnosing missing data, FK traversal issues, and export problems in dataset bags.
+- **`dataset-versioning`** — Full versioning rules, semantic versioning conventions, and pre-experiment checklist.

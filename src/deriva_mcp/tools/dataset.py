@@ -236,6 +236,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         dataset_rid: str,
         member_rids: list[str] | None = None,
         members_by_table: dict[str, list[str]] | None = None,
+        description: str = "",
     ) -> str:
         """Add records as dataset elements. Auto-increments minor version.
 
@@ -261,6 +262,8 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             members_by_table: Dict mapping table names to RID lists
                 (e.g., {"Subject": ["2-ABC"], "Observation": ["2-DEF", "2-GHI"]}).
                 Faster than member_rids for large datasets.
+            description: Optional description for the version increment that records
+                why these members were added. Stored in the dataset history.
 
         Returns:
             JSON with status, added_count, dataset_rid.
@@ -279,10 +282,10 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     "message": "Provide either member_rids or members_by_table, not both.",
                 })
             if members_by_table:
-                dataset.add_dataset_members(members=members_by_table)
+                dataset.add_dataset_members(members=members_by_table, description=description)
                 total = sum(len(v) for v in members_by_table.values())
             elif member_rids:
-                dataset.add_dataset_members(members=member_rids)
+                dataset.add_dataset_members(members=member_rids, description=description)
                 total = len(member_rids)
             else:
                 return json.dumps({
