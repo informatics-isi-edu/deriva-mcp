@@ -6,46 +6,42 @@ disable-model-invocation: true
 
 # Creating and Populating Features in DerivaML
 
-Features link domain objects (e.g., Image, Subject) to vocabulary terms, assets, or computed values, creating a structured labeling system for ML with full provenance tracking.
+Features link domain objects (e.g., Image, Subject) to vocabulary terms, assets, or computed values, creating a structured annotation system for ML with full provenance tracking. Features are inherently multivalued — the same record can be labeled multiple times by different annotators, model runs, or workflows, enabling inter-annotator agreement, model comparison, and audit trails.
 
-## Key Concepts
+Common uses include classification labels, quality scores, segmentation masks, derived data representations, and any structured annotation that needs provenance.
 
-- **Feature** — A named labeling dimension (e.g., "Tumor_Classification", "Image_Quality"). Created with `create_feature`.
-- **Vocabulary** — A controlled set of terms used as labels. Must exist before creating a term-based feature.
-- **Feature value** — One record labeled with one term/asset, within one execution. Created with `add_feature_value` or `add_feature_value_record`.
-- **Metadata columns** — Additional data on feature values (e.g., confidence scores, reviewer references).
+For background on feature types, metadata columns, multivalued features, and feature selection, see `references/concepts.md`.
 
 ## Critical Rules
 
-1. **Vocabulary must exist first** — Create the vocabulary table and add terms before creating a feature that references it.
-2. **Feature values require an active execution** — This is a hard requirement for provenance. Use `create_execution` first.
+1. **Vocabulary must exist first** — create the vocabulary table and add terms before creating a term-based feature.
+2. **Feature values require an active execution** — this is a hard requirement for provenance tracking.
 3. **Use the right tool for the job**:
-   - `add_feature_value` — Simple features with a single term or asset column
-   - `add_feature_value_record` — Features with multiple columns (e.g., term + confidence score)
-4. **Always provide term descriptions** — They appear in the UI and help annotators understand labels.
-5. **Multiple values per record are allowed** — An image can be labeled by multiple annotators, each in a separate execution.
+   - `add_feature_value` — simple features with a single term or asset column
+   - `add_feature_value_record` — features with multiple columns (e.g., term + confidence score)
+4. **Use feature selection for multivalued features** — when a record has multiple values, use `fetch_table_features` with `selector="newest"` or `workflow` to resolve to one value per record.
 
 ## Workflow Summary
 
-1. `create_vocabulary` + `add_term` — Define the label set (if needed)
-2. `create_feature` — Link a target table to vocabulary terms/assets
-3. `create_execution` + `start_execution` — Start provenance tracking
-4. `add_feature_value` / `add_feature_value_record` — Assign labels to records
-5. `stop_execution` + `upload_execution_outputs` — Finalize
+1. `create_vocabulary` + `add_term` — define the label set (if needed; see `manage-vocabulary` skill)
+2. `create_feature` — link a target table to vocabulary terms, assets, or both
+3. `create_execution` + `start_execution` — start provenance tracking
+4. `add_feature_value` / `add_feature_value_record` — assign values to records in batch
+5. `stop_execution` — finalize (no `upload_execution_outputs` needed — feature operations don't produce output files)
 
-## Feature Types
-
-| Type | Parameter | Example |
-|------|-----------|---------|
-| Term-based | `terms=["Tumor_Grade"]` | Classification labels |
-| Asset-based | `assets=["Mask_Image"]` | Segmentation masks |
-| Mixed | `terms=[...], assets=[...]` | Labels with overlay images |
-| With metadata | `metadata=[{"name": "confidence", "type": {"typename": "float4"}}]` | Scores, reviewer refs |
+For the full step-by-step guide with code examples (both MCP tools and Python API), see `references/workflow.md`.
 
 ## Reference Resources
 
-- `deriva://docs/features` — Full guide to feature creation, values, querying, and selectors. Read this for detailed examples and edge cases beyond what this skill covers.
-- `deriva://catalog/features` — Browse existing features before creating new ones
-- `deriva://feature/{table_name}/{feature_name}` — Feature details and current values
+- `references/concepts.md` — What features are, types, metadata, multivalued features, selection
+- `references/workflow.md` — Step-by-step how-to with MCP and Python examples
+- `deriva://docs/features` — Full user guide to features in DerivaML
+- `deriva://catalog/features` — Browse existing features
+- `deriva://feature/{table_name}/{feature_name}` — Feature details and column schema
+- `deriva://feature/{table_name}/{feature_name}/values` — Feature values with provenance
+- `deriva://table/{table_name}/feature-values/newest` — Deduplicated to newest per record
 
-For the full step-by-step guide with code examples (both Python API and MCP tools), read `references/workflow.md`.
+## Related Skills
+
+- **`manage-vocabulary`** — Create and manage the controlled vocabularies that features reference.
+- **`create-dataset`** — Features annotate records that belong to datasets. Feature values are included in dataset bag exports.

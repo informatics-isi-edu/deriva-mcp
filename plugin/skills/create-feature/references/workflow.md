@@ -1,223 +1,96 @@
-# Creating and Populating a Feature
+# Feature Workflow Reference
 
-Features in DerivaML link a target table (e.g., Image, Subject) to vocabulary terms, creating a structured labeling system for ML. A feature is essentially a many-to-many relationship between domain records and vocabulary terms, with provenance tracking through executions.
+Step-by-step MCP tool and Python API examples for creating and populating features. For background concepts (feature types, multivalued features, selection), see `concepts.md`.
 
 ## Table of Contents
 
-1. [Concepts](#concepts) — Feature, target table, vocabulary, feature value
-2. [Step 1: Check Existing Features](#step-1-check-existing-features)
-3. [Step 2: Create a Vocabulary](#step-2-create-a-vocabulary-if-needed)
-4. [Step 3: Create the Feature](#step-3-create-the-feature) — With terms, assets, both, metadata columns
-5. [Step 4: Add Feature Values](#step-4-add-feature-values) — MCP tools and Python API
-6. [Step 5: Query Feature Values](#step-5-query-feature-values)
-7. [Complete Example: Image Classification Labels](#complete-example-image-classification-labels)
-8. [Managing Features](#managing-features) — Delete, list
-9. [Tips](#tips)
+1. [Check Existing Features](#check-existing-features)
+2. [Create a Vocabulary](#create-a-vocabulary-if-needed)
+3. [Create the Feature](#create-the-feature)
+4. [Add Feature Values](#add-feature-values) — MCP tools and Python API
+5. [Query Feature Values](#query-feature-values) — Fetching and selecting
+6. [Managing Features](#managing-features) — Delete, list
+7. [Complete Example](#complete-example) — End-to-end MCP workflow
+8. [Complete Example: Python API](#complete-example-python-api)
 
 ---
 
-## Concepts
+## Check Existing Features
 
-- **Feature**: A named labeling dimension (e.g., "Tumor Classification", "Image Quality Score").
-- **Target table**: The table whose records are being labeled (e.g., Image, Subject).
-- **Vocabulary**: A controlled set of terms used as labels (e.g., "Benign", "Malignant", "Unknown").
-- **Feature value**: An individual label assignment -- one record labeled with one term, within one execution.
+Before creating a new feature, review what already exists.
 
-## Step 1: Check Existing Features
+- Read the `deriva://catalog/features` resource to list all features.
+- Read the `deriva://feature/{table_name}/{feature_name}` resource for details on a specific feature.
+- Call `query_table` with `table_name`: `"Feature"` to list feature records directly.
 
-```
-# List existing features
-query_table(table_name="Feature")
+## Create a Vocabulary (if needed)
 
-# Check existing vocabularies
-query_table(table_name="Diagnosis")
-query_table(table_name="Image_Quality")
-```
+If your feature needs a new set of terms, create the vocabulary first. See the `manage-vocabulary` skill for full details.
 
-## Step 2: Create a Vocabulary (if needed)
+In brief:
+1. Call `create_vocabulary` with `vocabulary_name` and `comment`.
+2. Call `add_term` for each term with `vocabulary_name`, `term_name`, `description`, and optional `synonyms`.
 
-If your feature needs a new set of terms, create a vocabulary first.
+**Always provide meaningful descriptions for terms.** They appear in the UI and help annotators understand what each label means.
 
-```
-# Create a new vocabulary table
-create_vocabulary(
-    vocabulary_name="Tumor_Grade",
-    comment="Histological grading of tumor samples"
-)
-```
+## Create the Feature
 
-Then add terms to the vocabulary:
+Call `create_feature` with:
+- `table_name`: the target table whose records will be labeled (e.g., `"Image"`)
+- `feature_name`: unique name for the feature (e.g., `"Tumor_Classification"`)
+- `comment`: description of what this feature represents
+- `terms` (optional): list of vocabulary table names whose terms can be values (e.g., `["Tumor_Grade"]`)
+- `assets` (optional): list of asset table names that can be referenced (e.g., `["Mask_Image"]`)
+- `metadata` (optional): list of additional columns — see `concepts.md` for format details
 
-```
-# Add individual terms with descriptions
-add_term(
-    vocabulary_name="Tumor_Grade",
-    term_name="Grade I",
-    description="Well-differentiated, low grade"
-)
+At least one of `terms` or `assets` is required.
 
-add_term(
-    vocabulary_name="Tumor_Grade",
-    term_name="Grade II",
-    description="Moderately differentiated, intermediate grade"
-)
+This creates the feature record and a `{FeatureName}_Feature_Value` association table.
 
-add_term(
-    vocabulary_name="Tumor_Grade",
-    term_name="Grade III",
-    description="Poorly differentiated, high grade"
-)
+### Examples
 
-add_term(
-    vocabulary_name="Tumor_Grade",
-    term_name="Grade IV",
-    description="Undifferentiated, high grade"
-)
-```
+**Term-based feature** (classification labels): call with `table_name`: `"Image"`, `feature_name`: `"Tumor_Classification"`, `terms`: `["Tumor_Grade"]`.
 
-**Always provide meaningful descriptions for terms.** They appear in the UI and help users understand what each label means.
+**Asset-based feature** (segmentation masks): call with `table_name`: `"Image"`, `feature_name`: `"Segmentation_Mask"`, `assets`: `["Mask_Image"]`.
 
-You can also add synonyms for terms:
+**Mixed feature** (labels with overlays): include both `terms` and `assets`.
 
-```
-add_synonym(vocabulary_name="Tumor_Grade", term_name="Grade I", synonym="Low Grade")
-add_synonym(vocabulary_name="Tumor_Grade", term_name="Grade III", synonym="High Grade")
-```
+**Feature with metadata** (confidence scores): add `metadata`: `[{"name": "confidence", "type": {"typename": "float4"}}]`.
 
-## Step 3: Create the Feature
-
-Create the feature, linking a target table to vocabulary terms.
-
-### Feature with vocabulary terms
-
-```
-create_feature(
-    table_name="Image",
-    feature_name="Tumor_Classification",
-    terms=["Tumor_Grade"],         # Vocabulary table(s) to use as labels
-    comment="Classification of tumor grade from histology images"
-)
-```
-
-This creates:
-- A `Tumor_Classification` feature record
-- A `Tumor_Classification_Feature_Value` association table linking Image records to Tumor_Grade terms
-
-### Feature with asset terms
-
-If the feature values are files (e.g., segmentation masks, annotation overlays):
-
-```
-create_feature(
-    table_name="Image",
-    feature_name="Segmentation_Mask",
-    assets=["Mask_Image"],         # Asset table(s) to use as values
-    comment="Pixel-level segmentation masks for images"
-)
-```
-
-### Feature with both terms and assets
-
-```
-create_feature(
-    table_name="Image",
-    feature_name="Annotated_Region",
-    terms=["Region_Label"],
-    assets=["Region_Overlay"],
-    comment="Labeled regions with overlay images"
-)
-```
-
-### Feature with metadata columns
-
-Features can include additional columns for structured metadata like confidence scores, reviewer references, or notes. Use the `metadata` parameter:
-
-```
-# Feature with a confidence score
-create_feature(
-    table_name="Image",
-    feature_name="Diagnosis",
-    terms=["Diagnosis_Type"],
-    metadata=[{"name": "confidence", "type": {"typename": "float4"}}],
-    comment="Diagnosis with confidence score"
-)
-
-# Feature referencing another table (e.g., a Reviewer table)
-create_feature(
-    table_name="Image",
-    feature_name="Review",
-    terms=["Review_Status"],
-    metadata=["Reviewer"],
-    comment="Review annotations with reviewer tracking"
-)
-```
-
-Each metadata item can be:
-- **A string**: Treated as a table name, adds a foreign key reference to that table
-- **A dict**: Column definition with `name` and `type` keys. Valid type names: `text`, `int2`, `int4`, `int8`, `float4`, `float8`, `boolean`, `date`, `timestamp`, `timestamptz`, `json`, `jsonb`. Optional keys: `nullok`, `default`, `comment`.
-
-## Step 4: Add Feature Values
+## Add Feature Values
 
 Feature values require an active execution for provenance tracking. Every label assignment is tied to the execution that created it.
 
-### MCP Tools
+### MCP workflow
 
-The MCP execution tools operate on the **active execution** -- you don't pass execution RIDs to start/stop/upload.
+**Step 1:** Call `create_execution` with `workflow_name`, `workflow_type`, and `description`. Then call `start_execution`.
 
-```
-# Step 1: Create execution (sets it as active)
-create_execution(
-    workflow_name="Manual Tumor Grading",
-    workflow_type="Annotation",
-    description="Expert pathologist tumor grading session"
-)
+**Step 2:** Add values using one of two tools:
 
-# Step 2: Start timing
-start_execution()
+**For simple features** (single term or asset column), call `add_feature_value` with:
+- `table_name`: the target table (e.g., `"Image"`)
+- `feature_name`: the feature name (e.g., `"Tumor_Classification"`)
+- `entries`: list of dicts, each with `target_rid` and `value` (a term name or asset RID)
+- `execution_rid` (optional): defaults to the active execution
 
-# Step 3: Add feature values
-# For simple features (single term or asset column), use add_feature_value:
-# Pass a list of entries, each with target_rid and value.
-add_feature_value(
-    table_name="Image",
-    feature_name="Tumor_Classification",
-    entries=[
-        {"target_rid": "2-IMG1", "value": "Grade II"},
-        {"target_rid": "2-IMG2", "value": "Grade III"}
-    ]
-)
+**For features with multiple columns** (e.g., term + confidence), call `add_feature_value_record` with:
+- `table_name`: the target table
+- `feature_name`: the feature name
+- `entries`: list of dicts, each with `target_rid` plus column values matching the feature's schema
+- `execution_rid` (optional): defaults to the active execution
 
-# For features with multiple columns (e.g., term + confidence), use add_feature_value_record:
-# Pass a list of entries, each with target_rid plus column values.
-add_feature_value_record(
-    table_name="Image",
-    feature_name="Diagnosis",
-    entries=[
-        {"target_rid": "2-IMG1", "Diagnosis_Type": "Normal", "confidence": 0.95}
-    ]
-)
+**Step 3:** Call `stop_execution`. (No need to call `upload_execution_outputs` — feature value operations don't produce output files.)
 
-# Step 4: Stop timing
-stop_execution()
-
-# Step 5: Upload outputs
-upload_execution_outputs()
-```
-
-### Python API with Context Manager
+### Python API with context manager
 
 ```python
 from deriva_ml import DerivaML, ExecutionConfiguration
 
 ml = DerivaML(hostname, catalog_id)
-
-# Look up the workflow by URL or RID
 workflow = ml.lookup_workflow_by_url("https://github.com/my-org/my-repo")
 
 config = ExecutionConfiguration(
     workflow=workflow,
-    datasets=[],
-    assets=[],
     description="Expert pathologist tumor grading"
 )
 
@@ -232,7 +105,7 @@ with ml.create_execution(config) as exe:
         RecordClass(Image="2-IMG2", Tumor_Grade="Grade III"),
     ]
 
-    # Bulk feature values
+    # Bulk add from a results dict
     for image_rid, grade in labeling_results.items():
         records.append(RecordClass(Image=image_rid, Tumor_Grade=grade))
 
@@ -240,91 +113,96 @@ with ml.create_execution(config) as exe:
     exe.add_features(records)
 ```
 
-## Step 5: Query Feature Values
+## Query Feature Values
 
-After populating feature values, query them for analysis or training.
+### Simple queries
 
-```
-# Get all feature values for a feature
-query_table(table_name="Tumor_Classification_Feature_Value")
+Call `query_table` with `table_name` set to the feature value table (e.g., `"Tumor_Classification_Feature_Value"`). Use `filters` to narrow results (e.g., `{"Image": "2-IMG1"}` for a specific image, or `{"Tumor_Grade": "Grade III"}` for all images with a specific grade).
 
-# Get feature values for a specific image
-query_table(
-    table_name="Tumor_Classification_Feature_Value",
-    filters={"Image": "2-IMG1"}
-)
+### Fetching with deduplication
 
-# Get all images with a specific grade
-query_table(
-    table_name="Tumor_Classification_Feature_Value",
-    filters={"Tumor_Grade": "Grade III"}
-)
-```
+When a record has multiple values for the same feature (from different annotators or executions), use `fetch_table_features` to resolve to a single value per record.
 
-## Complete Example: Image Classification Labels
+Call `fetch_table_features` with:
+- `table_name`: the target table (e.g., `"Image"`)
+- `feature_name` (optional): fetch only a specific feature
+- `selector`: `"newest"` to pick the most recent value per record
+- `workflow`: a Workflow RID or Workflow_Type name to filter by source workflow
 
-```
-# 1. Create vocabulary
-create_vocabulary(
-    vocabulary_name="Cell_Type",
-    comment="Cell type classifications for microscopy images"
-)
+`selector` and `workflow` are mutually exclusive. See `concepts.md` for the full Python API including custom selectors.
 
-add_term(vocabulary_name="Cell_Type", term_name="Epithelial", description="Epithelial cells lining surfaces and cavities")
-add_term(vocabulary_name="Cell_Type", term_name="Stromal", description="Connective tissue support cells")
-add_term(vocabulary_name="Cell_Type", term_name="Immune", description="Immune system cells including lymphocytes and macrophages")
-add_term(vocabulary_name="Cell_Type", term_name="Necrotic", description="Dead or dying cells")
-add_term(vocabulary_name="Cell_Type", term_name="Artifact", description="Non-biological artifact in image")
+### Feature value resources
 
-# 2. Create the feature
-create_feature(
-    table_name="Image",
-    feature_name="Cell_Classification",
-    terms=["Cell_Type"],
-    comment="Primary cell type visible in microscopy image"
-)
-
-# 3. Add values within an execution
-create_execution(
-    workflow_name="Expert Cell Annotation",
-    workflow_type="Annotation",
-    description="Expert cell type annotation - batch 1"
-)
-start_execution()
-
-add_feature_value(
-    table_name="Image",
-    feature_name="Cell_Classification",
-    entries=[
-        {"target_rid": "2-IMG1", "value": "Epithelial"},
-        {"target_rid": "2-IMG2", "value": "Immune"}
-    ]
-)
-
-stop_execution()
-upload_execution_outputs()
-```
+- `deriva://feature/{table}/{name}/values` — all values with provenance
+- `deriva://table/{table}/feature-values` — all feature values for a table, grouped by feature
+- `deriva://table/{table}/feature-values/newest` — deduplicated to newest per record
 
 ## Managing Features
 
-### Delete a feature
-```
-delete_feature(table_name="Image", feature_name="Tumor_Classification")
-```
-This removes the feature and its feature value table. Existing data will be lost.
+To **delete a feature**, call `delete_feature` with `table_name` and `feature_name`. This removes the feature and its value table — existing data will be lost.
 
-### List all features
-```
-query_table(table_name="Feature")
-```
+To **list all features**, call `query_table` with `table_name`: `"Feature"`, or read the `deriva://catalog/features` resource.
 
-## Tips
+## Complete Example
 
-- **Feature values require an active execution.** This is a hard requirement for provenance tracking.
-- **Always provide descriptions** for vocabulary terms -- they appear in the UI and help annotators.
-- Use separate executions for different labeling sessions or annotators to track who labeled what.
-- Multiple features can target the same table (e.g., an Image can have both "Tumor_Classification" and "Image_Quality" features).
-- A single record can have multiple values for the same feature (e.g., an image labeled by multiple annotators).
-- Use `add_synonym` to make vocabulary terms discoverable under alternative names.
-- Use `add_feature_value` for simple features (single term/asset) and `add_feature_value_record` for features with multiple columns. Both accept a batch `entries` list for efficient insertion.
-- Feature values are queryable like any other table, making them easy to use for training data preparation.
+End-to-end MCP workflow: create a vocabulary, create a feature, and add values.
+
+**Step 1:** Create the vocabulary.
+
+Call `create_vocabulary` with `vocabulary_name`: `"Cell_Type"`, `comment`: `"Cell type classifications for microscopy images"`.
+
+Then call `add_term` for each term:
+- `term_name`: `"Epithelial"`, `description`: `"Epithelial cells lining surfaces and cavities"`
+- `term_name`: `"Stromal"`, `description`: `"Connective tissue support cells"`
+- `term_name`: `"Immune"`, `description`: `"Immune system cells including lymphocytes and macrophages"`
+- `term_name`: `"Necrotic"`, `description`: `"Dead or dying cells"`
+
+**Step 2:** Create the feature.
+
+Call `create_feature` with `table_name`: `"Image"`, `feature_name`: `"Cell_Classification"`, `terms`: `["Cell_Type"]`, `comment`: `"Primary cell type visible in microscopy image"`.
+
+**Step 3:** Add values within an execution.
+
+Call `create_execution` with `workflow_name`: `"Expert Cell Annotation"`, `workflow_type`: `"Annotation"`, `description`: `"Expert cell type annotation - batch 1"`. Then call `start_execution`.
+
+Call `add_feature_value` with `table_name`: `"Image"`, `feature_name`: `"Cell_Classification"`, `entries`:
+- `{"target_rid": "2-IMG1", "value": "Epithelial"}`
+- `{"target_rid": "2-IMG2", "value": "Immune"}`
+
+Call `stop_execution`.
+
+## Complete Example: Python API
+
+```python
+from deriva_ml import DerivaML, ExecutionConfiguration
+
+ml = DerivaML(hostname, catalog_id)
+
+# 1. Create vocabulary and terms
+ml.create_vocabulary("Cell_Type", comment="Cell type classifications")
+ml.add_term("Cell_Type", "Epithelial", description="Epithelial cells lining surfaces")
+ml.add_term("Cell_Type", "Stromal", description="Connective tissue support cells")
+ml.add_term("Cell_Type", "Immune", description="Immune system cells")
+
+# 2. Create the feature
+ml.create_feature("Image", "Cell_Classification",
+                   terms=["Cell_Type"],
+                   comment="Primary cell type visible in microscopy image")
+
+# 3. Add values within an execution
+workflow = ml.create_workflow(
+    name="Expert Cell Annotation",
+    workflow_type="Annotation",
+    description="Expert cell type annotation"
+)
+
+with ml.create_execution(ExecutionConfiguration(workflow=workflow)) as exe:
+    feature = exe.catalog.lookup_feature("Image", "Cell_Classification")
+    RecordClass = feature.feature_record_class()
+
+    records = [
+        RecordClass(Image="2-IMG1", Cell_Type="Epithelial"),
+        RecordClass(Image="2-IMG2", Cell_Type="Immune"),
+    ]
+    exe.add_features(records)
+```
