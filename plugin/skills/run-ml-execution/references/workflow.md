@@ -104,7 +104,6 @@ ml = DerivaML(hostname, catalog_id)
 # 1. Find or create a workflow
 workflow = ml.create_workflow(
     name="Image Classification Training",
-    url="https://github.com/org/repo",
     workflow_type="Training",
     description="Train CNN on labeled image dataset"
 )
@@ -209,7 +208,7 @@ Call `list_asset_executions` with `asset_rid` to find executions that created or
 
 ### Update status with a message
 
-Call `update_execution_status` with `status` and `message`. Valid statuses: `"Pending"`, `"Running"`, `"Complete"`, `"Failed"`. Useful for tracking progress during long-running work (e.g., `"Running"`, `"Processing batch 3 of 10"`).
+Call `update_execution_status` with `status` and `message`. Valid statuses: `"Pending"`, `"Running"`, `"Completed"`, `"Failed"`. Useful for tracking progress during long-running work (e.g., `"Running"`, `"Processing batch 3 of 10"`).
 
 ### Set or update the description
 
@@ -280,7 +279,6 @@ ml = DerivaML(hostname, catalog_id)
 # Find or create workflow
 workflow = ml.create_workflow(
     name="CIFAR-10 CNN Training",
-    url="https://github.com/org/cifar10-project",
     workflow_type="Training",
     description="Train 2-layer CNN on CIFAR-10 images"
 )

@@ -58,6 +58,7 @@ exe.upload_execution_outputs()
 - `add_nested_execution` — link parent and child executions for multi-step pipelines
 - `list_nested_executions` / `list_parent_executions` — navigate execution hierarchies
 - `create_execution_dataset` — create an output dataset linked to the active execution
+- `list_storage_contents` — find local execution working directories and cached datasets
 
 For the full step-by-step guide with all parameters, see `references/workflow.md`.
 
