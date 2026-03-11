@@ -158,8 +158,8 @@ An execution consumes inputs, does work in a local working directory, and produc
 
 An execution's inputs are **datasets** and **assets** specified when the execution is created. During execution, you download these to a local working directory:
 
-- **Datasets** are downloaded as BDBags (versioned archives) containing all member records, asset files, and feature values. Call `download_execution_dataset` with a dataset RID and version.
-- **Individual assets** (e.g., pretrained model weights) are downloaded directly. Call `download_asset` with an asset RID.
+- **Datasets** are downloaded as BDBags — self-contained, versioned archives that include all member records, asset files, feature values, and vocabulary terms at the exact catalog state when the version was created. Call `download_execution_dataset` with a dataset RID and version. See the `create-dataset` skill for how datasets and versions work, and its `references/bags.md` for details on the BDBag format.
+- **Individual assets** (e.g., pretrained model weights) are downloaded directly. Call `download_asset` with an asset RID. See the `work-with-assets` skill for asset concepts including caching.
 
 Both operations automatically record provenance — the downloaded dataset or asset is linked to the execution with role "Input".
 
