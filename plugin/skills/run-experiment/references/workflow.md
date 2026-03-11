@@ -34,11 +34,7 @@ uv run bump-version patch   # For small changes
 uv run bump-version minor   # For new features
 ```
 
-Then commit the bump:
-```bash
-git add pyproject.toml
-git commit -m "Bump version to X.Y.Z"
-```
+The `bump-version` command automatically commits and tags. No separate `git add`/`git commit` needed.
 
 ### 3. Verify Lock File
 
@@ -63,7 +59,7 @@ Ready to run experiment:
   Version: 0.3.1
   Branch:  feature/new-model
   Status:  clean (no uncommitted changes)
-  Experiment: +experiments=baseline
+  Experiment: +experiment=baseline
 
 Proceed? [y/N]
 ```
@@ -88,7 +84,7 @@ This prints the full resolved Hydra config without executing anything. Verify:
 For a specific experiment:
 
 ```bash
-uv run deriva-ml-run +experiments=baseline --info
+uv run deriva-ml-run +experiment=baseline --info
 ```
 
 ## Running Experiments
@@ -98,7 +94,7 @@ uv run deriva-ml-run +experiments=baseline --info
 Always run with `dry_run=True` first to validate the pipeline end-to-end without persisting results:
 
 ```bash
-uv run deriva-ml-run +experiments=baseline dry_run=True
+uv run deriva-ml-run +experiment=baseline dry_run=True
 ```
 
 This will:
@@ -110,13 +106,13 @@ This will:
 ### Production Run
 
 ```bash
-uv run deriva-ml-run +experiments=baseline
+uv run deriva-ml-run +experiment=baseline
 ```
 
 Or explicitly:
 
 ```bash
-uv run deriva-ml-run +experiments=baseline dry_run=False
+uv run deriva-ml-run +experiment=baseline dry_run=False
 ```
 
 ### CLI Options
@@ -134,7 +130,7 @@ Override any config value from the command line:
 
 ```bash
 # Select a named experiment
-uv run deriva-ml-run +experiments=baseline
+uv run deriva-ml-run +experiment=baseline
 
 # Override dataset config group
 uv run deriva-ml-run datasets=cell_images_v3
@@ -146,10 +142,10 @@ uv run deriva-ml-run model_config=resnet50_long
 uv run deriva-ml-run model_config.learning_rate=0.001 model_config.epochs=50
 
 # Set dry_run
-uv run deriva-ml-run +experiments=baseline dry_run=True
+uv run deriva-ml-run +experiment=baseline dry_run=True
 
 # Combine overrides
-uv run deriva-ml-run +experiments=baseline model_config.learning_rate=0.01 dry_run=False
+uv run deriva-ml-run +experiment=baseline model_config.learning_rate=0.01 dry_run=False
 ```
 
 ### Running Sweeps (Multirun)
@@ -157,19 +153,19 @@ uv run deriva-ml-run +experiments=baseline model_config.learning_rate=0.01 dry_r
 For parameter sweeps defined with `multirun_config()`:
 
 ```bash
-uv run deriva-ml-run +experiments=lr_batch_sweep --multirun
+uv run deriva-ml-run +experiment=lr_batch_sweep --multirun
 ```
 
 For ad-hoc sweeps using Hydra's comma syntax:
 
 ```bash
-uv run deriva-ml-run +experiments=baseline model_config.learning_rate=1e-2,1e-3,1e-4 --multirun
+uv run deriva-ml-run +experiment=baseline model_config.learning_rate=1e-2,1e-3,1e-4 --multirun
 ```
 
 For running multiple named experiments:
 
 ```bash
-uv run deriva-ml-run +experiments=baseline,long_training --multirun
+uv run deriva-ml-run +experiment=baseline,long_training --multirun
 ```
 
 ## Verify Results

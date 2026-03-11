@@ -21,7 +21,7 @@ Detailed API documentation for each DerivaML annotation builder class. For an ov
 Controls how a table or column is displayed.
 
 ```python
-from deriva.ml.annotation_builders import Display
+from deriva_ml.model.annotations import Display
 
 # Simple display name
 display = Display(name="Labeled Images")
@@ -42,12 +42,12 @@ table.annotations[Display.tag] = display.to_dict()
 Defines which columns appear in each Chaise context, with method chaining.
 
 ```python
-from deriva.ml.annotation_builders import VisibleColumns, Context
+from deriva_ml.model.annotations import VisibleColumns, CONTEXT_COMPACT, CONTEXT_DETAILED, CONTEXT_ENTRY
 
 vc = VisibleColumns()
 
 # Set columns for compact view
-vc.set(Context.COMPACT, [
+vc.set(CONTEXT_COMPACT, [
     "Filename",
     "Subject",
     "Diagnosis",
@@ -55,7 +55,7 @@ vc.set(Context.COMPACT, [
 ])
 
 # Set columns for detailed view (more columns)
-vc.set(Context.DETAILED, [
+vc.set(CONTEXT_DETAILED, [
     "Filename",
     "Subject",
     "Diagnosis",
@@ -68,7 +68,7 @@ vc.set(Context.DETAILED, [
 ])
 
 # Set entry form columns
-vc.set(Context.ENTRY, [
+vc.set(CONTEXT_ENTRY, [
     "Filename",
     "Subject",
     "Diagnosis",
@@ -85,11 +85,11 @@ table.annotations[VisibleColumns.tag] = vc.to_dict()
 Controls which related tables appear on the detail page.
 
 ```python
-from deriva.ml.annotation_builders import VisibleForeignKeys, Context
+from deriva_ml.model.annotations import VisibleForeignKeys, CONTEXT_DETAILED
 
 vfk = VisibleForeignKeys()
 
-vfk.set(Context.DETAILED, [
+vfk.set(CONTEXT_DETAILED, [
     {"source": [{"outbound": ["schema", "Image_Subject_fkey"]}, "RID"]},
     {"source": [{"outbound": ["schema", "Sample_Subject_fkey"]}, "RID"]}
 ])
@@ -102,20 +102,20 @@ table.annotations[VisibleForeignKeys.tag] = vfk.to_dict()
 Controls table-level display behavior including row naming and default sort order.
 
 ```python
-from deriva.ml.annotation_builders import TableDisplay, Context
+from deriva_ml.model.annotations import TableDisplay, CONTEXT_ROW_NAME, CONTEXT_COMPACT
 
 td = TableDisplay()
 
 # Row name pattern (how records appear in FK links)
-td.set_row_name(Context.ROW_NAME, "{{{Last_Name}}}, {{{First_Name}}}")
+td.set_row_name(CONTEXT_ROW_NAME, "{{{Last_Name}}}, {{{First_Name}}}")
 
 # Row ordering
-td.set_row_order(Context.COMPACT, [
+td.set_row_order(CONTEXT_COMPACT, [
     {"column": "Name", "descending": False}
 ])
 
 # Page size
-td.set_page_size(Context.COMPACT, 25)
+td.set_page_size(CONTEXT_COMPACT, 25)
 
 table.annotations[TableDisplay.tag] = td.to_dict()
 ```
@@ -125,15 +125,15 @@ table.annotations[TableDisplay.tag] = td.to_dict()
 Controls how individual column values are rendered.
 
 ```python
-from deriva.ml.annotation_builders import ColumnDisplay, Context
+from deriva_ml.model.annotations import ColumnDisplay, CONTEXT_COMPACT, CONTEXT_DETAILED
 
 cd = ColumnDisplay()
 
 # Render URL as a download link
-cd.set(Context.COMPACT, markdown_pattern="[Download]({{{URL}}})")
+cd.set(CONTEXT_COMPACT, markdown_pattern="[Download]({{{URL}}})")
 
 # Pre-format: transform value before display
-cd.set(Context.DETAILED, pre_format={"format": "%d", "unit": "bytes"})
+cd.set(CONTEXT_DETAILED, pre_format={"format": "%d", "unit": "bytes"})
 
 column.annotations[ColumnDisplay.tag] = cd.to_dict()
 ```
@@ -143,7 +143,7 @@ column.annotations[ColumnDisplay.tag] = cd.to_dict()
 PseudoColumns let you display values from related tables or computed expressions in column lists.
 
 ```python
-from deriva.ml.annotation_builders import PseudoColumn, OutboundFK, InboundFK, Aggregate
+from deriva_ml.model.annotations import PseudoColumn, OutboundFK, InboundFK, Aggregate
 
 # Follow an outbound foreign key to show a related column
 # Image -> Subject -> Name
@@ -162,7 +162,7 @@ image_count = PseudoColumn(
         InboundFK("schema", "Image_Subject_fkey"),
         "RID"
     ],
-    aggregate=Aggregate.COUNT_DISTINCT,
+    aggregate=Aggregate.CNT_D,
     markdown_name="# Images"
 )
 
@@ -173,12 +173,12 @@ all_diagnoses = PseudoColumn(
         OutboundFK("schema", "Diagnosis_Type_fkey"),
         "Name"
     ],
-    aggregate=Aggregate.ARRAY_DISTINCT,
+    aggregate=Aggregate.ARRAY_D,
     markdown_name="Diagnoses"
 )
 
 # Use in visible columns
-vc.set(Context.COMPACT, [
+vc.set(CONTEXT_COMPACT, [
     "Name",
     subject_name.to_dict(),
     image_count.to_dict(),
@@ -192,10 +192,10 @@ vc.set(Context.COMPACT, [
 - Chain multiple hops: `[OutboundFK(...), OutboundFK(...), "Column"]`
 
 **Aggregate functions:**
-- `Aggregate.COUNT` -- count of values
-- `Aggregate.COUNT_DISTINCT` -- count of unique values
+- `Aggregate.CNT` -- count of values
+- `Aggregate.CNT_D` -- count of unique values
 - `Aggregate.ARRAY` -- array of all values
-- `Aggregate.ARRAY_DISTINCT` -- array of unique values
+- `Aggregate.ARRAY_D` -- array of unique values
 - `Aggregate.MIN`, `Aggregate.MAX` -- min/max value
 
 ## FacetList and Facet -- Faceted Search Configuration
@@ -203,7 +203,7 @@ vc.set(Context.COMPACT, [
 Configure the facet panel for filtering records.
 
 ```python
-from deriva.ml.annotation_builders import FacetList, Facet, OutboundFK
+from deriva_ml.model.annotations import FacetList, Facet, OutboundFK
 
 facets = FacetList()
 
@@ -263,7 +263,7 @@ pattern = "[{{{Name}}}](/chaise/record/#{{{$catalog.id}}}/Schema:Table/RID={{{$u
 ```
 validate_template_syntax(template="{{{Name}}} ({{{Age}}})")
 get_handlebars_template_variables(template="{{{Name}}} ({{{Age}}})")
-preview_handlebars_template(template="{{{Name}}}", table="Subject", rid="2-XXXX")
+preview_handlebars_template(template="{{{Name}}}", table_name="Subject", rid="2-XXXX")
 ```
 
 ## Context Constants
@@ -271,18 +271,18 @@ preview_handlebars_template(template="{{{Name}}}", table="Subject", rid="2-XXXX"
 Use context constants instead of raw strings:
 
 ```python
-from deriva.ml.annotation_builders import Context
-
-Context.COMPACT           # "compact"
-Context.COMPACT_BRIEF     # "compact/brief"
-Context.COMPACT_SELECT    # "compact/select"
-Context.DETAILED          # "detailed"
-Context.ENTRY             # "entry"
-Context.ENTRY_EDIT        # "entry/edit"
-Context.ENTRY_CREATE      # "entry/create"
-Context.FILTER_COMPACT    # "filter/compact"
-Context.ROW_NAME          # "row_name"
-Context.ROW_NAME_COMPACT  # "row_name/compact"
-Context.ROW_NAME_DETAILED # "row_name/detailed"
-Context.DEFAULT           # "*"
+from deriva_ml.model.annotations import (
+    CONTEXT_DEFAULT,             # "*"
+    CONTEXT_COMPACT,             # "compact"
+    CONTEXT_COMPACT_BRIEF,       # "compact/brief"
+    CONTEXT_COMPACT_BRIEF_INLINE,# "compact/brief/inline"
+    CONTEXT_COMPACT_SELECT,      # "compact/select"
+    CONTEXT_DETAILED,            # "detailed"
+    CONTEXT_ENTRY,               # "entry"
+    CONTEXT_ENTRY_EDIT,          # "entry/edit"
+    CONTEXT_ENTRY_CREATE,        # "entry/create"
+    CONTEXT_EXPORT,              # "export"
+    CONTEXT_FILTER,              # "filter"
+    CONTEXT_ROW_NAME,            # "row_name"
+)
 ```

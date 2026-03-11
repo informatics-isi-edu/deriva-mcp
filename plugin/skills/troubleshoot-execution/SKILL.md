@@ -20,10 +20,12 @@ This guide covers common problems encountered when running DerivaML executions a
 **Solution**:
 - In Python, always use the context manager pattern:
   ```python
-  with ml.execution(workflow_rid="...") as exec:
+  from deriva_ml import DerivaML, ExecutionConfiguration
+
+  with ml.create_execution(config) as exe:
       # All execution work goes here
   ```
-- With MCP tools, ensure you called `start_execution` before attempting execution-scoped operations.
+- With MCP tools, ensure you called `start_execution()` before attempting execution-scoped operations.
 - If the execution was started but the error persists, the execution may have been stopped or may have failed. Check with `get_execution_info`.
 
 ---
@@ -35,11 +37,11 @@ This guide covers common problems encountered when running DerivaML executions a
 **Cause**: `upload_execution_outputs` was not called, or files were written to the wrong path.
 
 **Solution**:
-1. Call `upload_execution_outputs` **after** writing all files but **before** the execution context closes (i.e., inside the `with` block in Python).
-2. Ensure files are written to the **exact path** returned by `asset_file_path`. Writing to any other directory will cause the upload to miss those files.
+1. Call `upload_execution_outputs()` **after** the `with` block exits in Python, not inside it. With MCP tools, call it after `stop_execution()`.
+2. Ensure files are written to the **exact path** returned by `asset_file_path()`. Writing to any other directory will cause the upload to miss those files.
 3. Verify the file actually exists at the path before uploading:
    ```python
-   path = exec.asset_file_path("MyAssetTable", "output.csv")
+   path = exe.asset_file_path("Execution_Asset", "output.csv")
    # Write file to `path`
    # Verify: os.path.exists(path) should be True
    ```
@@ -140,9 +142,9 @@ This guide covers common problems encountered when running DerivaML executions a
 **Cause**: The execution context was not properly closed (e.g., crash without cleanup, not using context manager).
 
 **Solution**:
-- **Best practice**: Always use the context manager (`with ml.execution(...)`) which automatically handles cleanup on both success and failure.
+- **Best practice**: Always use the context manager (`with ml.create_execution(config) as exe:`) which automatically handles cleanup on both success and failure.
 - To fix a stuck execution manually:
-  - **Tool**: `update_execution_status` with the execution RID and status `Failed` (or `Complete` if the work actually finished).
+  - **Tool**: `update_execution_status` with `status="Failed"` and `message="Manually marked as failed"` (or `status="Complete"` if the work actually finished).
 - **Tool**: `get_execution_info` to inspect the execution's current state and metadata.
 - For future runs, always use the context manager to prevent this issue.
 
@@ -158,7 +160,7 @@ This guide covers common problems encountered when running DerivaML executions a
 - Check the relevant vocabulary resource to list existing terms.
 - Vocabulary term names are case-sensitive.
 - **Tool**: `add_term` to add the missing term to the appropriate vocabulary.
-- Common vocabularies: `Dataset_Type`, `Asset_Type`, `Workflow_Type`, `Execution_Status`.
+- Common vocabularies: `Dataset_Type`, `Asset_Type`, `Workflow_Type`, `Execution_Status_Type`.
 
 ---
 
@@ -179,7 +181,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 ### Inspect Execution State
 - **Tool**: `get_execution_info` with the execution RID to see full execution metadata, status, inputs, and outputs.
-- **Tool**: `get_execution_working_dir` to find the local working directory and inspect files directly.
+- **Tool**: `get_execution_working_dir` to find the local working directory and inspect files directly. (No params -- operates on the active execution.)
 
 ### Check Catalog State
 - Use the catalog resources to review the current catalog schema, tables, and vocabularies.
@@ -191,7 +193,7 @@ logging.basicConfig(level=logging.DEBUG)
 - **Tool**: `list_parent_executions` to find the parent execution if this is a nested step.
 
 ### Verify Working Directory
-- **Tool**: `get_execution_working_dir` returns the local filesystem path for the execution.
+- **Tool**: `get_execution_working_dir` returns the local filesystem path for the active execution.
 - Inspect this directory to verify:
   - Input files were downloaded correctly.
   - Output files were written to the correct locations.

@@ -14,10 +14,10 @@ Start by understanding what is in the dataset using catalog resources.
 
 ```
 # List available datasets
-query_table(table="Dataset")
+query_table(table_name="Dataset")
 
 # Get details about a specific dataset
-get_record(table="Dataset", rid="2-XXXX")
+get_record(table_name="Dataset", rid="2-XXXX")
 
 # See what element types the dataset contains
 list_dataset_members(dataset_rid="2-XXXX")
@@ -36,8 +36,8 @@ Read resource: deriva://table/Image/schema
 Read resource: deriva://table/Subject/schema
 
 # View sample data
-query_table(table="Image", limit=5)
-query_table(table="Subject", limit=5)
+query_table(table_name="Image", limit=5)
+query_table(table_name="Subject", limit=5)
 ```
 
 Key things to look for:
@@ -54,36 +54,38 @@ Joins all dataset tables into a single flat DataFrame, ideal for feeding into ML
 ```
 denormalize_dataset(
     dataset_rid="2-XXXX",
-    include_tables=["Image", "Subject", "Diagnosis"]  # Optional: limit which tables to join
+    include_tables=["Image", "Subject", "Diagnosis"]
 )
 ```
 
 **What it does:**
 - Follows foreign key relationships to join related tables
 - Produces a single flat table with columns from all joined tables
-- Column names are prefixed with the table name (e.g., `Image.URL`, `Subject.Age`, `Diagnosis.Label`)
+- Column names are prefixed with the table name (e.g., `Image_URL`, `Subject_Age`, `Diagnosis_Label`)
 - Handles many-to-one and one-to-one relationships automatically
 
 **When to use:** Interactive exploration, quick prototyping, building training DataFrames.
 
 **Parameters:**
 - `dataset_rid` (required): The dataset to denormalize
-- `include_tables` (optional): List of table names to include. If omitted, all tables in the dataset are joined.
+- `include_tables` (required): List of table names to include in the join
+- `version` (optional): Dataset version. If omitted, uses current version
+- `limit` (optional): Maximum rows to return (default: 1000)
 
 ### Option B: `query_table` -- Best for Specific Tables
 
 Query individual tables when you need fine-grained control or only need data from one table.
 
 ```
-# Get all images in a dataset
+# Get all images with a specific filter
 query_table(
-    table="Image",
-    filters=[{"column": "Dataset", "operator": "=", "value": "2-XXXX"}]
+    table_name="Image",
+    filters={"Subject": "2-XXXX"}
 )
 
 # Get specific columns
 query_table(
-    table="Subject",
+    table_name="Subject",
     columns=["RID", "Age", "Sex", "Species"]
 )
 ```
@@ -137,16 +139,16 @@ download_dataset(dataset_rid="2-XXXX", version="1.0.0")
 
 ### Common Column Patterns
 
-After denormalization, columns follow the pattern `TableName.ColumnName`:
+After denormalization, columns follow the pattern `TableName_ColumnName`:
 
 | Pattern | Example | Description |
 |---------|---------|-------------|
-| `Image.URL` | `https://...` | Asset download URL |
-| `Image.Filename` | `img_001.png` | Original filename |
-| `Subject.Age` | `42` | Numeric feature |
-| `Subject.Sex` | `Male` | Categorical feature from vocabulary |
-| `Diagnosis.Label` | `Malignant` | Classification label from vocabulary |
-| `Measurement.Value` | `3.14` | Numeric measurement |
+| `Image_URL` | `https://...` | Asset download URL |
+| `Image_Filename` | `img_001.png` | Original filename |
+| `Subject_Age` | `42` | Numeric feature |
+| `Subject_Sex` | `Male` | Categorical feature from vocabulary |
+| `Diagnosis_Label` | `Malignant` | Classification label from vocabulary |
+| `Measurement_Value` | `3.14` | Numeric measurement |
 
 ### Building a Training DataFrame
 
@@ -156,11 +158,11 @@ import pandas as pd
 
 # The denormalized result gives you a flat table
 # Select features and labels
-features = df[["Subject.Age", "Subject.Sex", "Measurement.Value"]]
-labels = df["Diagnosis.Label"]
+features = df[["Subject_Age", "Subject_Sex", "Measurement_Value"]]
+labels = df["Diagnosis_Label"]
 
 # Handle categorical variables
-features_encoded = pd.get_dummies(features, columns=["Subject.Sex"])
+features_encoded = pd.get_dummies(features, columns=["Subject_Sex"])
 
 # Split (or use pre-split nested datasets)
 from sklearn.model_selection import train_test_split
@@ -171,8 +173,8 @@ X_train, X_test, y_train, y_test = train_test_split(features_encoded, labels, te
 
 ```python
 # For image classification tasks
-image_urls = df["Image.URL"]
-labels = df["Diagnosis.Label"]
+image_urls = df["Image_URL"]
+labels = df["Diagnosis_Label"]
 
 # Download images using the URLs, or use download_dataset for batch download
 # If using download_dataset, images are already local
@@ -184,7 +186,7 @@ Datasets in DerivaML support versioning. Always pin to a specific version for re
 
 ```
 # Check current dataset version
-get_record(table="Dataset", rid="2-XXXX")
+get_record(table_name="Dataset", rid="2-XXXX")
 # Look for the Version field
 
 # Increment version after changes

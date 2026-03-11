@@ -31,8 +31,15 @@ def main():
 
     ml = DerivaML(hostname="...", catalog_id=...)
 
+    workflow = ml.create_workflow(
+        name="My Operation",
+        url="https://github.com/org/repo",
+        workflow_type="ETL",
+        description="..."
+    )
+
     config = ExecutionConfiguration(
-        workflow_rid="...",
+        workflow=workflow,
         description="...",
     )
 
@@ -49,7 +56,7 @@ if __name__ == "__main__":
 Key elements:
 - `argparse` for CLI arguments
 - `--dry-run` flag for testing without side effects
-- `ExecutionConfiguration` context manager for provenance tracking
+- `ExecutionConfiguration` with a `Workflow` object (not a string)
 - `execution.upload_execution_outputs()` called after the with block to record results
 
 ---
@@ -60,12 +67,11 @@ Create a new dataset and populate it with members.
 
 ```python
 with ml.create_execution(config, dry_run=args.dry_run) as execution:
-    dataset = execution.create_dataset(
-        name="training-v1",
-        dataset_type="Training",
+    dataset = ml.create_dataset(
+        dataset_types=["Training"],
         description="Training dataset with 10,000 balanced images.",
     )
-    execution.add_dataset_members(dataset.rid, member_rids)
+    ml.add_dataset_members(dataset["RID"], "Image", member_rids)
 
 execution.upload_execution_outputs()
 ```
@@ -74,15 +80,16 @@ execution.upload_execution_outputs()
 
 ## Dataset Splitting
 
-Split an existing dataset into train/val/test partitions with optional stratification and grouping.
+Split an existing dataset into train/val/test partitions with optional stratification.
 
 ```python
 with ml.create_execution(config, dry_run=args.dry_run) as execution:
-    splits = execution.split_dataset(
-        source_rid="1-ABC4",
-        splits={"train": 0.8, "val": 0.1, "test": 0.1},
-        stratify_by="Diagnosis",
-        group_by="Subject",
+    splits = ml.split_dataset(
+        dataset_rid="1-ABC4",
+        test_size=0.1,
+        val_size=0.1,
+        stratify_by_column="Image_Classification_Image_Class",
+        seed=42,
     )
 
 execution.upload_execution_outputs()
@@ -92,18 +99,24 @@ execution.upload_execution_outputs()
 
 ## Feature Creation and Population
 
-Create a new feature column on a table and populate it with values.
+Create a new feature and populate it with values.
 
 ```python
 with ml.create_execution(config, dry_run=args.dry_run) as execution:
-    feature = execution.create_feature(
-        name="Severity",
-        target_table="Image",
-        vocabulary="Severity_Grade",
-        description="Severity grading for chest X-ray findings.",
+    ml.create_feature(
+        table_name="Image",
+        feature_name="Severity",
+        terms=["Severity_Grade"],
+        comment="Severity grading for chest X-ray findings.",
     )
+
+    feature = ml.lookup_feature("Image", "Severity")
+    RecordClass = feature.feature_record_class()
+
+    records = []
     for image_rid, severity in annotations.items():
-        execution.add_feature_value(feature.name, image_rid, severity)
+        records.append(RecordClass(Image=image_rid, Severity_Grade=severity))
+    execution.add_features(records)
 
 execution.upload_execution_outputs()
 ```
@@ -118,9 +131,11 @@ Load data from an external source, transform it, and insert into the catalog.
 with ml.create_execution(config, dry_run=args.dry_run) as execution:
     # Load data from external source
     data = load_external_data(args.source)
-    # Transform and insert
-    for record in transform(data):
-        execution.insert_record("TargetTable", record)
+
+    # Transform and insert using pathBuilder
+    pb = ml.pathBuilder()
+    table = pb.schemas[ml.domain_schema].tables["TargetTable"]
+    table.insert(transform(data))
 
 execution.upload_execution_outputs()
 ```

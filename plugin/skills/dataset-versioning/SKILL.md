@@ -87,7 +87,7 @@ Follow semantic versioning for dataset versions:
 1. Make catalog changes (add features, fix labels, etc.)
 2. Increment version with description:
    ```
-   increment_dataset_version(rid="1-ABC4", description="Added severity grading feature")
+   increment_dataset_version(dataset_rid="1-ABC4", description="Added severity grading feature")
    ```
 3. Update config to new version:
    ```python

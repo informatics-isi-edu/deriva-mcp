@@ -46,10 +46,10 @@ Tables are the foundation of a Deriva catalog schema. Choose the right table typ
 create_table(table_name="Sample", columns=[...], foreign_keys=[...], comment="...")
 
 # Asset table
-create_asset_table(table_name="Slide_Image", columns=[...], comment="...")
+create_asset_table(asset_name="Slide_Image", columns=[...], comment="...")
 
 # Add column to existing table
-add_column(table="Subject", column_name="Weight_kg", column_type="float8", comment="...")
+add_column(table_name="Subject", column_name="Weight_kg", column_type="float8", comment="...")
 ```
 
 ## Reference Resources

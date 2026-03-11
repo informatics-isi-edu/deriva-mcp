@@ -2,6 +2,21 @@
 
 An execution is the fundamental unit of provenance in DerivaML. Every data transformation, model training run, or analysis should be wrapped in an execution to track what was done, with what inputs, and what outputs were produced.
 
+## Table of Contents
+
+- [Concepts](#concepts)
+- [Python API: Context Manager Pattern](#python-api-context-manager-pattern)
+- [MCP Tools Workflow](#mcp-tools-workflow)
+- [ExecutionConfiguration Details](#executionconfiguration-details)
+- [Downloading Execution Datasets](#downloading-execution-datasets)
+- [Registering Output Files](#registering-output-files)
+- [Useful Inspection and Management Tools](#useful-inspection-and-management-tools)
+- [Managing Asset Types](#managing-asset-types)
+- [Creating New Asset Tables](#creating-new-asset-tables)
+- [Tips](#tips)
+
+---
+
 ## Concepts
 
 - **Execution**: A recorded unit of work with inputs (datasets, assets), outputs (files, new data), and metadata (workflow, description, status).
@@ -13,12 +28,11 @@ An execution is the fundamental unit of provenance in DerivaML. Every data trans
 The recommended approach uses a `with` block that auto-starts and auto-stops the execution:
 
 ```python
-from deriva.ml import DerivaML, ExecutionConfiguration
+from deriva_ml import DerivaML, ExecutionConfiguration
 
 ml = DerivaML(hostname, catalog_id)
 
 # 1. Find or create a workflow
-workflows = ml.list_workflows()
 workflow = ml.create_workflow(
     name="Image Classification Training",
     url="https://github.com/org/repo",
@@ -44,10 +58,10 @@ with ml.create_execution(config) as exe:
     results = train_model(exe.working_dir)
 
     # Write output files using asset_file_path()
-    output_path = exe.asset_file_path("model_weights.pt", description="Trained model weights")
+    output_path = exe.asset_file_path("Execution_Asset", "model_weights.pt")
     save_model(results, output_path)
 
-    metrics_path = exe.asset_file_path("metrics.json", description="Training metrics")
+    metrics_path = exe.asset_file_path("Execution_Asset", "metrics.json")
     save_metrics(results, metrics_path)
 
 # 4. Upload AFTER exiting the context manager
@@ -58,54 +72,54 @@ exe.upload_execution_outputs()
 - `with` block automatically calls `start_execution()` on entry and `stop_execution()` on exit.
 - If an exception occurs inside the block, the execution status is set to "Failed".
 - You MUST call `upload_execution_outputs()` AFTER exiting the `with` block, not inside it.
-- Use `asset_file_path()` to register output files -- this both creates the file path and registers it as an output asset.
+- Use `asset_file_path(asset_table, filename)` to register output files -- this both creates the file path and registers it as an output asset.
 
 ## MCP Tools Workflow
 
 For interactive use or when working through the MCP interface:
 
 ```
-Step 1: Find or create a workflow
-  -> query_table(table="Workflow") or create_workflow(...)
-
-Step 2: Create the execution
+Step 1: Create the execution (also finds/creates the workflow)
   -> create_execution(
-       workflow_rid="2-XXXX",
+       workflow_name="Image Classification Training",
+       workflow_type="Training",
        description="Training run on labeled images",
        dataset_rids=["2-ABC1"],
        asset_rids=["2-DEF2"]
      )
   Returns: execution RID
 
-Step 3: Start the execution
-  -> start_execution(execution_rid="2-YYYY")
+Step 2: Start the execution
+  -> start_execution()
 
-Step 4: Download input data
-  -> download_execution_dataset(execution_rid="2-YYYY")
+Step 3: Download input data
+  -> download_execution_dataset(dataset_rid="2-ABC1", version="1.0.0")
 
-Step 5: Do your work
+Step 4: Do your work
   (run notebooks, scripts, generate outputs)
 
-Step 6: Register output files
-  -> asset_file_path(execution_rid="2-YYYY", filename="results.csv", description="Model predictions")
+Step 5: Register output files
+  -> asset_file_path(asset_name="Execution_Asset", file_name="results.csv")
 
-Step 7: Stop the execution
-  -> stop_execution(execution_rid="2-YYYY")
+Step 6: Stop the execution
+  -> stop_execution()
 
-Step 8: Upload outputs
-  -> upload_execution_outputs(execution_rid="2-YYYY")
+Step 7: Upload outputs
+  -> upload_execution_outputs()
 ```
+
+**Important:** MCP execution lifecycle tools (`start_execution`, `stop_execution`, `get_execution_working_dir`, `upload_execution_outputs`) operate on the **active execution** -- they take no `execution_rid` parameter.
 
 ## ExecutionConfiguration Details
 
 ```python
-from deriva.ml import ExecutionConfiguration
+from deriva_ml import ExecutionConfiguration
 
 config = ExecutionConfiguration(
-    workflow=workflow_rid_or_object,   # Required: which workflow
-    datasets=["2-ABC1", "2-ABC2"],    # Optional: input dataset RIDs
-    assets=["2-DEF1"],                # Optional: input asset RIDs
-    description="Run description",     # Optional: execution description
+    workflow=workflow_object,              # Required: Workflow object from create_workflow/lookup
+    datasets=["2-ABC1", "2-ABC2"],        # Optional: input dataset RIDs
+    assets=["2-DEF1"],                    # Optional: input asset RIDs
+    description="Run description",         # Optional: execution description
 )
 ```
 
@@ -122,7 +136,7 @@ with ml.create_execution(config) as exe:
 
 ```
 # MCP tools
-download_execution_dataset(execution_rid="2-YYYY")
+download_execution_dataset(dataset_rid="2-ABC1", version="1.0.0")
 ```
 
 The downloaded data lands in the execution's working directory under a structured layout.
@@ -132,63 +146,54 @@ The downloaded data lands in the execution's working directory under a structure
 Use `asset_file_path()` to both get the correct output path and register the file as an execution output:
 
 ```python
-# Python API
-output_path = exe.asset_file_path("predictions.csv", description="Model predictions on test set")
+# Python API — two required args: asset_table and filename
+output_path = exe.asset_file_path("Execution_Asset", "predictions.csv")
 # Write your data to output_path
 df.to_csv(output_path, index=False)
-
-# For subdirectories
-nested_path = exe.asset_file_path("plots/confusion_matrix.png", description="Confusion matrix plot")
 ```
 
 ```
 # MCP tools
-asset_file_path(execution_rid="2-YYYY", filename="predictions.csv", description="Model predictions")
+asset_file_path(asset_name="Execution_Asset", file_name="predictions.csv")
 ```
 
 ## Useful Inspection and Management Tools
 
 ### Get execution info
-```python
-info = ml.get_execution_info(execution_rid="2-YYYY")
+```
+# MCP tool
+get_execution_info(execution_rid="2-YYYY")
 # Returns: workflow, status, datasets, assets, nested executions, timestamps
 ```
 
 ### Update execution status
-```python
-ml.update_execution_status(execution_rid="2-YYYY", status="Running")
+```
+# MCP tool
+update_execution_status(status="Running", message="Processing batch 3")
 # Valid statuses: Pending, Running, Complete, Failed
 ```
 
 ### Restore a previous execution
-```python
-ml.restore_execution(execution_rid="2-YYYY")
+```
+# MCP tool
+restore_execution(execution_rid="2-YYYY")
 # Re-downloads execution assets and datasets to local working directory
 # Useful for debugging or continuing work from a previous execution
 ```
 
 ### Get execution working directory
-```python
-working_dir = ml.get_execution_working_dir(execution_rid="2-YYYY")
+```
+# MCP tool (operates on active execution, no params)
+get_execution_working_dir()
 ```
 
 ### Nested executions
 For multi-step pipelines, create nested executions within a parent:
 
-```python
-with ml.create_execution(parent_config) as parent_exe:
-    # First step
-    with ml.add_nested_execution(parent_exe, step_config) as step1:
-        # ... do step 1 work ...
-
-    # Second step
-    with ml.add_nested_execution(parent_exe, step2_config) as step2:
-        # ... do step 2 work ...
-```
-
 ```
 # MCP tools
-add_nested_execution(parent_rid="2-PARENT", workflow_rid="2-STEP1_WF", description="Preprocessing step")
+# First, create both parent and child executions, then link them:
+add_nested_execution(parent_execution_rid="2-PARENT", child_execution_rid="2-CHILD")
 ```
 
 ### List related executions
@@ -205,7 +210,7 @@ Asset Types are vocabulary terms that categorize assets (e.g., "Raw Image", "Tra
 
 ```
 # Create a new asset type
-add_asset_type(name="Normalized Image", description="Image after intensity normalization")
+add_asset_type(type_name="Normalized Image", description="Image after intensity normalization")
 
 # Tag an asset with a type
 add_asset_type_to_asset(asset_rid="2-IMG1", asset_type="Normalized Image")
@@ -220,9 +225,10 @@ When you need a new category of files:
 
 ```
 create_asset_table(
-    table_name="Processed_Image",
+    asset_name="Processed_Image",
     columns=[{"name": "Resolution", "type": "text", "nullok": true, "comment": "Image resolution"}],
-    referenced_tables=["Subject"]
+    referenced_tables=["Subject"],
+    comment="Processed microscopy images"
 )
 ```
 

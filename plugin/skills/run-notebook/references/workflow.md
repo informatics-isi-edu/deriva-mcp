@@ -26,8 +26,7 @@ The first code cell should contain all imports:
 
 ```python
 from pathlib import Path
-from deriva.ml import DerivaML
-from deriva.ml.config import DatasetSpecConfig
+from deriva_ml import DerivaML
 ```
 
 ### 2. Parameters Cell (Tagged "parameters")
@@ -56,7 +55,7 @@ When the notebook is run via papermill (by `deriva-ml-run` or the `run_notebook`
 Connect to the catalog:
 
 ```python
-ml = DerivaML(host=host, catalog_id=catalog_id, schema=schema)
+ml = DerivaML(hostname=host, catalog_id=catalog_id)
 ```
 
 ### 4. Execution Context
@@ -64,20 +63,32 @@ ml = DerivaML(host=host, catalog_id=catalog_id, schema=schema)
 Wrap the main computation in an execution context manager. This creates an execution record in the catalog, tracks provenance, and handles cleanup:
 
 ```python
-with ml.create_execution(
-    workflow_rid=workflow_rid,
-    datasets=[DatasetSpecConfig(rid=dataset_rid, version=dataset_version)],
+from deriva_ml import ExecutionConfiguration
+
+workflow = ml.lookup_workflow_by_url("https://github.com/my-org/my-repo")
+
+config = ExecutionConfiguration(
+    workflow=workflow,
+    datasets=[dataset_rid],
     description=f"Training run: lr={learning_rate}, bs={batch_size}, epochs={epochs}",
-) as execution:
+)
+
+with ml.create_execution(config) as execution:
     # Download data
-    dataset_path = execution.download_dataset(dataset_rid)
+    execution.download_execution_dataset()
 
     # Your training logic here
-    model = train(dataset_path, learning_rate, batch_size, epochs)
+    model = train(execution.working_dir, learning_rate, batch_size, epochs)
 
-    # Save outputs to the execution
-    execution.save_artifact("model_weights.pt", model.state_dict())
-    execution.save_metrics({"accuracy": 0.95, "loss": 0.12})
+    # Save outputs using asset_file_path
+    output_path = execution.asset_file_path("Execution_Asset", "model_weights.pt")
+    save_model(model.state_dict(), output_path)
+
+    metrics_path = execution.asset_file_path("Execution_Asset", "metrics.json")
+    save_metrics({"accuracy": 0.95, "loss": 0.12}, metrics_path)
+
+# Upload AFTER exiting the with block
+execution.upload_execution_outputs()
 ```
 
 ### 5. Save Execution RID
@@ -126,7 +137,7 @@ Always use `ml.create_execution()` for tracked work. The execution context:
 
 - Creates a timestamped execution record.
 - Links the execution to datasets, workflow, and code version.
-- Provides methods to save artifacts and metrics.
+- Provides `asset_file_path()` to register output files.
 - Automatically updates status on success or failure.
 - Records the git commit hash and branch.
 
@@ -143,8 +154,6 @@ Before running a notebook for production (non-dry-run):
 3. Bump the version if needed:
    ```bash
    uv run bump-version patch
-   git add pyproject.toml
-   git commit -m "Bump version to X.Y.Z"
    ```
 
 ## Running the Notebook with Tracking
@@ -154,7 +163,7 @@ Before running a notebook for production (non-dry-run):
 If your project has hydra-zen configs set up, the notebook can be run as part of an experiment:
 
 ```bash
-uv run deriva-ml-run +experiments=baseline
+uv run deriva-ml-run +experiment=baseline
 ```
 
 The experiment config can specify the notebook as the task function, with parameters injected from the config.
@@ -216,7 +225,7 @@ When a DerivaML notebook runs with execution tracking, these steps occur:
 
 3. **Notebook executed**: Papermill runs the notebook cell-by-cell, injecting parameters. Output is captured.
 
-4. **Results uploaded**: Artifacts saved via `execution.save_artifact()` and metrics saved via `execution.save_metrics()` are uploaded to the catalog.
+4. **Results uploaded**: Files saved via `execution.asset_file_path()` are uploaded to the catalog by `execution.upload_execution_outputs()`.
 
 5. **Status updated**: The execution status is set to "Complete" on success or "Failed" on error. The output notebook (with all outputs) is attached to the execution record.
 
@@ -247,4 +256,4 @@ When a DerivaML notebook runs with execution tracking, these steps occur:
 | `PapermillExecutionError` | A cell raised an exception | Check the output notebook for the traceback |
 | `AuthenticationError` during execution | Credentials expired mid-run | Re-authenticate and re-run |
 | `DERIVA_ML_SAVE_EXECUTION_RID` not found | Variable not set in notebook | Add the assignment after the execution context block |
-| Metrics not appearing in catalog | `save_metrics()` not called inside context | Move the call inside the `with` block |
+| Files not appearing in catalog | `upload_execution_outputs()` not called after `with` block | Call it after exiting the context manager |

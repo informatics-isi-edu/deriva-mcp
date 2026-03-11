@@ -28,10 +28,10 @@ Use catalog resources to see the current state:
 
 ```
 # View table annotations and column details
-get_table(table="Image")
+get_table(table_name="Image")
 
 # View sample data to understand what users see
-get_table_sample_data(table="Image", limit=5)
+get_table_sample_data(table_name="Image", limit=5)
 ```
 
 ## Step 2: Understand Display Contexts
@@ -57,20 +57,20 @@ Annotations can be set per-context, controlling how data appears in different Ch
 
 ### Table display name
 ```
-set_table_display_name(table="Image", display_name="Images")
+set_table_display_name(table_name="Image", display_name="Images")
 # Or set it contextually
-set_display_annotation(table="Image", display_name="Images")
+set_display_annotation(table_name="Image", display_name="Images")
 ```
 
 ### Column display name
 ```
-set_column_display_name(table="Image", column="URL", display_name="Image File")
-set_column_display_name(table="Subject", column="Age_At_Enrollment", display_name="Age at Enrollment")
+set_column_display_name(table_name="Image", column_name="URL", display_name="Image File")
+set_column_display_name(table_name="Subject", column_name="Age_At_Enrollment", display_name="Age at Enrollment")
 ```
 
 ### Column description (tooltip)
 ```
-set_column_description(table="Image", column="URL", description="Direct download link for the image file")
+set_column_description(table_name="Image", column_name="URL", description="Direct download link for the image file")
 ```
 
 ## Step 4: Configure Visible Columns
@@ -79,62 +79,49 @@ Control which columns appear and in what order for each context.
 
 ### View current visible columns
 ```
-get_table(table="Image")
+get_table(table_name="Image")
 # Check the visible_columns annotation in the response
 ```
 
 ### Add a column to a context
 ```
-add_visible_column(table="Image", context="compact", column="Filename")
-add_visible_column(table="Image", context="compact", column="Subject")
-add_visible_column(table="Image", context="compact", column="Diagnosis")
+add_visible_column(table_name="Image", context="compact", column="Filename")
+add_visible_column(table_name="Image", context="compact", column="Subject")
+add_visible_column(table_name="Image", context="compact", column="Diagnosis")
 ```
 
 ### Remove a column from a context
 ```
-remove_visible_column(table="Image", context="compact", column="RCT")
-remove_visible_column(table="Image", context="compact", column="RMT")
+remove_visible_column(table_name="Image", context="compact", column="RCT")
+remove_visible_column(table_name="Image", context="compact", column="RMT")
 ```
 
 ### Reorder columns
 ```
 reorder_visible_columns(
-    table="Image",
+    table_name="Image",
     context="compact",
-    columns=["Filename", "Subject", "Diagnosis", "Image_Type", "URL"]
+    new_order=["Filename", "Subject", "Diagnosis", "Image_Type", "URL"]
 )
 ```
 
 ### Set all visible columns at once
 ```
 set_visible_columns(
-    table="Image",
-    context="compact",
-    columns=["Filename", "Subject", "Diagnosis", "Image_Type", "URL"]
+    table_name="Image",
+    annotation={"compact": ["Filename", "Subject", "Diagnosis", "Image_Type", "URL"]}
 )
 ```
 
 ### Different columns per context
 ```
-# Compact view: show summary
 set_visible_columns(
-    table="Image",
-    context="compact",
-    columns=["Filename", "Subject", "Diagnosis"]
-)
-
-# Detailed view: show everything
-set_visible_columns(
-    table="Image",
-    context="detailed",
-    columns=["Filename", "Subject", "Diagnosis", "Image_Type", "URL", "File_Size", "Description"]
-)
-
-# Entry form: only editable fields
-set_visible_columns(
-    table="Image",
-    context="entry",
-    columns=["Filename", "Subject", "Diagnosis", "Image_Type", "Description"]
+    table_name="Image",
+    annotation={
+        "compact": ["Filename", "Subject", "Diagnosis"],
+        "detailed": ["Filename", "Subject", "Diagnosis", "Image_Type", "URL", "File_Size", "Description"],
+        "entry": ["Filename", "Subject", "Diagnosis", "Image_Type", "Description"]
+    }
 )
 ```
 
@@ -144,26 +131,29 @@ Row names determine how a record is identified when referenced from other tables
 
 ### Simple row name from a column
 ```
-set_row_name_pattern(table="Subject", pattern="{{{Name}}}")
+set_row_name_pattern(table_name="Subject", pattern="{{{Name}}}")
 ```
 
 ### Composite row name with multiple columns
 ```
-set_row_name_pattern(table="Subject", pattern="{{{Last_Name}}}, {{{First_Name}}}")
+set_row_name_pattern(table_name="Subject", pattern="{{{Last_Name}}}, {{{First_Name}}}")
 ```
 
 ### Row name with related data using Handlebars
 ```
-set_row_name_pattern(table="Image", pattern="{{{Filename}}} ({{{Diagnosis}}})")
+set_row_name_pattern(table_name="Image", pattern="{{{Filename}}} ({{{Diagnosis}}})")
 ```
 
 ### Table display with row ordering
 ```
 set_table_display(
-    table="Subject",
-    context="compact",
-    row_markdown_pattern="{{{Name}}} (Age: {{{Age}}})",
-    row_order=[{"column": "Name", "descending": false}]
+    table_name="Subject",
+    annotation={
+        "compact": {
+            "row_markdown_pattern": "{{{Name}}} (Age: {{{Age}}})",
+            "row_order": [{"column": "Name", "descending": false}]
+        }
+    }
 )
 ```
 
@@ -173,29 +163,33 @@ Control which related tables are shown as sections on the detail page of a recor
 
 ### Add a related table section
 ```
-add_visible_foreign_key(table="Subject", context="detailed", foreign_key="Image_Subject_fkey")
+add_visible_foreign_key(table_name="Subject", context="detailed", foreign_key=["deriva-ml", "Image_Subject_fkey"])
 ```
 
 ### Remove a related table section
 ```
-remove_visible_foreign_key(table="Subject", context="detailed", foreign_key="Image_Subject_fkey")
+remove_visible_foreign_key(table_name="Subject", context="detailed", foreign_key=["deriva-ml", "Image_Subject_fkey"])
 ```
 
 ### Reorder related table sections
 ```
 reorder_visible_foreign_keys(
-    table="Subject",
+    table_name="Subject",
     context="detailed",
-    foreign_keys=["Image_Subject_fkey", "Sample_Subject_fkey", "Diagnosis_Subject_fkey"]
+    new_order=[["deriva-ml", "Image_Subject_fkey"], ["deriva-ml", "Sample_Subject_fkey"], ["deriva-ml", "Diagnosis_Subject_fkey"]]
 )
 ```
 
 ### Set all visible foreign keys at once
 ```
 set_visible_foreign_keys(
-    table="Subject",
-    context="detailed",
-    foreign_keys=["Image_Subject_fkey", "Sample_Subject_fkey"]
+    table_name="Subject",
+    annotation={
+        "detailed": [
+            {"source": [{"inbound": ["deriva-ml", "Image_Subject_fkey"]}, "RID"]},
+            {"source": [{"inbound": ["deriva-ml", "Sample_Subject_fkey"]}, "RID"]}
+        ]
+    }
 )
 ```
 
@@ -231,4 +225,4 @@ To inspect current annotations on a specific table or column:
 - Row name patterns use Handlebars syntax: `{{{column_name}}}` for column values.
 - Foreign key columns are automatically rendered as links to the related record in Chaise.
 - Test your changes by viewing the table in Chaise after applying annotations.
-- If something looks wrong, use `get_table()` to inspect the current annotations.
+- If something looks wrong, use `get_table(table_name=...)` to inspect the current annotations.

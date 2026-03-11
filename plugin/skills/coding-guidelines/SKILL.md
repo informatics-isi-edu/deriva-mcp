@@ -120,7 +120,7 @@ See `setup-notebook-environment` for full environment setup and `run-notebook` f
 Prefer inheritance and composition over modifying DerivaML library code:
 
 ```python
-from deriva.ml import DerivaML
+from deriva_ml import DerivaML
 
 class MyProjectML(DerivaML):
     """Extended DerivaML with project-specific helpers."""

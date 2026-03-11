@@ -114,9 +114,9 @@ Then verify:
 2. **Test the import**: In the first cell, run:
 
 ```python
-from deriva.ml import DerivaML
+from deriva_ml import DerivaML
 
-ml = DerivaML(host="ml.derivacloud.org", catalog_id="1")
+ml = DerivaML(hostname="ml.derivacloud.org", catalog_id="1")
 print(f"Connected to {ml.host}, catalog {ml.catalog_id}")
 ```
 
@@ -164,7 +164,7 @@ Check the project's `pyproject.toml` for predefined dependency groups before add
 - [ ] Jupyter kernel installed (verify with `jupyter kernelspec list`)
 - [ ] Authenticated to Deriva (verify with `login --no-browser`)
 - [ ] JupyterLab starts and the project kernel is available
-- [ ] `from deriva.ml import DerivaML` imports without error
+- [ ] `from deriva_ml import DerivaML` imports without error
 - [ ] Can connect to the target catalog
 
 ## Reference Resources

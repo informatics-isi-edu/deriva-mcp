@@ -19,20 +19,19 @@ Datasets are the primary unit for organizing data in DerivaML. A dataset is a na
 
 ## Splitting Datasets
 
-Three split types are available via `split_dataset`:
+`split_dataset` follows scikit-learn's `train_test_split` conventions:
 
-| Split Type | Use Case | Key Parameter |
-|-----------|----------|---------------|
-| `random` | General train/test/val splits | `ratios`, `seed` |
-| `stratified` | Preserve label distribution across splits | `ratios`, `stratify_feature`, `seed` |
-| `labeled` | Separate records with/without feature values | `feature_name` |
+| Strategy | Use Case | Key Parameters |
+|----------|----------|----------------|
+| Random (default) | General train/test/val splits | `test_size`, `val_size`, `seed` |
+| Stratified | Preserve label distribution | `test_size`, `val_size`, `stratify_by_column`, `include_tables`, `seed` |
 
-All splits create nested child datasets automatically. Use `dry_run=true` to preview before committing.
+Two-way (train/test) by default. Add `val_size` for three-way (train/val/test). Use `*_types=["Labeled"]` when splits need ground truth labels. Use `dry_run=true` to preview before committing.
 
 ## Critical Rules and Gotchas
 
-1. **Always create datasets within an execution** — Use `create_execution_dataset`, not bare `create_dataset`, to maintain provenance.
-2. **Register element types before adding members** — `add_dataset_element_type` must be called for each source table before `add_dataset_members`.
+1. **Always create datasets within an execution** — Use `create_dataset` (which requires an active execution) to maintain provenance.
+2. **Register element types before adding members** — `add_dataset_element_type(table_name=...)` is a catalog-level operation; call it for each source table before `add_dataset_members`.
 3. **FK traversal in bag exports** — Downloaded bags include all FK-reachable records from registered element types. The export walks all foreign key paths (both directions) from member records, with vocabulary tables as natural terminators. Deep join chains (Image -> Sample -> Subject -> Study) can cause timeouts. Three fixes in order of preference: (a) increase `timeout` (default read timeout is 610s, e.g. `timeout=[10, 1800]` for 30 min), (b) use `exclude_tables` to prune specific tables from the FK graph, or (c) add intermediate table records as direct members to flatten the traversal.
 4. **Version after every modification** — Call `increment_dataset_version` after adding/removing members or changing element types.
 5. **Validate RIDs first** — Use `validate_rids` before `add_dataset_members` to catch invalid RIDs early.
@@ -44,13 +43,12 @@ All splits create nested child datasets automatically. Use `dry_run=true` to pre
 The standard sequence for creating a dataset:
 
 1. Create execution (with a workflow for provenance)
-2. `create_execution_dataset` — create the dataset within the execution
+2. `create_dataset` — create the dataset within the active execution
 3. `add_dataset_type` — label the dataset (Training, Complete, etc.)
-4. `add_dataset_element_type` — register source tables
-5. `add_dataset_members` — add records by RID
+4. `add_dataset_element_type` — register source tables (catalog-level)
+5. `add_dataset_members` — add records by RID (auto-increments version)
 6. `split_dataset` (optional) — create train/test/val child datasets
-7. `increment_dataset_version` — version the dataset
-8. `stop_execution` + `upload_execution_outputs` — finalize
+7. `stop_execution` + `upload_execution_outputs` — finalize
 
 For the full step-by-step guide with code examples (both Python API and MCP tools), see `references/workflow.md`.
 

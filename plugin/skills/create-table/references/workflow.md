@@ -101,7 +101,7 @@ Asset tables have built-in file management columns (URL, Filename, Length, MD5, 
 
 ```
 create_asset_table(
-    table_name="Slide_Image",
+    asset_name="Slide_Image",
     columns=[
         {"name": "Magnification", "type": "text", "nullok": true, "comment": "Microscope magnification (e.g., 10x, 40x)"},
         {"name": "Stain", "type": "text", "nullok": true, "comment": "Staining protocol used"},
@@ -133,13 +133,13 @@ After creation, verify the table was created correctly:
 
 ```
 # View the full table schema
-get_table(table="Sample")
+get_table(table_name="Sample")
 
 # View sample data (will be empty for new tables)
-get_table_sample_data(table="Sample", limit=5)
+get_table_sample_data(table_name="Sample", limit=5)
 
 # Count records
-count_table(table="Sample")
+count_table(table_name="Sample")
 ```
 
 ## Common Patterns
@@ -213,7 +213,7 @@ If you need to add a column after table creation:
 
 ```
 add_column(
-    table="Subject",
+    table_name="Subject",
     column_name="Weight_kg",
     column_type="float8",
     nullok=true,
@@ -225,13 +225,13 @@ add_column(
 
 ```
 # Make a column required or optional
-set_column_nullok(table="Subject", column="Notes", nullok=true)
+set_column_nullok(table_name="Subject", column_name="Notes", nullok=true)
 
 # Update column description
-set_column_description(table="Subject", column="Age", description="Age in years at enrollment, rounded down")
+set_column_description(table_name="Subject", column_name="Age", description="Age in years at enrollment, rounded down")
 
 # Set column display name
-set_column_display_name(table="Subject", column="Age_At_Enrollment", display_name="Enrollment Age")
+set_column_display_name(table_name="Subject", column_name="Age_At_Enrollment", display_name="Enrollment Age")
 ```
 
 ## Documentation Best Practices
@@ -241,8 +241,8 @@ set_column_display_name(table="Subject", column="Age_At_Enrollment", display_nam
 3. **Set display names**: Use `set_table_display_name` and `set_column_display_name` for user-friendly names that differ from the technical names.
 4. **Set row name patterns**: After creating a table, set a row name pattern so records are identifiable:
    ```
-   set_row_name_pattern(table="Subject", pattern="{{{Name}}}")
-   set_row_name_pattern(table="Sample", pattern="{{{Sample_ID}}} ({{{Subject}}})")
+   set_row_name_pattern(table_name="Subject", pattern="{{{Name}}}")
+   set_row_name_pattern(table_name="Sample", pattern="{{{Sample_ID}}} ({{{Subject}}})")
    ```
 5. **Set table descriptions**: Use `set_table_description` for longer descriptions beyond the initial comment.
 

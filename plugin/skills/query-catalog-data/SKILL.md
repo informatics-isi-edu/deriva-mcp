@@ -47,7 +47,7 @@ query_table(table_name="Image", limit=100, offset=200)
 get_record(table_name="Subject", rid="2-B4C8")
 
 # ML-ready flat data
-denormalize_dataset(dataset_rid="2-B4C8")
+denormalize_dataset(dataset_rid="2-B4C8", include_tables=["Image", "Subject"])
 ```
 
 ## Tips

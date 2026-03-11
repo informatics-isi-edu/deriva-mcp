@@ -59,7 +59,7 @@ query_table(table_name="Subject", limit=100, offset=200)   # Next 100
 ### Equality Filter
 
 ```
-query_table(table_name="Subject", filter={"Species": "Mouse"})
+query_table(table_name="Subject", filters={"Species": "Mouse"})
 ```
 
 ### Multiple AND Conditions
@@ -67,7 +67,7 @@ query_table(table_name="Subject", filter={"Species": "Mouse"})
 ```
 query_table(
     table_name="Subject",
-    filter={"Species": "Mouse", "Status": "Active"}
+    filters={"Species": "Mouse", "Status": "Active"}
 )
 ```
 
@@ -79,7 +79,7 @@ Use the `count_table` MCP tool to get the number of matching rows without fetchi
 
 ```
 count_table(table_name="Subject")
-count_table(table_name="Subject", filter={"Species": "Mouse"})
+count_table(table_name="Subject", filters={"Species": "Mouse"})
 ```
 
 ## Get Specific Records
@@ -109,7 +109,7 @@ validate_rids(rids=["2-B4C8", "2-D1E2"])
 Use the `denormalize_dataset` MCP tool to get ML-ready joined data from a dataset:
 
 ```
-denormalize_dataset(dataset_rid="2-B4C8")
+denormalize_dataset(dataset_rid="2-B4C8", include_tables=["Image", "Subject"])
 ```
 
 This joins the dataset's member tables, resolving foreign keys into human-readable values. The result is a flat table suitable for loading into a DataFrame.
@@ -119,7 +119,7 @@ This joins the dataset's member tables, resolving foreign keys into human-readab
 For simpler needs, `query_table` on the relevant table is sufficient:
 
 ```
-query_table(table_name="Image", filter={"Subject": "2-A1B2"})
+query_table(table_name="Image", filters={"Subject": "2-A1B2"})
 ```
 
 ### Download a Full Dataset
@@ -184,7 +184,7 @@ get_table_sample_data(table_name="Image_Cell_Count")
 ### Find Images for a Subject
 
 ```
-query_table(table_name="Image", filter={"Subject": "2-A1B2"})
+query_table(table_name="Image", filters={"Subject": "2-A1B2"})
 ```
 
 ### Find All Subjects in a Dataset
@@ -201,13 +201,12 @@ Deriva supports date filtering. Use ISO 8601 format:
 ```
 query_table(
     table_name="Execution",
-    filter={"Status": "Complete"},
-    sort=[{"column": "RCT", "descending": True}],
+    filters={"Status": "Complete"},
     limit=20
 )
 ```
 
-Note: For complex date range queries, you may need to use the ERMrest API directly or filter results client-side.
+Note: `query_table` does not support a `sort` parameter. For sorted or complex date range queries, filter results client-side or use the ERMrest API directly.
 
 ### Export Data for ML
 
@@ -215,7 +214,7 @@ To get data ready for ML training:
 
 1. **Identify the dataset**: `get_record(table_name="Dataset", rid="2-B4C8")`
 2. **Get the members**: `list_dataset_members(dataset_rid="2-B4C8")`
-3. **Denormalize**: `denormalize_dataset(dataset_rid="2-B4C8")`
+3. **Denormalize**: `denormalize_dataset(dataset_rid="2-B4C8", include_tables=["Image", "Subject"])`
 4. **Download assets**: `download_dataset(dataset_rid="2-B4C8", version=3)`
 
 ## Historical Queries with Versions
@@ -249,17 +248,17 @@ Here is a typical workflow for exploring and extracting data from a catalog:
 
 2. **Explore a table**: Read `deriva://table/Subject/schema` to understand columns, then `get_table_sample_data(table_name="Subject")` for sample rows.
 
-3. **Count records**: `count_table(table_name="Subject")` and `count_table(table_name="Subject", filter={"Species": "Mouse"})`.
+3. **Count records**: `count_table(table_name="Subject")` and `count_table(table_name="Subject", filters={"Species": "Mouse"})`.
 
-4. **Query with filters**: `query_table(table_name="Subject", filter={"Species": "Mouse"}, limit=50)`.
+4. **Query with filters**: `query_table(table_name="Subject", filters={"Species": "Mouse"}, limit=50)`.
 
 5. **Inspect a specific record**: `get_record(table_name="Subject", rid="2-A1B2")`.
 
-6. **Find related data**: `query_table(table_name="Image", filter={"Subject": "2-A1B2"})`.
+6. **Find related data**: `query_table(table_name="Image", filters={"Subject": "2-A1B2"})`.
 
-7. **Check features**: Read `deriva://table/Image/features`, then `query_table(table_name="Image_Cell_Count", filter={"Image": "2-C3D4"})`.
+7. **Check features**: Read `deriva://table/Image/features`, then `query_table(table_name="Image_Cell_Count", filters={"Image": "2-C3D4"})`.
 
-8. **Get dataset for ML**: `denormalize_dataset(dataset_rid="2-B4C8")` for a flat view, or `download_dataset(dataset_rid="2-B4C8", version=3)` for a full local copy.
+8. **Get dataset for ML**: `denormalize_dataset(dataset_rid="2-B4C8", include_tables=["Image", "Subject"])` for a flat view, or `download_dataset(dataset_rid="2-B4C8", version=3)` for a full local copy.
 
 9. **Share with a colleague**: Read `deriva://chaise-url/Subject/2-A1B2` to get a shareable URL.
 

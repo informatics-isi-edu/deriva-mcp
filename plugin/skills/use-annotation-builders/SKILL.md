@@ -24,7 +24,7 @@ DerivaML provides Python builder classes for constructing Deriva annotations wit
 
 ## Available Builder Classes
 
-All builders are imported from `deriva.ml.annotation_builders` and follow the same pattern: construct, configure, call `.to_dict()`, assign to `table.annotations[Builder.tag]`, then `ml.apply_annotations()`.
+All builders are imported from `deriva_ml.model.annotations` (or `deriva_ml.model` for convenience) and follow the same pattern: construct, configure, call `.to_dict()`, assign to `table.annotations[Builder.tag]`, then `ml.apply_annotations()`.
 
 | Builder | Purpose |
 |---------|---------|
@@ -35,7 +35,8 @@ All builders are imported from `deriva.ml.annotation_builders` and follow the sa
 | `ColumnDisplay` | Per-column value formatting and rendering |
 | `PseudoColumn` | Computed values and FK-traversed columns |
 | `FacetList` / `Facet` | Faceted search panel configuration |
-| `Context` | Constants for Chaise display contexts |
+
+Context constants (e.g., `CONTEXT_COMPACT`, `CONTEXT_DETAILED`, `CONTEXT_ROW_NAME`) are module-level variables, not a class.
 
 Helpers: `OutboundFK`, `InboundFK` (FK path navigation), `Aggregate` (COUNT, ARRAY, MIN, MAX, etc.).
 
@@ -46,11 +47,12 @@ For the full API reference of each builder class, see `references/builder-api.md
 ## Complete Example: Configuring an Image Table
 
 ```python
-from deriva.ml import DerivaML
-from deriva.ml.annotation_builders import (
+from deriva_ml import DerivaML
+from deriva_ml.model.annotations import (
     Display, VisibleColumns, VisibleForeignKeys, TableDisplay,
     ColumnDisplay, PseudoColumn, OutboundFK, InboundFK,
-    Aggregate, FacetList, Facet, Context
+    Aggregate, FacetList, Facet,
+    CONTEXT_COMPACT, CONTEXT_DETAILED, CONTEXT_ROW_NAME,
 )
 
 ml = DerivaML(hostname, catalog_id)
@@ -77,14 +79,14 @@ diagnosis = PseudoColumn(
     markdown_name="Diagnosis"
 )
 
-vc.set(Context.COMPACT, [
+vc.set(CONTEXT_COMPACT, [
     "Filename",
     subject_name.to_dict(),
     diagnosis.to_dict(),
     "Image_Type"
 ])
 
-vc.set(Context.DETAILED, [
+vc.set(CONTEXT_DETAILED, [
     "Filename",
     subject_name.to_dict(),
     diagnosis.to_dict(),
@@ -98,12 +100,12 @@ vc.set(Context.DETAILED, [
 
 # Table display: row name and ordering
 td = TableDisplay()
-td.set_row_name(Context.ROW_NAME, "{{{Filename}}}")
-td.set_row_order(Context.COMPACT, [{"column": "Filename", "descending": False}])
+td.set_row_name(CONTEXT_ROW_NAME, "{{{Filename}}}")
+td.set_row_order(CONTEXT_COMPACT, [{"column": "Filename", "descending": False}])
 
 # Column display: render URL as download link
 url_display = ColumnDisplay()
-url_display.set(Context.COMPACT, markdown_pattern="[Download]({{{URL}}})")
+url_display.set(CONTEXT_COMPACT, markdown_pattern="[Download]({{{URL}}})")
 
 # Facets for filtering
 facets = FacetList()
@@ -119,7 +121,7 @@ facets.add(Facet(
 
 # Visible foreign keys on detail page
 vfk = VisibleForeignKeys()
-vfk.set(Context.DETAILED, [
+vfk.set(CONTEXT_DETAILED, [
     {"source": [{"inbound": ["deriva-ml", "Feature_Value_Image_fkey"]}, "RID"]}
 ])
 

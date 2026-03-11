@@ -25,6 +25,8 @@ create_execution → start → work → stop → upload_execution_outputs
 ## Python API (Recommended)
 
 ```python
+from deriva_ml import DerivaML, ExecutionConfiguration
+
 config = ExecutionConfiguration(
     workflow=workflow,
     datasets=["2-ABC1"],
@@ -41,13 +43,13 @@ exe.upload_execution_outputs()
 ## MCP Tools
 
 ```
-create_execution(workflow_rid=..., description=..., dataset_rids=[...])
-start_execution(execution_rid=...)
-download_execution_dataset(execution_rid=...)
+create_execution(workflow_name="...", workflow_type="...", description="...", dataset_rids=[...])
+start_execution()
+download_execution_dataset(dataset_rid="...", version="...")
 # ... do work ...
-asset_file_path(execution_rid=..., asset_name=..., filename=...)
-stop_execution(execution_rid=...)
-upload_execution_outputs(execution_rid=...)
+asset_file_path(asset_name="Execution_Asset", file_name="results.csv")
+stop_execution()
+upload_execution_outputs()
 ```
 
 ## Key Tools

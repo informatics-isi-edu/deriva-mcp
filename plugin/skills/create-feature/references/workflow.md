@@ -2,6 +2,20 @@
 
 Features in DerivaML link a target table (e.g., Image, Subject) to vocabulary terms, creating a structured labeling system for ML. A feature is essentially a many-to-many relationship between domain records and vocabulary terms, with provenance tracking through executions.
 
+## Table of Contents
+
+1. [Concepts](#concepts) — Feature, target table, vocabulary, feature value
+2. [Step 1: Check Existing Features](#step-1-check-existing-features)
+3. [Step 2: Create a Vocabulary](#step-2-create-a-vocabulary-if-needed)
+4. [Step 3: Create the Feature](#step-3-create-the-feature) — With terms, assets, both, metadata columns
+5. [Step 4: Add Feature Values](#step-4-add-feature-values) — MCP tools and Python API
+6. [Step 5: Query Feature Values](#step-5-query-feature-values)
+7. [Complete Example: Image Classification Labels](#complete-example-image-classification-labels)
+8. [Managing Features](#managing-features) — Delete, list
+9. [Tips](#tips)
+
+---
+
 ## Concepts
 
 - **Feature**: A named labeling dimension (e.g., "Tumor Classification", "Image Quality Score").
@@ -163,26 +177,24 @@ start_execution()
 
 # Step 3: Add feature values
 # For simple features (single term or asset column), use add_feature_value:
+# Pass a list of entries, each with target_rid and value.
 add_feature_value(
     table_name="Image",
     feature_name="Tumor_Classification",
-    target_rid="2-IMG1",
-    value="Grade II"
-)
-
-add_feature_value(
-    table_name="Image",
-    feature_name="Tumor_Classification",
-    target_rid="2-IMG2",
-    value="Grade III"
+    entries=[
+        {"target_rid": "2-IMG1", "value": "Grade II"},
+        {"target_rid": "2-IMG2", "value": "Grade III"}
+    ]
 )
 
 # For features with multiple columns (e.g., term + confidence), use add_feature_value_record:
+# Pass a list of entries, each with target_rid plus column values.
 add_feature_value_record(
     table_name="Image",
     feature_name="Diagnosis",
-    target_rid="2-IMG1",
-    values={"Diagnosis_Type": "Normal", "confidence": 0.95}
+    entries=[
+        {"target_rid": "2-IMG1", "Diagnosis_Type": "Normal", "confidence": 0.95}
+    ]
 )
 
 # Step 4: Stop timing
@@ -199,36 +211,33 @@ from deriva_ml import DerivaML, ExecutionConfiguration
 
 ml = DerivaML(hostname, catalog_id)
 
+# Look up the workflow by URL or RID
+workflow = ml.lookup_workflow_by_url("https://github.com/my-org/my-repo")
+
 config = ExecutionConfiguration(
-    workflow_name="Manual Tumor Grading",
-    workflow_type="Annotation",
+    workflow=workflow,
+    datasets=[],
+    assets=[],
     description="Expert pathologist tumor grading"
 )
 
 with ml.create_execution(config) as exe:
-    exe.add_feature_value(
-        feature_name="Tumor_Classification",
-        target_rid="2-IMG1",
-        term_name="Grade II",
-        comment="Clear moderately differentiated pattern"
-    )
+    # Look up the feature and get its record class
+    feature = exe.catalog.lookup_feature("Image", "Tumor_Classification")
+    RecordClass = feature.feature_record_class()
 
-    exe.add_feature_value(
-        feature_name="Tumor_Classification",
-        target_rid="2-IMG2",
-        term_name="Grade III",
-        comment="Poorly differentiated with high mitotic rate"
-    )
+    # Create feature records
+    records = [
+        RecordClass(Image="2-IMG1", Tumor_Grade="Grade II"),
+        RecordClass(Image="2-IMG2", Tumor_Grade="Grade III"),
+    ]
 
     # Bulk feature values
     for image_rid, grade in labeling_results.items():
-        exe.add_feature_value(
-            feature_name="Tumor_Classification",
-            target_rid=image_rid,
-            term_name=grade
-        )
+        records.append(RecordClass(Image=image_rid, Tumor_Grade=grade))
 
-exe.upload_execution_outputs()
+    # Add all records in batch (execution RID set automatically)
+    exe.add_features(records)
 ```
 
 ## Step 5: Query Feature Values
@@ -286,15 +295,10 @@ start_execution()
 add_feature_value(
     table_name="Image",
     feature_name="Cell_Classification",
-    target_rid="2-IMG1",
-    value="Epithelial"
-)
-
-add_feature_value(
-    table_name="Image",
-    feature_name="Cell_Classification",
-    target_rid="2-IMG2",
-    value="Immune"
+    entries=[
+        {"target_rid": "2-IMG1", "value": "Epithelial"},
+        {"target_rid": "2-IMG2", "value": "Immune"}
+    ]
 )
 
 stop_execution()
@@ -322,5 +326,5 @@ query_table(table_name="Feature")
 - Multiple features can target the same table (e.g., an Image can have both "Tumor_Classification" and "Image_Quality" features).
 - A single record can have multiple values for the same feature (e.g., an image labeled by multiple annotators).
 - Use `add_synonym` to make vocabulary terms discoverable under alternative names.
-- Use `add_feature_value` for simple features (single term/asset) and `add_feature_value_record` for features with multiple columns.
+- Use `add_feature_value` for simple features (single term/asset) and `add_feature_value_record` for features with multiple columns. Both accept a batch `entries` list for efficient insertion.
 - Feature values are queryable like any other table, making them easy to use for training data preparation.

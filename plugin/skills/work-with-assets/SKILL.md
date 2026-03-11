@@ -14,10 +14,10 @@ Use the catalog resources and query tools to find assets:
 
 ```
 # List all tables — asset tables have URL, Filename, Length, MD5 columns
-query_table(table="Slide_Image", limit=5)
+query_table(table_name="Slide_Image", limit=5)
 
 # Search assets with filters
-query_table(table_name="Slide_Image", filter={"Subject": "2-A1B2"})
+query_table(table_name="Slide_Image", filters={"Subject": "2-A1B2"})
 
 # Look up a specific asset
 get_record(table_name="Slide_Image", rid="2-IMG1")
@@ -40,11 +40,11 @@ list_asset_executions(asset_rid="2-IMG1")
 # Download a specific asset by RID
 download_asset(asset_rid="2-IMG1")
 
-# Download all assets in an execution's input configuration
-download_execution_dataset(execution_rid="2-EXEC")
+# Download a dataset version as a BDBag (within an active execution)
+download_execution_dataset(dataset_rid="2-DS01", version="1.0.0")
 
-# Find where downloaded assets are located
-get_execution_working_dir(execution_rid="2-EXEC")
+# Find where downloaded assets are located (uses active execution)
+get_execution_working_dir()
 ```
 
 ## Reference Resources
