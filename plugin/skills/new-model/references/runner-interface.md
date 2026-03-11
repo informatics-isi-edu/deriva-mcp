@@ -225,7 +225,7 @@ records = [
 execution.add_features(records)
 ```
 
-`add_features()` automatically sets the Execution field on each record. Unlike output files (which are staged and uploaded after the model completes), feature values are written to the catalog immediately when `add_features()` is called.
+`add_features()` automatically sets the Execution field on each record. Like output files, feature values are staged locally as JSONL files in the execution's `feature/` directory and uploaded to the catalog when `upload_execution_outputs()` runs after the model completes.
 
 ## Complete Data Flow
 
