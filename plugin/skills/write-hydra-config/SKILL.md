@@ -19,10 +19,9 @@ This skill is the authoritative reference for the Python API used in DerivaML hy
 
 After any catalog-modifying action (create_dataset, split_dataset, create_workflow, etc.), proactively offer to update the relevant config file using these patterns.
 
-## Reference Files
+## Reference File
 
-- `references/config-examples.md` — Full annotated code examples for every config group. Read the relevant section when writing or modifying a specific config file.
-- `references/config-templates.md` — Complete starter templates for creating a new project from scratch.
+- `references/config-reference.md` — Annotated examples and starter templates for every config group. Each section shows a populated example from a real project, followed by a minimal template. Read the relevant section when writing or modifying a specific config file.
 
 ## Config Groups Overview
 
