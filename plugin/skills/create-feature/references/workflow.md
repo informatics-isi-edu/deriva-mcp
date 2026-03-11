@@ -79,7 +79,7 @@ Feature values require an active execution for provenance tracking. Every label 
 - `entries`: list of dicts, each with `target_rid` plus column values matching the feature's schema
 - `execution_rid` (optional): defaults to the active execution
 
-**Step 3:** Call `stop_execution`. (No need to call `upload_execution_outputs` — feature value operations don't produce output files.)
+**Step 3:** Call `stop_execution`, then call `upload_execution_outputs` to write the staged feature values to the catalog.
 
 ### Python API with context manager
 
@@ -110,7 +110,11 @@ with ml.create_execution(config) as exe:
         records.append(RecordClass(Image=image_rid, Tumor_Grade=grade))
 
     # Add all records in batch (execution RID set automatically)
+    # Records are staged to JSONL on disk, not written to catalog yet
     exe.add_features(records)
+
+# Upload staged feature values to the catalog
+exe.upload_execution_outputs()
 ```
 
 ## Query Feature Values
@@ -169,7 +173,7 @@ Call `add_feature_value` with `table_name`: `"Image"`, `feature_name`: `"Cell_Cl
 - `{"target_rid": "2-IMG1", "value": "Epithelial"}`
 - `{"target_rid": "2-IMG2", "value": "Immune"}`
 
-Call `stop_execution`.
+Call `stop_execution`. Then call `upload_execution_outputs` to write the staged feature values to the catalog.
 
 ## Complete Example: Python API
 
@@ -205,4 +209,7 @@ with ml.create_execution(ExecutionConfiguration(workflow=workflow)) as exe:
         RecordClass(Image="2-IMG2", Cell_Type="Immune"),
     ]
     exe.add_features(records)
+
+# Upload staged feature values to catalog
+exe.upload_execution_outputs()
 ```

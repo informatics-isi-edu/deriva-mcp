@@ -186,9 +186,9 @@ For creating new asset tables and managing asset types, see the `work-with-asset
 
 ### Recording feature values
 
-An execution can also record **feature values** (e.g., per-image predictions, classification labels). Like output files, feature values are staged locally and uploaded when `upload_execution_outputs` is called.
+An execution can also record **feature values** (e.g., per-image predictions, classification labels). Like output files, feature values are **staged locally** and uploaded when `upload_execution_outputs` is called — they are not written to the catalog immediately.
 
-In MCP tools, call `add_feature_value` or `add_feature_value_record` during the execution. In Python, call `execution.add_features(records)` — this writes JSONL files to the execution's `feature/` directory on disk. The catalog is updated when `upload_execution_outputs()` processes these files.
+In MCP tools, call `add_feature_value` or `add_feature_value_record` during the execution. In Python, call `execution.add_features(records)`. Both write JSONL files to the execution's `feature/` directory on disk. The catalog is updated when `upload_execution_outputs()` processes these files.
 
 For creating features and populating values, see the `create-feature` skill.
 

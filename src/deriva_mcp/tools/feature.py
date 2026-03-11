@@ -202,18 +202,21 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             ml = conn_manager.get_active_or_raise()
 
-            # Get execution RID from active execution or parameter
-            # Priority: explicit parameter > user-created execution > MCP connection execution
+            # Get the active Execution object
+            # Priority: explicit execution_rid > user-created execution > MCP connection execution
+            execution = None
             exe_rid = execution_rid
+
             if not exe_rid:
                 conn_info = conn_manager.get_active_connection_info()
                 if conn_info and conn_info.active_tool_execution:
-                    exe_rid = conn_info.active_tool_execution.execution_rid
+                    execution = conn_info.active_tool_execution
+                    exe_rid = execution.execution_rid
 
-            # Fallback to MCP connection execution
             if not exe_rid:
                 mcp_execution = conn_manager.get_active_execution()
                 if mcp_execution:
+                    execution = mcp_execution
                     exe_rid = mcp_execution.execution_rid
 
             if not exe_rid:
@@ -245,28 +248,30 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     }
                 )
 
-            # Build record dicts for batch insert
+            # Build typed FeatureRecord instances
+            RecordClass = feature.feature_record_class()
             records = []
             for entry in entries:
-                records.append({
+                records.append(RecordClass(**{
                     feature.target_table.name: entry["target_rid"],
-                    "Feature_Name": feature_name,
-                    "Execution": exe_rid,
                     value_column: entry["value"],
-                })
+                }))
 
-            # Batch insert all records
-            pb = ml.pathBuilder()
-            path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
-            result = list(path.insert(records))
+            # Stage feature values via the execution's deferred write mechanism
+            if execution is not None:
+                execution.add_features(records)
+            else:
+                # Explicit execution_rid without an Execution object — use catalog API
+                for r in records:
+                    r.Execution = exe_rid
+                ml.add_features(records)
 
             return json.dumps(
                 {
                     "status": "added",
                     "feature_name": feature_name,
-                    "count": len(result),
+                    "count": len(records),
                     "execution_rid": exe_rid,
-                    "rids": [r.get("RID") for r in result],
                 }
             )
         except Exception as e:
@@ -317,18 +322,21 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         try:
             ml = conn_manager.get_active_or_raise()
 
-            # Get execution RID from active execution or parameter
-            # Priority: explicit parameter > user-created execution > MCP connection execution
+            # Get the active Execution object
+            # Priority: explicit execution_rid > user-created execution > MCP connection execution
+            execution = None
             exe_rid = execution_rid
+
             if not exe_rid:
                 conn_info = conn_manager.get_active_connection_info()
                 if conn_info and conn_info.active_tool_execution:
-                    exe_rid = conn_info.active_tool_execution.execution_rid
+                    execution = conn_info.active_tool_execution
+                    exe_rid = execution.execution_rid
 
-            # Fallback to MCP connection execution
             if not exe_rid:
                 mcp_execution = conn_manager.get_active_execution()
                 if mcp_execution:
+                    execution = mcp_execution
                     exe_rid = mcp_execution.execution_rid
 
             if not exe_rid:
@@ -342,32 +350,34 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Look up the feature
             feature = ml.lookup_feature(table_name, feature_name)
 
-            # Build record dicts for batch insert
+            # Build typed FeatureRecord instances
+            RecordClass = feature.feature_record_class()
             records = []
             for entry in entries:
-                record_dict = {
+                record_kwargs = {
                     feature.target_table.name: entry["target_rid"],
-                    "Feature_Name": feature_name,
-                    "Execution": exe_rid,
                 }
                 # Add all user-provided values (everything except target_rid)
                 for k, v in entry.items():
                     if k != "target_rid":
-                        record_dict[k] = v
-                records.append(record_dict)
+                        record_kwargs[k] = v
+                records.append(RecordClass(**record_kwargs))
 
-            # Batch insert all records
-            pb = ml.pathBuilder()
-            path = pb.schemas[feature.feature_table.schema.name].tables[feature.feature_table.name]
-            result = list(path.insert(records))
+            # Stage feature values via the execution's deferred write mechanism
+            if execution is not None:
+                execution.add_features(records)
+            else:
+                # Explicit execution_rid without an Execution object — use catalog API
+                for r in records:
+                    r.Execution = exe_rid
+                ml.add_features(records)
 
             return json.dumps(
                 {
                     "status": "added",
                     "feature_name": feature_name,
-                    "count": len(result),
+                    "count": len(records),
                     "execution_rid": exe_rid,
-                    "rids": [r.get("RID") for r in result],
                 }
             )
         except Exception as e:
