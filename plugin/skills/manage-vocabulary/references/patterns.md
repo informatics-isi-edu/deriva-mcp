@@ -31,7 +31,7 @@ Browse all vocabularies by reading the `deriva://catalog/vocabularies` resource.
 Built-in vocabularies can be extended with domain-specific terms using dedicated tools:
 
 - To add a **dataset type**, call `create_dataset_type_term` with `type_name` and `description`.
-- To add a **workflow type**, call `add_workflow_type` with `name` and `description`.
+- To add a **workflow type**, call `add_workflow_type` with `type_name` and `description`.
 
 For general vocabularies, use `add_term` instead (see the main skill).
 
