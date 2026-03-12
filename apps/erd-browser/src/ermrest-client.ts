@@ -1,48 +1,50 @@
-// ERMrest client for fetching catalog schema and record counts
-// In dev mode, requests go through Vite's proxy to avoid CORS issues.
-// Chaise links are absolute URLs pointing at the real server.
+// ERMrest client for fetching catalog schema and record counts.
+// Uses catalog-config.ts for connection settings (URL hash params or env vars).
+// Same-origin requests use credentials; cross-origin requests are anonymous.
 
 import type { CatalogSchema, EnrichedTable } from "./types";
 import { classifyTable } from "./types";
+import {
+  getCatalogConfig,
+  ermrestBaseUrl,
+  ermrestFetchOptions,
+} from "./catalog-config";
 
-function getConfig() {
-  const hostname = import.meta.env.VITE_CATALOG_HOST || "localhost";
-  const catalogId = import.meta.env.VITE_CATALOG_ID || "1";
-  const protocol = hostname === "localhost" ? "https" : "https";
-  return { hostname, catalogId, protocol };
-}
+// Re-export URL builders from catalog-config for backward compatibility
+export { chaiseRecordsetUrl, chaiseRecordUrl } from "./catalog-config";
 
-// API requests use relative paths → routed through Vite proxy in dev
-function ermrestBase() {
-  const { catalogId } = getConfig();
-  return `/ermrest/catalog/${catalogId}`;
-}
-
-// Chaise links are absolute — they open in the browser directly
-export function chaiseRecordsetUrl(schema: string, table: string): string {
-  const { hostname, catalogId, protocol } = getConfig();
-  return `${protocol}://${hostname}/chaise/recordset/#${catalogId}/${schema}:${table}`;
-}
-
-export function chaiseRecordUrl(
-  schema: string,
-  table: string,
-  rid: string
-): string {
-  const { hostname, catalogId, protocol } = getConfig();
-  return `${protocol}://${hostname}/chaise/record/#${catalogId}/${schema}:${table}/RID=${rid}`;
-}
+// Annotation tag constants (matching ERMRestJS and Chaise conventions)
+const TAGS = {
+  ASSET: "tag:isrd.isi.edu,2017:asset",
+  DISPLAY: "tag:misd.isi.edu,2015:display",
+  IGNORE: "tag:isrd.isi.edu,2016:ignore",
+  TABLE_DISPLAY: "tag:isrd.isi.edu,2016:table-display",
+  VISIBLE_COLUMNS: "tag:isrd.isi.edu,2016:visible-columns",
+  VISIBLE_FOREIGN_KEYS: "tag:isrd.isi.edu,2016:visible-foreign-keys",
+  VOCABULARY_MISD: "tag:misd.isi.edu,2015:vocabulary",
+  VOCABULARY_ISRD: "tag:isrd.isi.edu,2016:vocabulary",
+} as const;
 
 export function getCatalogInfo() {
-  return getConfig();
+  const { hostname, catalogId } = getCatalogConfig();
+  return { hostname, catalogId };
 }
 
 export async function fetchSchema(): Promise<CatalogSchema> {
-  const base = ermrestBase();
-  const resp = await fetch(`${base}/schema`, {
-    credentials: "include",
-  });
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const resp = await fetch(`${base}/schema`, opts);
   if (!resp.ok) {
+    if (resp.status === 401) {
+      const { isSameOrigin } = getCatalogConfig();
+      throw new Error(
+        isSameOrigin
+          ? "Unauthorized — please log in to the Deriva server."
+          : "Unauthorized — this catalog requires authentication. " +
+            "Either the catalog is private, or the server needs CORS " +
+            "configured to allow credentialed cross-origin requests."
+      );
+    }
     throw new Error(`Failed to fetch schema: ${resp.status} ${resp.statusText}`);
   }
   const raw = await resp.json();
@@ -53,10 +55,11 @@ export async function fetchTableCount(
   schema: string,
   table: string
 ): Promise<number> {
-  const base = ermrestBase();
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
   const resp = await fetch(
     `${base}/aggregate/${schema}:${table}/cnt:=cnt(*)`,
-    { credentials: "include" }
+    opts
   );
   if (!resp.ok) return -1;
   const data = await resp.json();
@@ -68,10 +71,11 @@ export async function fetchSampleRows(
   table: string,
   limit = 5
 ): Promise<Record<string, unknown>[]> {
-  const base = ermrestBase();
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
   const resp = await fetch(
     `${base}/entity/${schema}:${table}?limit=${limit}`,
-    { credentials: "include" }
+    opts
   );
   if (!resp.ok) return [];
   return resp.json();
@@ -92,13 +96,12 @@ export async function fetchPagedData(
   searchTerm?: string,
   searchColumns?: string[]
 ): Promise<PagedResult> {
-  const base = ermrestBase();
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
 
   // Build filter path for search
   let filterPath = "";
   if (searchTerm && searchColumns && searchColumns.length > 0) {
-    // Use ERMrest's ciregexp for case-insensitive regex search across columns
-    // Multiple columns are OR'd together using ;
     const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const filters = searchColumns.map(
       (col) => `${encodeURIComponent(col)}::ciregexp::${encodeURIComponent(escaped)}`
@@ -110,9 +113,9 @@ export async function fetchPagedData(
   if (afterValue !== undefined && afterValue !== null) {
     url += `@after(${encodeURIComponent(afterValue)})`;
   }
-  url += `?limit=${limit + 1}`; // fetch one extra to detect hasMore
+  url += `?limit=${limit + 1}`;
 
-  const resp = await fetch(url, { credentials: "include" });
+  const resp = await fetch(url, opts);
   if (!resp.ok) return { rows: [], hasMore: false };
   const data: Record<string, unknown>[] = await resp.json();
 
@@ -121,19 +124,50 @@ export async function fetchPagedData(
   return { rows, hasMore };
 }
 
-// Parse raw ERMrest /schema response into our CatalogSchema shape
-function parseErmrestSchema(raw: any): CatalogSchema {
-  const { hostname, catalogId } = getConfig();
+// ── Schema parsing ────────────────────────────────────────────────
 
-  // ERMrest returns { schemas: { schemaName: { tables: { tableName: { ... } } } } }
+const SYSTEM_COLS = new Set(["RID", "RCT", "RMT", "RCB", "RMB"]);
+const SKIP_SCHEMAS = new Set(["", "public", "ERMrest"]);
+
+// Standard vocabulary table columns (DerivaML convention)
+const VOCAB_COLUMNS = ["Name", "Description", "Synonyms", "ID", "URI"];
+
+function hasAssetAnnotation(tableObj: any): boolean {
+  const annotations = tableObj.annotations || {};
+  // Table-level asset annotation
+  if (annotations[TAGS.ASSET]) return true;
+  // Column-level asset annotations
+  const cols = tableObj.column_definitions || [];
+  for (const col of cols) {
+    if (col.annotations?.[TAGS.ASSET]) return true;
+  }
+  // Heuristic: Filename + URL columns (common Deriva asset pattern)
+  const colNames = new Set(cols.map((c: any) => c.name));
+  return colNames.has("Filename") && colNames.has("URL");
+}
+
+function hasVocabularyAnnotation(tableObj: any): boolean {
+  const annotations = tableObj.annotations || {};
+  if (annotations[TAGS.VOCABULARY_MISD] || annotations[TAGS.VOCABULARY_ISRD]) return true;
+  // Heuristic: has all standard vocabulary columns
+  const colNames = new Set((tableObj.column_definitions || []).map((c: any) => c.name));
+  return VOCAB_COLUMNS.every((c) => colNames.has(c));
+}
+
+function isIgnored(tableObj: any): boolean {
+  return Boolean(tableObj.annotations?.[TAGS.IGNORE]);
+}
+
+function parseErmrestSchema(raw: any): CatalogSchema {
+  const { hostname, catalogId } = getCatalogConfig();
+
   const schemas: CatalogSchema["schemas"] = {};
   const domainSchemas: string[] = [];
   let mlSchema = "deriva-ml";
   let defaultSchema = "";
 
   for (const [schemaName, schemaObj] of Object.entries(raw.schemas as Record<string, any>)) {
-    // Skip system schemas
-    if (schemaName === "" || schemaName === "public" || schemaName === "ERMrest") continue;
+    if (SKIP_SCHEMAS.has(schemaName)) continue;
 
     if (schemaName === "deriva-ml") {
       mlSchema = schemaName;
@@ -147,18 +181,17 @@ function parseErmrestSchema(raw: any): CatalogSchema {
     for (const [tableName, tableObj] of Object.entries(
       (schemaObj as any).tables as Record<string, any>
     )) {
-      const columns = Object.values(
-        (tableObj.column_definitions || []) as any[]
-      ).map((col: any) => ({
+      // Skip tables marked as ignored
+      if (isIgnored(tableObj)) continue;
+
+      const columns = (tableObj.column_definitions || []).map((col: any) => ({
         name: col.name,
         type: col.type?.typename || "unknown",
         nullok: col.nullok ?? true,
         comment: col.comment || "",
       }));
 
-      // Filter system columns
-      const systemCols = new Set(["RID", "RCT", "RMT", "RCB", "RMB"]);
-      const userColumns = columns.filter((c) => !systemCols.has(c.name));
+      const userColumns = columns.filter((c: any) => !SYSTEM_COLS.has(c.name));
 
       const foreignKeys = (tableObj.foreign_keys || []).map((fk: any) => {
         const fkCols = fk.foreign_key_columns?.map((c: any) => c.column_name) || [];
@@ -167,64 +200,47 @@ function parseErmrestSchema(raw: any): CatalogSchema {
         const refTable = fk.referenced_columns?.[0]?.table_name || "";
         return {
           columns: fkCols,
-          referenced_table: `${refSchema}.${refTable}`,
+          referenced_table: refSchema && refTable ? `${refSchema}.${refTable}` : "",
           referenced_columns: refCols,
         };
-      });
+      }).filter((fk: any) => fk.referenced_table); // drop malformed FKs
 
-      // Determine table type from annotations and column patterns
-      const annotations = tableObj.annotations || {};
-      const colNames = new Set(columns.map((c: any) => c.name));
+      const isVocabulary = hasVocabularyAnnotation(tableObj);
+      const isAsset = !isVocabulary && hasAssetAnnotation(tableObj);
 
-      // Vocabulary: annotation tag or standard vocabulary column pattern
-      const isVocabulary = Boolean(
-        annotations["tag:misd.isi.edu,2015:vocabulary"] ||
-        annotations["tag:isrd.isi.edu,2016:vocabulary"] ||
-        (colNames.has("Name") && colNames.has("Description") &&
-         colNames.has("Synonyms") && colNames.has("ID") && colNames.has("URI"))
-      );
-
-      // Asset: annotation tag or Filename+URL column pattern
-      const isAsset = Boolean(
-        annotations["tag:isrd.isi.edu,2017:asset"] ||
-        Object.keys(annotations).some(k => k.includes("asset")) ||
-        (colNames.has("Filename") && colNames.has("URL"))
-      );
-      // Association tables typically have only FKs and system columns
+      // Association: non-vocab, non-asset table whose user columns are all FK columns
       const isAssociation =
         !isVocabulary &&
         !isAsset &&
         userColumns.length > 0 &&
-        userColumns.every(
-          (c) =>
-            foreignKeys.some((fk: any) => fk.columns.includes(c.name))
+        userColumns.every((c: any) =>
+          foreignKeys.some((fk: any) => fk.columns.includes(c.name))
         );
 
-      // Extract visible-columns annotation
-      // The annotation can have contexts: "compact", "detailed", "entry", "*"
-      // We prefer "compact" for table browsing, fall back to "*"
-      const visColsAnno = annotations["tag:isrd.isi.edu,2016:visible-columns"];
+      // Extract visible-columns annotation (prefer compact context)
+      const annotations = tableObj.annotations || {};
+      const visColsAnno = annotations[TAGS.VISIBLE_COLUMNS];
       let visibleColumns: string[] | undefined;
       if (visColsAnno) {
         const ctx = visColsAnno.compact || visColsAnno["*"] || visColsAnno.detailed;
         if (Array.isArray(ctx)) {
-          // Each entry can be a string (column name) or an array/object (FK path)
-          // We only extract simple column name strings
           visibleColumns = ctx
             .filter((entry: any) => typeof entry === "string")
-            .filter((name: string) => !systemCols.has(name));
+            .filter((name: string) => !SYSTEM_COLS.has(name));
         }
       }
 
-      // Extract display name
-      const displayAnno =
-        annotations["tag:isrd.isi.edu,2015:display"] ||
-        annotations["tag:misd.isi.edu,2015:display"];
+      // Display name from annotation
+      const displayAnno = annotations[TAGS.DISPLAY];
       const displayName = displayAnno?.name || undefined;
 
-      // Extract row name pattern
-      const tableDisplayAnno = annotations["tag:isrd.isi.edu,2016:table-display"];
+      // Row name pattern from table-display annotation
+      const tableDisplayAnno = annotations[TAGS.TABLE_DISPLAY];
       const rowNamePattern = tableDisplayAnno?.row_name?.row_markdown_pattern || undefined;
+
+      // Extract features: look for DerivaML-style feature associations
+      // Features are tables named <TargetTable>_<VocabTerm> with FK refs to both
+      const features = detectFeatures(tableName, schemaName, raw);
 
       tables[tableName] = {
         comment: tableObj.comment || "",
@@ -236,6 +252,7 @@ function parseErmrestSchema(raw: any): CatalogSchema {
         visible_columns: visibleColumns,
         display_name: displayName,
         row_name_pattern: rowNamePattern,
+        features,
       };
     }
 
@@ -250,6 +267,42 @@ function parseErmrestSchema(raw: any): CatalogSchema {
     catalog_id: catalogId,
     schemas,
   };
+}
+
+// Detect DerivaML feature tables that reference a given target table.
+// Feature tables follow the naming pattern: <TargetTable>_<FeatureName>
+// and have FKs to both the target table and a vocabulary table.
+function detectFeatures(
+  targetTable: string,
+  schemaName: string,
+  rawSchema: any
+): { name: string; feature_table: string }[] {
+  const features: { name: string; feature_table: string }[] = [];
+  const schemaObj = rawSchema.schemas?.[schemaName];
+  if (!schemaObj?.tables) return features;
+
+  for (const [tblName, tblObj] of Object.entries(schemaObj.tables as Record<string, any>)) {
+    // Feature tables start with the target table name + underscore
+    if (!tblName.startsWith(targetTable + "_")) continue;
+    if (tblName === targetTable) continue;
+
+    // Check it has a FK to the target table
+    const fks = (tblObj as any).foreign_keys || [];
+    const refsTarget = fks.some((fk: any) =>
+      fk.referenced_columns?.some(
+        (rc: any) => rc.table_name === targetTable && rc.schema_name === schemaName
+      )
+    );
+    if (!refsTarget) continue;
+
+    const featureName = tblName.slice(targetTable.length + 1);
+    features.push({
+      name: featureName,
+      feature_table: `${schemaName}.${tblName}`,
+    });
+  }
+
+  return features;
 }
 
 // Build enriched table list with counts

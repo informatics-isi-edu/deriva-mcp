@@ -5,18 +5,21 @@ import ERDCanvas from "@/components/erd/ERDCanvas";
 import DetailPanel from "@/components/erd/DetailPanel";
 import Toolbar from "@/components/erd/Toolbar";
 import SplitLayout from "@/components/erd/SplitLayout";
+import CatalogPicker from "@/components/erd/CatalogPicker";
 import type { CatalogSchema, EnrichedTable, SchemaFilter } from "@/types";
 import {
   fetchSchema,
   buildEnrichedTables,
   getCatalogInfo,
 } from "@/ermrest-client";
+import { hasCatalogConfig, getCatalogConfig } from "@/catalog-config";
 
 export default function App() {
   const [schema, setSchema] = useState<CatalogSchema | null>(null);
   const [tables, setTables] = useState<EnrichedTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasConfig, setHasConfig] = useState(hasCatalogConfig());
 
   // Navigation state
   const [viewMode, setViewMode] = useState<"schemas" | "tables">("schemas");
@@ -30,7 +33,29 @@ export default function App() {
 
   const { hostname, catalogId } = getCatalogInfo();
 
+  // Listen for hash changes (user navigating to a new catalog)
   useEffect(() => {
+    const onHashChange = () => {
+      setHasConfig(hasCatalogConfig());
+      // Reset state for new catalog
+      setSchema(null);
+      setTables([]);
+      setError(null);
+      setLoading(true);
+      setViewMode("schemas");
+      setActiveSchema(null);
+      setSelectedTable(null);
+      setSearchQuery("");
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  useEffect(() => {
+    if (!hasConfig) {
+      setLoading(false);
+      return;
+    }
     async function load() {
       try {
         setLoading(true);
@@ -45,7 +70,7 @@ export default function App() {
       }
     }
     load();
-  }, []);
+  }, [hasConfig]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -136,6 +161,11 @@ export default function App() {
     return tables.filter((t) => t.schema === activeSchema).length;
   }, [tables, activeSchema]);
 
+  // No catalog configured — show picker
+  if (!hasConfig) {
+    return <CatalogPicker />;
+  }
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50">
@@ -160,9 +190,13 @@ export default function App() {
           </div>
           <div className="text-xs text-slate-500 mb-4">{error}</div>
           <div className="text-xs text-slate-400 space-y-1">
-            <p>Make sure you are logged into {hostname} in this browser.</p>
+            <p>
+              {getCatalogConfig().isSameOrigin
+                ? `Make sure you are logged into ${hostname} in this browser.`
+                : "This catalog may require authentication, or the server may need CORS configured for credentialed requests."}
+            </p>
             <p className="font-mono text-[10px]">
-              VITE_CATALOG_HOST={hostname} VITE_CATALOG_ID={catalogId}
+              {hostname} / catalog {catalogId}
             </p>
           </div>
         </div>
