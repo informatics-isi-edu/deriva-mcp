@@ -54,8 +54,8 @@ uv run deriva-ml-run +experiment=baseline model_config.learning_rate=1e-2,1e-3,1
 
 After a run, check the execution was recorded:
 - Read `deriva://execution/{rid}` for details
-- Read `deriva://chaise-url/Execution/{rid}` for the web UI link
-- Verify: status is "Complete", correct datasets linked, output assets attached, git hash matches
+- Read `deriva://chaise-url/{rid}` for the web UI link
+- Verify: status is "Completed", correct datasets linked, output assets attached, git hash matches
 
 ## Reference Resources
 

@@ -258,14 +258,13 @@ The recommended Python pattern uses a `with` block:
 ```python
 with ml.create_execution(config) as exe:
     # On enter: creates execution record, sets status to Initializing → Running
-    exe.download_execution_dataset()
+    # Datasets specified in config are auto-downloaded
+    for dataset in exe.datasets:
+        dataset.restructure_assets(...)  # DatasetBag objects
     # ... do work ...
     path = exe.asset_file_path("Execution_Asset", "results.csv")
     # ... write to path ...
-    # On exit: sets status to Completed (or Failed on exception)
-
-# Upload AFTER exiting the with block
-exe.upload_execution_outputs()
+    # On exit: sets status to Completed (or Failed), outputs auto-uploaded
 ```
 
 **Key points:**
@@ -324,6 +323,6 @@ The restored execution becomes the active execution, so subsequent MCP tool call
 You need the execution's RID to restore it. Several ways to find it:
 
 - **From the catalog**: Read `deriva://execution/{execution_rid}` if you know the RID, or query the `Execution` table via `query_table` to search by workflow, status, or description.
-- **From local storage**: Call `list_storage_contents` with `filter`: `"executions"` to see execution working directories that still exist locally. Each entry includes the execution RID, a label, size, and modification time.
+- **From local storage**: Read the `deriva://storage/execution-dirs` resource to see execution working directories that still exist locally. Each entry includes the execution RID, a label, size, and modification time.
 - **From provenance**: Call `list_asset_executions` with an asset RID to find which execution produced it, or `list_dataset_executions` with a dataset RID to find executions that used it.
 - **From the web UI**: Browse executions in Chaise and copy the RID from the record page.

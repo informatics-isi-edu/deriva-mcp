@@ -24,8 +24,8 @@ Dataset members are the explicit records that belong to a dataset. If data is mi
 
 Every table that contributes members to a dataset must be registered as a **dataset element type**. If a table is not registered, its members will be silently excluded from the bag.
 
-- **Resource**: Check the dataset element types resource to see which tables are registered for this dataset type.
-- **Tool**: `add_dataset_element_type` to register a table as an element type if it is missing. You need to specify the dataset type and the table name.
+- **Resource**: Read `deriva://catalog/dataset-element-types` to see which tables are registered as element types in the catalog.
+- **Tool**: `add_dataset_element_type(table_name="...")` to register a table as an element type if it is missing.
 - Common tables that should be registered: `Subject`, `Observation`, `Image` (or other asset tables), and any custom tables whose records appear as dataset members.
 
 ---
@@ -97,7 +97,7 @@ The bag export algorithm uses foreign key (FK) path traversal to determine which
 
 **Fix**:
 - Vocabulary terms referenced by included records should be automatically exported. If they are missing, verify the FK relationship between the data table and the vocabulary table is intact.
-- **Tool**: `get_table` on the vocabulary table to confirm its structure.
+- Read `deriva://table/{vocab_table}/schema` to confirm the vocabulary table's structure.
 
 ---
 
@@ -238,4 +238,4 @@ Use this checklist when data is missing from a bag:
 | `download_dataset` | Download the dataset bag (supports `exclude_tables` and `timeout`) |
 | `denormalize_dataset` | Flatten dataset for analysis |
 | `query_table` | Inspect FK column values |
-| `get_table` | Check table schema and FK relationships |
+| `get_table` | Check table schema and FK relationships (or read `deriva://table/{name}/schema` resource) |

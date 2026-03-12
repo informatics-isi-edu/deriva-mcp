@@ -9,6 +9,8 @@ disable-model-invocation: true
 
 Consistent naming conventions for API methods ensure discoverability and predictable behavior. Use this reference when calling DerivaML tools or writing scripts.
 
+**Note**: This reference covers both MCP tools and Python API methods. Some methods listed here (e.g., `lookup_dataset`, `find_datasets`, `list_vocabulary_terms`, `list_tables`) exist only in the Python API, not as MCP tools. When working via MCP, use the corresponding resource or tool (e.g., `deriva://catalog/datasets` resource, `query_table` tool).
+
 ## Method Prefixes
 
 ### `lookup_*(identifier)` -- Single Entity by Identifier

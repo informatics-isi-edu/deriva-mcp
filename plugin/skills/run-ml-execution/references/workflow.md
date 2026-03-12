@@ -119,9 +119,11 @@ config = ExecutionConfiguration(
 # 3. Run within context manager
 with ml.create_execution(config) as exe:
     # Execution auto-starts (status → Running)
+    # Datasets specified in config are auto-downloaded
 
-    # Download input datasets
-    exe.download_execution_dataset()
+    # Access downloaded datasets (DatasetBag objects)
+    for dataset in exe.datasets:
+        dataset.restructure_assets(...)
 
     # Do your work
     results = train_model(exe.working_dir)
@@ -131,9 +133,7 @@ with ml.create_execution(config) as exe:
     save_model(results, output_path)
 
     # Execution auto-stops on exit (status → Completed, or Failed on exception)
-
-# 4. Upload AFTER exiting the context manager
-exe.upload_execution_outputs()
+    # Outputs auto-uploaded on context exit
 ```
 
 **Key points:**
@@ -300,8 +300,9 @@ config = ExecutionConfiguration(
 )
 
 with ml.create_execution(config) as exe:
-    # Download datasets (auto-recorded as inputs)
-    exe.download_execution_dataset()
+    # Datasets auto-downloaded; access as DatasetBag objects
+    for dataset in exe.datasets:
+        dataset.restructure_assets(...)
 
     # Access working directory
     data_dir = exe.working_dir

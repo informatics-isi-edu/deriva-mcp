@@ -25,7 +25,7 @@ To **look up a specific term**, read the `deriva://vocabulary/{vocab_name}/{term
 
 Call `create_vocabulary` with:
 - `vocabulary_name`: table name in PascalCase with underscores (e.g., `"Tissue_Type"`)
-- `comment`: what this vocabulary classifies (e.g., `"Classification of biological tissue types for histology analysis"`)
+- `comment` (optional, recommended): what this vocabulary classifies (e.g., `"Classification of biological tissue types for histology analysis"`)
 
 This creates a table in the domain schema with the standard vocabulary columns.
 

@@ -144,7 +144,7 @@ This guide covers common problems encountered when running DerivaML executions a
 **Solution**:
 - **Best practice**: Always use the context manager (`with ml.create_execution(config) as exe:`) which automatically handles cleanup on both success and failure.
 - To fix a stuck execution manually:
-  - **Tool**: `update_execution_status` with `status="Failed"` and `message="Manually marked as failed"` (or `status="Complete"` if the work actually finished).
+  - **Tool**: `update_execution_status` with `status="Failed"` and `message="Manually marked as failed"` (or `status="Completed"` if the work actually finished).
 - **Tool**: `get_execution_info` to inspect the execution's current state and metadata.
 - For future runs, always use the context manager to prevent this issue.
 
@@ -160,7 +160,7 @@ This guide covers common problems encountered when running DerivaML executions a
 - Check the relevant vocabulary resource to list existing terms.
 - Vocabulary term names are case-sensitive.
 - **Tool**: `add_term` to add the missing term to the appropriate vocabulary.
-- Common vocabularies: `Dataset_Type`, `Asset_Type`, `Workflow_Type`, `Execution_Status_Type`.
+- Common vocabularies: `Dataset_Type`, `Asset_Type`, `Workflow_Type`.
 
 ---
 
@@ -200,4 +200,4 @@ logging.basicConfig(level=logging.DEBUG)
   - No unexpected files or directory structures.
 
 ### Clean Up
-- **Tool**: `clean_execution_dirs` to remove local execution working directories that are no longer needed, freeing disk space.
+- **Resource**: Read `deriva://storage/execution-dirs` to list local execution working directories. Remove unneeded directories manually to free disk space.

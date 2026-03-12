@@ -37,11 +37,12 @@ def my_model(
     batch_size: int = 64,
     hidden_size: int = 128,
     # Framework-injected (always last, always default None)
-    ml_instance: DerivaML = None,
+    ml_instance: DerivaML | None = None,
     execution: Execution | None = None,
 ) -> None:
     """Train my model on the provided datasets."""
-    # Load data from execution datasets
+    # execution.datasets returns DatasetBag objects (not Dataset)
+    # DatasetBag has: restructure_assets(), get_table_as_dict(), get_table_as_dataframe(), list_tables()
     for dataset in execution.datasets:
         dataset.restructure_assets(
             asset_table="Image",

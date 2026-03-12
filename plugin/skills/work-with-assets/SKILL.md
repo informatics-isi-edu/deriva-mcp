@@ -29,8 +29,9 @@ For background on asset tables, types, RIDs, Hatrac storage, caching, and proven
 ### Downloading assets
 
 1. `download_asset` — download a single asset by RID
-2. `download_execution_dataset` — download a dataset as a BDBag with all asset files (within an execution)
-3. `restructure_assets` — organize downloaded assets into ML-ready directory layouts
+2. `download_dataset` — download a dataset as a BDBag with all asset files (no execution required)
+3. `download_execution_dataset` — same as above but within an active execution (records the dataset as an input for provenance)
+4. `restructure_assets` — organize downloaded assets into ML-ready directory layouts
 
 ### Creating asset tables
 

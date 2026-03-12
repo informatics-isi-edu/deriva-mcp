@@ -14,7 +14,7 @@ Every catalog entity that accepts a description MUST have one. If the user doesn
 - **Executions and Workflows**: `create_execution`, Workflow configuration -- description parameter
 - **Features**: `create_feature` -- description parameter
 - **Vocabulary Terms**: `add_term` -- description parameter
-- **Tables and Columns**: `create_table`, `set_table_description`, `set_column_description`
+- **Tables and Columns**: `create_table` (uses `comment` parameter), `set_table_description`, `set_column_description`
 - **Assets**: asset metadata descriptions
 
 For hydra-zen configuration descriptions (`with_description()` and `zen_meta`), see the `write-hydra-config` skill.

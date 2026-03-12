@@ -74,8 +74,9 @@ config = ExecutionConfiguration(
 )
 
 with ml.create_execution(config) as execution:
-    # Download data
-    execution.download_execution_dataset()
+    # Datasets specified in config are auto-downloaded
+    for dataset in execution.datasets:
+        dataset.restructure_assets(...)  # DatasetBag objects
 
     # Your training logic here
     model = train(execution.working_dir, learning_rate, batch_size, epochs)
@@ -87,8 +88,7 @@ with ml.create_execution(config) as execution:
     metrics_path = execution.asset_file_path("Execution_Asset", "metrics.json")
     save_metrics({"accuracy": 0.95, "loss": 0.12}, metrics_path)
 
-# Upload AFTER exiting the with block
-execution.upload_execution_outputs()
+    # Outputs auto-uploaded on context exit
 ```
 
 ### 5. Save Execution RID

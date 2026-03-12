@@ -108,8 +108,8 @@ uv run deriva-ml-run-notebook notebooks/<notebook_name>.ipynb \
 
 ## MCP Tools
 
-- `inspect_notebook` — View notebook structure, parameters, and tags without running
-- `run_notebook` — Execute notebook with parameters and return execution RID
+- `inspect_notebook(notebook_path)` — View notebook structure, parameters, and tags without running
+- `run_notebook(notebook_path, config_name, dry_run, host, catalog_id)` — Execute notebook with parameters and return execution RID. The `config_name` selects the named config defined with `notebook_config()`. Use `host`/`catalog_id` to override the catalog connection.
 
 ## Pre-Production Checklist
 
