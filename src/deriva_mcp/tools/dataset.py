@@ -1281,6 +1281,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         seed: int = 42,
         shuffle: bool = True,
         stratify_by_column: str | None = None,
+        stratify_missing: str = "error",
         element_table: str | None = None,
         include_tables: list[str] | None = None,
         training_types: list[str] | None = None,
@@ -1316,7 +1317,9 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         Image_Classification feature table, use
         ``Image_Classification_Image_Class``.
 
-        Use denormalize_dataset() first to see available column names.
+        Derive the column name from the table schema (via the
+        ``deriva://catalog/schema`` or ``deriva://catalog/features`` resource)
+        rather than calling denormalize_dataset().
 
         Args:
             source_dataset_rid: RID of the source dataset to split.
@@ -1333,6 +1336,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 for stratified splitting. Maintains class distribution
                 across all partitions. Requires include_tables.
                 Example: "Image_Classification_Image_Class".
+            stratify_missing: Policy for null values in the stratify column.
+                "error" (default): raise if any nulls exist, reporting count
+                and percentage. "drop": exclude rows with null values from
+                the split. "include": treat nulls as a separate class.
+                Only used when stratify_by_column is set.
             element_table: Element table to split (e.g., "Image"). If not
                 specified, auto-detected from the dataset's members.
             include_tables: Tables to include when denormalizing. Required
@@ -1390,6 +1398,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 seed=seed,
                 shuffle=shuffle,
                 stratify_by_column=stratify_by_column,
+                stratify_missing=stratify_missing,
                 element_table=element_table,
                 include_tables=include_tables,
                 training_types=training_types,

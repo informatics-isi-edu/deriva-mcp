@@ -138,7 +138,24 @@ To **create a three-way split**, also include `val_size` (e.g., `0.1` for 10% Va
 
 ### Stratified and labeled splits
 
-To maintain class distribution, add `stratify_by_column` with the denormalized column name (format: `{TableName}_{ColumnName}`). Use `denormalize_dataset` to discover available column names. `include_tables` is required when using stratification.
+To maintain class distribution, add `stratify_by_column` with the denormalized column name. Derive this from the table schema — do **not** call `denormalize_dataset` just to discover column names.
+
+**Finding the stratify column name:**
+
+1. Read `deriva://catalog/schema` or `deriva://catalog/features` to find the feature table name and its columns
+2. Construct the denormalized column name as `{FeatureTableName}_{ColumnName}`
+
+For example, if the feature table is `Execution_Image_Image_Classification` and the column is `Image_Class`, the stratify column is `Execution_Image_Image_Classification_Image_Class`.
+
+`include_tables` is required when using stratification — use the feature table name from the schema.
+
+**Handling missing values in the stratify column:** Not all members may have a value for the stratify column (e.g., unlabeled images in a labeled feature table). Use `stratify_missing` to control this:
+
+| Policy | Behavior |
+|--------|----------|
+| `"error"` (default) | Raise an error reporting the count and percentage of nulls |
+| `"drop"` | Exclude rows with missing values — only labeled rows are split |
+| `"include"` | Treat nulls as a distinct class — missing-value rows are distributed proportionally |
 
 To label partitions with ground truth metadata (needed for evaluation, ROC curves, etc.), add `training_types`, `testing_types`, and/or `validation_types` (e.g., `["Labeled"]`).
 
@@ -147,6 +164,7 @@ To label partitions with ground truth metadata (needed for evaluation, ROC curve
 - `test_size`: `0.2`, `val_size`: `0.1`, `seed`: `42`
 - `stratify_by_column`: `"Image_Classification_Image_Class"`
 - `include_tables`: `["Image", "Image_Classification"]`
+- `stratify_missing`: `"drop"` (if some images lack labels)
 - `training_types`: `["Labeled"]`, `testing_types`: `["Labeled"]`, `validation_types`: `["Labeled"]`
 
 ### Parameter reference
@@ -160,6 +178,7 @@ To label partitions with ground truth metadata (needed for evaluation, ROC curve
 | `seed` | `int` | `42` | Random seed for reproducibility |
 | `shuffle` | `bool` | `True` | Shuffle before splitting |
 | `stratify_by_column` | `str \| None` | `None` | Denormalized column name for stratified split |
+| `stratify_missing` | `str` | `"error"` | Policy for nulls in stratify column: `"error"`, `"drop"`, `"include"` |
 | `element_table` | `str \| None` | `None` | Table to split. Auto-detected if dataset has one element type |
 | `include_tables` | `list[str] \| None` | `None` | Tables for denormalization. Required with `stratify_by_column` |
 | `training_types` | `list[str] \| None` | `None` | Additional types for training set (e.g., `["Labeled"]`) |
@@ -249,6 +268,7 @@ with ml.create_execution(config) as exe:
         ml, dataset.dataset_rid,
         test_size=0.15, val_size=0.15,
         stratify_by_column="Image_Classification_Image_Class",
+        stratify_missing="drop",  # exclude unlabeled images
         include_tables=["Image", "Image_Classification"],
         seed=42, dry_run=True
     )
@@ -260,6 +280,7 @@ with ml.create_execution(config) as exe:
         ml, dataset.dataset_rid,
         test_size=0.15, val_size=0.15,
         stratify_by_column="Image_Classification_Image_Class",
+        stratify_missing="drop",
         include_tables=["Image", "Image_Classification"],
         training_types=["Labeled"],
         testing_types=["Labeled"],

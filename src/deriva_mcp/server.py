@@ -532,8 +532,9 @@ split_dataset("1-ABC", test_size=0.2,
               include_tables=["Image", "Image_Classification"])
 ```
 
-The `stratify_by_column` uses the denormalized column name format `{TableName}_{ColumnName}`.
-Use `denormalize_dataset` first to discover available column names.
+The `stratify_by_column` uses the denormalized column name format `{FeatureTableName}_{ColumnName}`.
+Derive this from the table schema (via `deriva://catalog/schema` or `deriva://catalog/features`)
+rather than calling `denormalize_dataset` just to discover column names.
 Stratification works with both two-way and three-way splits.
 
 **When creating splits, consider whether ground truth labels are needed:**

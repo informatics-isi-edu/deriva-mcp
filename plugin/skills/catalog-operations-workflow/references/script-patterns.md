@@ -84,12 +84,19 @@ Split an existing dataset into train/val/test partitions with optional stratific
 ```python
 from deriva_ml.dataset.split import split_dataset
 
+# Derive the stratify column name from the schema:
+#   Feature table: Execution_Image_Image_Classification
+#   Column: Image_Class
+#   Denormalized name: Execution_Image_Image_Classification_Image_Class
+
 splits = split_dataset(
     ml,
     source_dataset_rid="1-ABC4",
     test_size=0.1,
     val_size=0.1,
-    stratify_by_column="Image_Classification_Image_Class",
+    stratify_by_column="Execution_Image_Image_Classification_Image_Class",
+    stratify_missing="drop",  # "error" (default), "drop", or "include"
+    include_tables=["Image", "Execution_Image_Image_Classification"],
     seed=42,
 )
 ```
