@@ -1,4 +1,4 @@
----
+t---
 name: help
 description: "Use this skill when the user asks what they can do with DerivaML, needs help getting started, wants to know what capabilities are available, or seems unsure how to proceed with a DerivaML project. Also use when the user is new to DerivaML or asks general questions like 'what can you help me with', 'how does this work', or 'where do I start'."
 ---
