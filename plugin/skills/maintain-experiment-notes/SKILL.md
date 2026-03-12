@@ -1,6 +1,6 @@
 ---
 name: maintain-experiment-notes
-description: "ALWAYS use after any significant experiment decision — running a model or experiment, dataset creation, split strategy, feature selection, hyperparameter choice, architecture selection, catalog structure change, or interpreting experiment results. Append the decision and rationale to experiment-decisions.md automatically."
+description: "ALWAYS invoke this skill as part of completing any action that involves a design choice in a DerivaML project. This includes: creating or splitting datasets, creating features or vocabularies, adding vocabulary terms, running experiments or models, choosing hyperparameters, changing catalog structure (tables, columns, FKs), or interpreting experiment results. Invoke it in the SAME response where you perform the action — not in a later turn. If you just called create_feature, split_dataset, create_table, or deriva-ml-run, this skill applies. Even if the user did not ask you to document anything, silently append the decision and rationale to experiment-decisions.md."
 user-invocable: false
 ---
 
