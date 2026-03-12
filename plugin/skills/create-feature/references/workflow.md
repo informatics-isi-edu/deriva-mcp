@@ -129,8 +129,9 @@ Call `fetch_table_features` with:
 - `feature_name` (optional): fetch only a specific feature
 - `selector`: `"newest"` to pick the most recent value per record
 - `workflow`: a Workflow RID or Workflow_Type name to filter by source workflow
+- `execution`: an Execution RID to filter by a specific execution run
 
-`selector` and `workflow` are mutually exclusive. See `concepts.md` for the full Python API including custom selectors.
+Only one of `selector`, `workflow`, or `execution` may be specified. See `concepts.md` for the full Python API including custom selectors.
 
 ### Feature value resources
 

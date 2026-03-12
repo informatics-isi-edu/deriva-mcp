@@ -390,6 +390,7 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         feature_name: str | None = None,
         selector: str | None = None,
         workflow: str | None = None,
+        execution: str | None = None,
     ) -> str:
         """Fetch all feature values for a table, grouped by feature name.
 
@@ -400,16 +401,19 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         **Resolving multiple values per object:**
 
         When the same object has multiple values for a feature (e.g., labels from
-        different annotators or model runs), use ``selector`` or ``workflow`` to
-        pick one value per object:
+        different annotators or model runs), use ``selector``, ``workflow``, or
+        ``execution`` to pick one value per object:
 
         - **selector="newest"**: Picks the value with the most recent creation time
           (RCT). Good for getting the latest annotation regardless of source.
         - **workflow**: Filters to values produced by a specific workflow, then picks
           the newest. Pass a Workflow RID (e.g., "2-ABC1") or a Workflow_Type name
           (e.g., "Training"). Auto-detected.
+        - **execution**: Filters to values produced by a specific execution RID,
+          then picks the newest. Use this when multiple executions of the same
+          workflow have produced values and you want a specific run's results.
 
-        ``selector`` and ``workflow`` are mutually exclusive.
+        Only one of ``selector``, ``workflow``, or ``execution`` may be specified.
 
         Args:
             table_name: Table to fetch features for (e.g., "Image", "Subject").
@@ -419,7 +423,9 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 Picks one value per target object using the most recent RCT.
             workflow: Workflow RID or Workflow_Type name. Filters values to those
                 produced by executions of the matching workflow, then picks the
-                newest per target object. Mutually exclusive with selector.
+                newest per target object.
+            execution: Execution RID. Filters values to those produced by a
+                specific execution, then picks the newest per target object.
 
         Returns:
             JSON dict mapping feature names to lists of feature value records.
@@ -435,15 +441,20 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
             # Get values from Training workflow only
             fetch_table_features("Image", feature_name="Classification", workflow="Training")
+
+            # Get values from a specific execution
+            fetch_table_features("Image", feature_name="FooBar", execution="3WY2")
         """
         try:
             ml = conn_manager.get_active_or_raise()
 
-            if selector and workflow:
+            # Validate mutual exclusivity
+            specified = [x for x in [selector, workflow, execution] if x is not None]
+            if len(specified) > 1:
                 return json.dumps(
                     {
                         "status": "error",
-                        "message": "Cannot specify both 'selector' and 'workflow'. They are mutually exclusive.",
+                        "message": "Only one of 'selector', 'workflow', or 'execution' may be specified.",
                     }
                 )
 
@@ -461,7 +472,15 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     }
                 )
 
-            if workflow:
+            if execution:
+                selector_fn = FeatureRecord.select_by_execution(execution)
+                features = ml.fetch_table_features(
+                    table_name,
+                    feature_name=feature_name,
+                    selector=selector_fn,
+                )
+                result = {fname: [r.model_dump(mode="json") for r in records] for fname, records in features.items()}
+            elif workflow:
                 # Fetch without selector, then apply select_by_workflow per group
                 features = ml.fetch_table_features(table_name, feature_name=feature_name)
                 result = {}
