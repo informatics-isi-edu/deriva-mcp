@@ -15,17 +15,17 @@ This skill covers how to find, filter, and explore data in a Deriva catalog usin
 | `deriva://catalog/tables` | All tables with descriptions and row counts |
 | `deriva://catalog/schema` | Full schema with relationships |
 | `deriva://table/{name}/schema` | Column names, types, descriptions |
-| `deriva://table/{name}/sample` | Sample rows |
 | `deriva://table/{name}/features` | Features on a table |
 | `deriva://vocabulary/{name}` | Vocabulary terms |
 | `deriva://dataset/{rid}` | Dataset details and versions |
-| `deriva://chaise-url/{table}/{rid}` | Web UI link |
+| `deriva://chaise-url/{table_or_rid}` | Web UI link (pass table name or RID) |
 
 ## Key Tools
 
 | Tool | Purpose |
 |------|---------|
 | `query_table` | Query with filters, columns, limit/offset |
+| `get_table_sample_data` | Preview sample rows from a table |
 | `count_table` | Count matching records |
 | `get_record` | Fetch a single record by RID |
 | `validate_rids` | Check if RIDs exist |

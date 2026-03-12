@@ -252,8 +252,8 @@ uv run deriva-ml-run-notebook notebooks/roc_analysis.ipynb assets=roc_lr_sweep
 
 ## MCP Tools
 
-- `inspect_notebook` — view notebook structure and tags without running
-- `run_notebook` — execute notebook with parameters and return execution RID
+- `inspect_notebook(notebook_path)` — view notebook structure and tags without running
+- `run_notebook(notebook_path, config_name, dry_run, host, catalog_id)` — execute notebook with parameters and return execution RID. The `config_name` selects the named config defined with `notebook_config()`. Use `host`/`catalog_id` to override the catalog connection.
 
 ## Pre-Production Checklist
 

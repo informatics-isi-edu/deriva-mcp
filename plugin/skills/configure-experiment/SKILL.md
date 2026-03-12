@@ -17,6 +17,7 @@ This covers the structure of a DerivaML experiment project: config groups, how t
 | `assets` | Pre-trained weights, reference files | `configs/assets.py` |
 | `workflow` | What the code does | `configs/workflow.py` |
 | `model_config` | Hyperparameters and architecture | `configs/<model>.py` |
+| `notebook` | Notebook-specific configs | `configs/<notebook>.py` |
 | `experiment` | Named combinations of the above | `configs/experiments.py` |
 | `multiruns` | Sweeps over experiments/parameters | `configs/multiruns.py` |
 
@@ -80,16 +81,16 @@ Named multiruns are preferred because they're committed to the repo, self-docume
 
 For the full `multirun_config` API, see the `write-hydra-config` skill.
 
-## Update Experiments.md
+## Optional: Generate Experiments.md
 
-After adding or modifying experiment or multirun configs, regenerate `Experiments.md` in the project root. This file is a human-readable summary of all defined experiments — it should always reflect the current state of the config code.
+For projects with many experiments, consider maintaining an `Experiments.md` file in the project root as a human-readable summary of all defined experiments. This is optional but helpful for discoverability.
 
 1. **Read the config source** — `experiments.py`, `multiruns.py`, and any model config files they reference
 2. **Extract each experiment's** name, config group overrides, key parameters (epochs, lr, batch size, architecture), and purpose
 3. **Extract each multirun's** name, overrides, sweep ranges, and description
 4. **Write `Experiments.md`** with a quick-reference table, a multiruns table, and a detail section per experiment
 
-Include `Experiments.md` in the same commit as the config changes — it should travel with the code it describes.
+If maintained, include `Experiments.md` in the same commit as the config changes — it should travel with the code it describes.
 
 ### Format
 

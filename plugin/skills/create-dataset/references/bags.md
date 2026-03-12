@@ -80,7 +80,7 @@ Use `materialize=False` when you only need the tabular data (record metadata, fe
 
 Bags are cached locally by checksum. When you download the same dataset version again, the cached bag is reused without re-downloading. The cache key is `{dataset_rid}_{checksum}`.
 
-The cache location can be configured via the `cache_dir` argument when creating a DerivaML instance. Use `list_cache_contents` to see cached bags and `clear_cache` or `delete_cache_entry` to manage cache.
+The cache location can be configured via the `cache_dir` argument when creating a DerivaML instance. Read the `deriva://storage/cache` resource to see cached bags, and use `clear_cache` to remove all cached data.
 
 ## Downloading a Bag
 

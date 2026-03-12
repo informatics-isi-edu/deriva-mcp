@@ -45,7 +45,7 @@ After any such change:
 
 ## Rule 3: Always Provide Version Descriptions
 
-Version descriptions are required and must explain:
+Version descriptions are strongly recommended and should explain:
 - **What** changed in this version
 - **Why** the change was made
 - **Impact** on experiments or downstream usage

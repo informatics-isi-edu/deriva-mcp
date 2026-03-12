@@ -135,6 +135,41 @@ download_dataset(dataset_rid="2-XXXX", version="1.0.0")
 
 **When to use:** Production training pipelines, reproducible experiments, when you need actual files (not just URLs).
 
+### Restructure for ML Frameworks
+
+After downloading a dataset, use `restructure_assets` to organize files into the directory structure expected by ML frameworks (e.g., PyTorch ImageFolder):
+
+```
+restructure_assets(
+    dataset_rid="2-XXXX",
+    asset_table="Image",
+    output_dir="./ml_data",
+    group_by=["Diagnosis"],
+    version="1.0.0"
+)
+```
+
+This creates subdirectories by dataset type (Training/Testing) and group_by values:
+```
+./ml_data/
+  Training/
+    Normal/
+      image1.jpg
+    Abnormal/
+      image2.jpg
+  Testing/
+    Normal/
+      image3.jpg
+```
+
+**Parameters:**
+- `dataset_rid` (required): Dataset to restructure
+- `asset_table` (required): Table containing the assets (e.g., "Image")
+- `output_dir` (required): Where to create the directory structure
+- `group_by` (optional): Feature columns to group by (creates subdirectories)
+- `version` (optional): Dataset version
+- `use_symlinks` (optional, default true): Symlink instead of copying files
+
 ## Step 4: Use the Data
 
 ### Common Column Patterns

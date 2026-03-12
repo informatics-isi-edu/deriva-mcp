@@ -108,14 +108,7 @@ create_asset_table(
         {"name": "Width", "type": "int4", "nullok": true, "comment": "Image width in pixels"},
         {"name": "Height", "type": "int4", "nullok": true, "comment": "Image height in pixels"}
     ],
-    foreign_keys=[
-        {
-            "column": "Sample",
-            "referenced_table": "Sample",
-            "on_delete": "CASCADE",
-            "comment": "The sample this slide image was taken from"
-        }
-    ],
+    referenced_tables=["Sample"],
     comment="Microscopy slide images of biological samples"
 )
 ```

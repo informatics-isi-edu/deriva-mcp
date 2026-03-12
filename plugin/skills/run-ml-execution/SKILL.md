@@ -42,11 +42,13 @@ config = ExecutionConfiguration(
     description="Train CNN on labeled images"
 )
 with ml.create_execution(config) as exe:
-    exe.download_execution_dataset()
+    # Datasets specified in config are auto-downloaded; access via exe.datasets
+    for dataset in exe.datasets:
+        dataset.restructure_assets(...)  # DatasetBag objects
     # ... do work ...
     path = exe.asset_file_path("Execution_Asset", "results.csv")
     # ... write to path ...
-exe.upload_execution_outputs()
+    # Outputs auto-uploaded on context exit
 ```
 
 ## Key Tools Beyond the Lifecycle
@@ -58,7 +60,7 @@ exe.upload_execution_outputs()
 - `add_nested_execution` — link parent and child executions for multi-step pipelines
 - `list_nested_executions` / `list_parent_executions` — navigate execution hierarchies
 - `create_execution_dataset` — create an output dataset linked to the active execution
-- `list_storage_contents` — find local execution working directories and cached datasets
+- `deriva://storage/execution-dirs` resource — find local execution working directories
 
 For the full step-by-step guide with all parameters, see `references/workflow.md`.
 

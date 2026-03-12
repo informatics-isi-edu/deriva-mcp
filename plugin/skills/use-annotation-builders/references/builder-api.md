@@ -90,8 +90,8 @@ from deriva_ml.model.annotations import VisibleForeignKeys, CONTEXT_DETAILED
 vfk = VisibleForeignKeys()
 
 vfk.set(CONTEXT_DETAILED, [
-    {"source": [{"outbound": ["schema", "Image_Subject_fkey"]}, "RID"]},
-    {"source": [{"outbound": ["schema", "Sample_Subject_fkey"]}, "RID"]}
+    {"source": [{"inbound": ["schema", "Image_Subject_fkey"]}, "RID"]},
+    {"source": [{"inbound": ["schema", "Sample_Subject_fkey"]}, "RID"]}
 ])
 
 table.annotations[VisibleForeignKeys.tag] = vfk.to_dict()

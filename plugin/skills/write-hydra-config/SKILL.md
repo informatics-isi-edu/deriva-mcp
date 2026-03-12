@@ -120,7 +120,7 @@ Descriptions are recorded in execution metadata and make experiments self-docume
 | `ml_schema` | `str` | `'deriva-ml'` | Schema name for ML tables |
 | `logging_level` | `int` | `WARNING` | Logging level for DerivaML |
 | `deriva_logging_level` | `int` | `WARNING` | Logging level for underlying Deriva libraries |
-| `credential` | `Any` | `None` | Auth credentials. `None` = retrieved automatically |
+| `credential` | `dict \| None` | `None` | Auth credentials. `None` = retrieved automatically |
 | `s3_bucket` | `str \| None` | `None` | S3 bucket URL for bag storage (e.g., `'s3://my-bucket'`). Enables MINID |
 | `use_minid` | `bool \| None` | `None` | Use MINID for bags. `None` = auto (True if `s3_bucket` set) |
 | `check_auth` | `bool` | `True` | Verify authentication on connection |
@@ -197,3 +197,8 @@ After any catalog-modifying action (create_dataset, split_dataset, increment_dat
 3. Offer to update configs if versions are stale or new entities should be added
 4. Present changes for approval before modifying files
 5. Remind the user to commit config changes before running experiments
+
+## Related Skills
+
+- **`dataset-versioning`** — Rules for version pinning, when to increment, and semantic versioning conventions for datasets.
+- **`configure-experiment`** — Project structure, config group composition, and experiment setup.

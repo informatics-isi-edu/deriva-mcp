@@ -28,7 +28,7 @@ Use catalog resources to see the current state:
 
 ```
 # View table annotations and column details
-get_table(table_name="Image")
+# Read the deriva://table/Image/annotations resource
 
 # View sample data to understand what users see
 get_table_sample_data(table_name="Image", limit=5)
@@ -58,8 +58,6 @@ Annotations can be set per-context, controlling how data appears in different Ch
 ### Table display name
 ```
 set_table_display_name(table_name="Image", display_name="Images")
-# Or set it contextually
-set_display_annotation(table_name="Image", display_name="Images")
 ```
 
 ### Column display name
@@ -79,7 +77,7 @@ Control which columns appear and in what order for each context.
 
 ### View current visible columns
 ```
-get_table(table_name="Image")
+# Read the deriva://table/Image/annotations resource
 # Check the visible_columns annotation in the response
 ```
 

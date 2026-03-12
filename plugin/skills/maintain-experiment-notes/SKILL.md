@@ -1,6 +1,6 @@
 ---
 name: maintain-experiment-notes
-description: "ALWAYS use after any significant experiment decision — dataset creation, split strategy, feature selection, hyperparameter choice, architecture selection, or catalog structure change. Append the decision and rationale to experiment-decisions.md automatically."
+description: "ALWAYS use after any significant experiment decision — running a model or experiment, dataset creation, split strategy, feature selection, hyperparameter choice, architecture selection, catalog structure change, or interpreting experiment results. Append the decision and rationale to experiment-decisions.md automatically."
 user-invocable: false
 ---
 
@@ -20,6 +20,7 @@ Append an entry after any of these events:
 - **Split strategy**: Why this split ratio, why stratified, why patient-level vs image-level
 - **Feature selection**: Why this feature was created (or reused), what it represents, why this vocabulary
 - **Architecture/model choice**: Why this model, why these hyperparameters, what alternatives were considered
+- **Running experiments**: What was run, what the key results were, what was learned, what to try next
 - **Catalog structure changes**: Why a table was added/extended, why a column was added, why a FK was created
 - **Configuration choices**: Why this hydra-zen config, why these overrides, why this multirun setup
 - **Problem resolution**: What went wrong and why the chosen fix was correct (not just "fixed it")

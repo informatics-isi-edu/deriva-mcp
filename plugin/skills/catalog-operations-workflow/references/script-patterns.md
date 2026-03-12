@@ -67,13 +67,12 @@ Create a new dataset and populate it with members.
 
 ```python
 with ml.create_execution(config, dry_run=args.dry_run) as execution:
-    dataset = ml.create_dataset(
+    dataset = execution.create_dataset(
         dataset_types=["Training"],
         description="Training dataset with 10,000 balanced images.",
     )
-    ml.add_dataset_members(dataset["RID"], "Image", member_rids)
-
-execution.upload_execution_outputs()
+    dataset.add_dataset_members(member_rids)
+    # Outputs auto-uploaded on context exit
 ```
 
 ---
@@ -83,16 +82,16 @@ execution.upload_execution_outputs()
 Split an existing dataset into train/val/test partitions with optional stratification.
 
 ```python
-with ml.create_execution(config, dry_run=args.dry_run) as execution:
-    splits = ml.split_dataset(
-        dataset_rid="1-ABC4",
-        test_size=0.1,
-        val_size=0.1,
-        stratify_by_column="Image_Classification_Image_Class",
-        seed=42,
-    )
+from deriva_ml.dataset.split import split_dataset
 
-execution.upload_execution_outputs()
+splits = split_dataset(
+    ml,
+    source_dataset_rid="1-ABC4",
+    test_size=0.1,
+    val_size=0.1,
+    stratify_by_column="Image_Classification_Image_Class",
+    seed=42,
+)
 ```
 
 ---

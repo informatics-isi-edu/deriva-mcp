@@ -39,21 +39,21 @@ uv add torch torchvision  # ML framework deps
 ```toml
 [project]
 name = "my-ml-project"
-version = "0.1.0"
-requires-python = ">=3.11"
+dynamic = ["version"]
+requires-python = ">=3.12"
 dependencies = [
     "deriva-ml>=0.5.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 jupyter = ["jupyterlab", "papermill"]
 dev = ["pytest", "ruff"]
 
-[dependency-groups]
-jupyter = ["jupyterlab", "papermill"]
+[tool.setuptools_scm]
+# Version derived from git tags
 
 [project.scripts]
-deriva-ml-run = "my_project.configs:main"
+load-my-data = "scripts.load_data:main"
 ```
 
 ## Environment Management

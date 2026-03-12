@@ -150,10 +150,10 @@ uv run deriva-ml-run +experiment=baseline model_config.learning_rate=0.01 dry_ru
 
 ### Running Sweeps (Multirun)
 
-For parameter sweeps defined with `multirun_config()`:
+For parameter sweeps defined with `multirun_config()` (no `--multirun` flag needed):
 
 ```bash
-uv run deriva-ml-run +experiment=lr_batch_sweep --multirun
+uv run deriva-ml-run +multirun=lr_batch_sweep
 ```
 
 For ad-hoc sweeps using Hydra's comma syntax:
@@ -174,7 +174,7 @@ uv run deriva-ml-run +experiment=baseline,long_training --multirun
 
 After the run completes, verify the execution was recorded. Use the MCP resource:
 
-- Read `deriva://executions` to list recent executions.
+- Read `deriva://catalog/executions` to list recent executions.
 - Read `deriva://execution/{rid}` for details on a specific execution.
 
 ### View in Chaise
@@ -185,10 +185,10 @@ Open the execution in the web interface. The Chaise URL is typically:
 https://{host}/chaise/record/#{catalog_id}/{schema}:Execution/RID={execution_rid}
 ```
 
-The MCP resource `deriva://chaise-url/Execution/{rid}` provides the direct URL.
+The MCP resource `deriva://chaise-url/{rid}` provides the direct URL (pass the execution RID).
 
 Verify:
-- The execution status is "Complete".
+- The execution status is "Completed".
 - The correct datasets and versions are linked.
 - Output assets and metrics are attached.
 - The git commit hash matches your expectation.
@@ -205,5 +205,5 @@ Verify:
 | `Dirty git state warning` | Uncommitted changes when running | Commit changes before running |
 | `Lock file out of date` | `uv.lock` does not match `pyproject.toml` | Run `uv lock` and commit |
 | `ModuleNotFoundError` | Dependencies not installed | Run `uv sync` |
-| `Multirun requires --multirun flag` | Using `multirun_config` without the flag | Add `--multirun` to the command |
+| `Multirun requires --multirun flag` | Ad-hoc sweep without the flag | Add `--multirun` for ad-hoc sweeps; named multiruns (`+multirun=X`) don't need it |
 | `dry_run output looks wrong` | Config resolution issue | Use `--info` to inspect the resolved config |

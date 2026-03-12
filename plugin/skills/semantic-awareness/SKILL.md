@@ -37,20 +37,20 @@ Use MCP resources to retrieve candidates. Which resources depend on the entity t
 
 **Tables:**
 ```
-deriva://catalog/schema          # All tables with columns and descriptions
-deriva://table/<name>/schema     # Specific table details
+deriva://catalog/schema                       # All tables with columns and descriptions
+deriva://table/{table_name}/schema            # Specific table details
 ```
 
 **Vocabulary terms:**
 ```
-deriva://vocabulary/<vocab_name>              # All terms with descriptions and synonyms
-deriva://vocabulary/<vocab_name>/<term_name>  # Lookup by name or synonym
+deriva://vocabulary/{vocab_name}              # All terms with descriptions and synonyms
+deriva://vocabulary/{vocab_name}/{term_name}  # Lookup by name or synonym
 ```
 
 **Features:**
 ```
-deriva://table/<table_name>/features          # Features on a target table
-deriva://feature/<table_name>/<feature_name>  # Feature details
+deriva://table/{table_name}/features          # Features on a target table
+deriva://feature/{table_name}/{feature_name}  # Feature details
 deriva://catalog/features                     # All features across all tables
 ```
 
@@ -146,7 +146,7 @@ See the `generate-descriptions` skill for templates and detailed guidance.
 
 **Tables**: "Subject" vs "Patient" vs "Participant" — these are often the same concept. Check column structure and record count, not just names. A table with 500 records and 5 FK relationships is worth extending, not duplicating.
 
-**Vocabulary terms**: Always search synonyms. "X-ray" might have synonym "Xray" or "radiograph". The right action is usually `add_synonym`, not `add_term`. Use the `deriva://vocabulary/<name>/<term>` resource which matches against synonyms automatically.
+**Vocabulary terms**: Always search synonyms. "X-ray" might have synonym "Xray" or "radiograph". The right action is usually `add_synonym`, not `add_term`. Use the `deriva://vocabulary/{vocab_name}/{term_name}` resource which matches against synonyms automatically.
 
 **Features**: A feature named "Quality" and one named "Image_Quality" on the same table are almost certainly duplicates. The combination of target table + vocabulary is the strongest duplicate signal. Check how many values already exist — a feature with thousands of values is definitely established.
 

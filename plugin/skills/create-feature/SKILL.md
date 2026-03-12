@@ -27,7 +27,7 @@ For background on feature types, metadata columns, multivalued features, and fea
 2. `create_feature` — link a target table to vocabulary terms, assets, or both
 3. `create_execution` + `start_execution` — start provenance tracking
 4. `add_feature_value` / `add_feature_value_record` — assign values to records in batch
-5. `stop_execution` + `upload_execution_outputs` — finalize and upload staged feature values to the catalog
+5. `stop_execution` — finalize (feature values are written directly to the catalog by `add_feature_value`; `upload_execution_outputs` is only needed if you also registered file assets)
 
 For the full step-by-step guide with code examples (both MCP tools and Python API), see `references/workflow.md`.
 

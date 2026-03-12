@@ -18,9 +18,8 @@ Read these MCP resources to get oriented:
 For a specific table:
 
 - `deriva://table/{table_name}/schema` -- Column names, types, nullability, and descriptions.
-- `deriva://table/{table_name}/sample` -- A few sample rows to understand the data shape.
 
-Use the `get_table` MCP tool for programmatic access to table metadata.
+Use `get_table_sample_data(table_name="...")` to preview sample rows.
 
 ## Simple Queries
 
@@ -94,13 +93,15 @@ get_record(table_name="Subject", rid="2-B4C8")
 
 This returns the complete record with all columns.
 
-### Resolve a RID
+### Validate Known RIDs
 
-Use the `validate_rids` MCP tool to check if RIDs exist and determine their table:
+Use `validate_rids` to check that dataset, asset, workflow, or execution RIDs exist before using them:
 
 ```
-validate_rids(rids=["2-B4C8", "2-D1E2"])
+validate_rids(dataset_rids=["2-B4C8"], asset_rids=["2-D1E2"])
 ```
+
+To resolve an unknown RID to its table, read the `deriva://rid/{rid}` resource instead.
 
 ## Query Related Data
 
@@ -127,7 +128,7 @@ query_table(table_name="Image", filters={"Subject": "2-A1B2"})
 Use the `download_dataset` MCP tool to get a complete local copy of a dataset:
 
 ```
-download_dataset(dataset_rid="2-B4C8", version=3)
+download_dataset(dataset_rid="2-B4C8", version="3")
 ```
 
 This downloads all dataset members and assets to a local directory.
@@ -215,14 +216,14 @@ To get data ready for ML training:
 1. **Identify the dataset**: `get_record(table_name="Dataset", rid="2-B4C8")`
 2. **Get the members**: `list_dataset_members(dataset_rid="2-B4C8")`
 3. **Denormalize**: `denormalize_dataset(dataset_rid="2-B4C8", include_tables=["Image", "Subject"])`
-4. **Download assets**: `download_dataset(dataset_rid="2-B4C8", version=3)`
+4. **Download assets**: `download_dataset(dataset_rid="2-B4C8", version="3")`
 
 ## Historical Queries with Versions
 
 Datasets in Deriva can be versioned. Query specific versions:
 
 ```
-download_dataset(dataset_rid="2-B4C8", version=3)
+download_dataset(dataset_rid="2-B4C8", version="3")
 ```
 
 To see available versions, read:
@@ -235,8 +236,7 @@ Always pin to a specific version for reproducible experiments.
 
 To get the Chaise (web UI) URL for any record, use the MCP resource:
 
-- `deriva://chaise-url/{table_name}/{rid}` -- Direct URL to view a record in the browser.
-- `deriva://chaise-url/{table_name}` -- URL to the table's record set view.
+- `deriva://chaise-url/{table_or_rid}` -- Pass a table name for the record set view, or a RID for a specific record.
 
 These URLs are useful for sharing records with collaborators or viewing complex relationships that are easier to navigate in the web interface.
 
@@ -258,9 +258,9 @@ Here is a typical workflow for exploring and extracting data from a catalog:
 
 7. **Check features**: Read `deriva://table/Image/features`, then `query_table(table_name="Image_Cell_Count", filters={"Image": "2-C3D4"})`.
 
-8. **Get dataset for ML**: `denormalize_dataset(dataset_rid="2-B4C8", include_tables=["Image", "Subject"])` for a flat view, or `download_dataset(dataset_rid="2-B4C8", version=3)` for a full local copy.
+8. **Get dataset for ML**: `denormalize_dataset(dataset_rid="2-B4C8", include_tables=["Image", "Subject"])` for a flat view, or `download_dataset(dataset_rid="2-B4C8", version="3")` for a full local copy.
 
-9. **Share with a colleague**: Read `deriva://chaise-url/Subject/2-A1B2` to get a shareable URL.
+9. **Share with a colleague**: Read `deriva://chaise-url/2-A1B2` to get a shareable URL for a specific record, or `deriva://chaise-url/Subject` for the table view.
 
 ## Asset Provenance
 
