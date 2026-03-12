@@ -1,18 +1,12 @@
 ---
 name: check-versions
-description: "Run this skill proactively at the START of every new conversation to check if the DerivaML ecosystem is up to date. Also use when the user asks about versions, updates, or whether their environment is current. Triggers on: session start, 'check versions', 'am I up to date', 'update deriva', 'what version', 'upgrade packages'."
-disable-model-invocation: false
+description: "Check if the DerivaML ecosystem (deriva-ml, skills plugin, MCP server) is up to date and offer to update outdated components. Use when the user asks about versions, updates, or whether their environment is current. Triggers on: 'check versions', 'am I up to date', 'update deriva', 'what version', 'upgrade packages'."
+disable-model-invocation: true
 ---
 
 # Check and Update DerivaML Ecosystem
 
-Run the version checker at the start of every session to ensure the user's environment is current. The script checks three components and can automatically update them.
-
-## When to Run
-
-- **Every new session** — Run automatically before other work
-- When the user asks about versions or updates
-- After pulling code changes or setting up a new project
+Check whether the user's DerivaML components are up to date and offer to update outdated ones.
 
 ## How to Check
 
@@ -37,7 +31,7 @@ python <skill-dir>/scripts/check_versions.py --component deriva-ml --update
 | Component | What it checks | How it updates |
 |-----------|---------------|----------------|
 | **deriva-ml** | Installed package version vs latest GitHub release tag | `uv lock --upgrade-package deriva-ml && uv sync` |
-| **skills** | Local repo commits vs remote branch | `git pull --ff-only` in the deriva-mcp repo |
+| **skills** | Cached plugin version vs latest GitHub release tag | `/plugin install deriva` (must be run by user in Claude Code) |
 | **mcp-server** | Docker container age vs latest repo commit | Rebuild via `docker compose up -d --build` |
 
 The MCP server check adapts to the deployment mode:
@@ -53,10 +47,10 @@ The MCP server check adapts to the deployment mode:
 - **UNKNOWN** — Could not determine status (network issue, not installed, etc.)
 - **Dev version** — Installed from git HEAD, at or ahead of latest release. Normal for library developers.
 
-## Behavior on Session Start
+## Behavior
 
-- Run the check automatically
-- If everything is up to date, say nothing (unless the user asked)
-- If something is outdated, briefly report which component and offer to update
-- For the MCP server, always ask before rebuilding — it takes time and restarts the server
-- Don't block the user's actual request — report concisely and move on
+- Run the check when the user invokes `/deriva:check-versions`
+- Report which components are up to date and which are outdated
+- For **deriva-ml**: can be updated automatically with `--update`
+- For **skills**: tell the user to run `/plugin install deriva` to update
+- For **mcp-server**: ask before rebuilding — it takes time and restarts the server

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Check and update the DerivaML ecosystem.
 
-Checks installed versions of deriva-ml, deriva-mcp skills, and the MCP server
-against the latest releases. Can optionally perform updates.
+Checks installed versions of deriva-ml, deriva-mcp skills plugin, and the MCP
+server against the latest releases. Can optionally perform updates.
 
 Usage:
     python check_versions.py              # Check only
@@ -24,6 +24,11 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, asdict, field
+from pathlib import Path
+
+
+PLUGIN_CACHE_DIR = Path.home() / ".claude" / "plugins" / "cache" / "deriva-plugins" / "deriva"
+GITHUB_REPO = "informatics-isi-edu/deriva-mcp"
 
 
 @dataclass
@@ -182,101 +187,90 @@ def update_deriva_ml(status: VersionStatus) -> VersionStatus:
     return status
 
 
+def _get_cached_plugin_version() -> str | None:
+    """Get the installed plugin version from the Claude Code plugin cache.
+
+    The plugin cache lives at ~/.claude/plugins/cache/deriva-plugins/deriva/<version>/
+    with a plugin.json file containing the version metadata.
+    """
+    if not PLUGIN_CACHE_DIR.exists():
+        return None
+
+    # Find cached version directories (e.g., "0.1.0", "0.10.3")
+    version_dirs = [d for d in PLUGIN_CACHE_DIR.iterdir() if d.is_dir()]
+    if not version_dirs:
+        return None
+
+    # If multiple versions cached, pick the highest
+    best_version = None
+    best_tuple = (0, 0, 0)
+    for d in version_dirs:
+        plugin_json = d / ".claude-plugin" / "plugin.json"
+        if plugin_json.exists():
+            try:
+                data = json.loads(plugin_json.read_text())
+                ver = data.get("version", d.name)
+                ver_tuple = parse_semver(ver)
+                if ver_tuple > best_tuple:
+                    best_version = ver
+                    best_tuple = ver_tuple
+            except (json.JSONDecodeError, ValueError):
+                pass
+        else:
+            # Fall back to directory name
+            try:
+                ver_tuple = parse_semver(d.name)
+                if ver_tuple > best_tuple:
+                    best_version = d.name
+                    best_tuple = ver_tuple
+            except (ValueError, IndexError):
+                pass
+
+    return best_version
+
+
 def check_skills() -> VersionStatus:
-    """Check if the local deriva-mcp repo (skills) is behind the remote."""
-    # Find the deriva-mcp repo by looking for the plugin directory
-    # Walk up from this script's location
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_dir = script_dir
-    for _ in range(10):
-        if os.path.isdir(os.path.join(repo_dir, ".git")):
-            break
-        repo_dir = os.path.dirname(repo_dir)
-    else:
+    """Check if the cached skills plugin is up to date.
+
+    Compares the version in ~/.claude/plugins/cache/deriva-plugins/deriva/<ver>/
+    against the latest release tag on GitHub.
+    """
+    installed = _get_cached_plugin_version()
+    if not installed:
         return VersionStatus("skills", None, None, None,
-                             "Could not find deriva-mcp git repository")
+                             "Not installed (run: /plugin install deriva)")
 
-    # Fetch latest from remote
-    try:
-        run_cmd(["git", "fetch", "--quiet"], timeout=30, cwd=repo_dir)
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return VersionStatus("skills", None, None, None,
-                             "Could not fetch from remote")
+    latest_tag = get_latest_git_tag(GITHUB_REPO)
+    if not latest_tag:
+        return VersionStatus("skills", installed, None, None,
+                             "Could not fetch latest version from GitHub")
 
-    # Check current branch
-    result = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_dir)
-    branch = result.stdout.strip() if result.returncode == 0 else "main"
+    outdated = version_is_outdated(installed, latest_tag)
+    if outdated is None:
+        return VersionStatus("skills", installed, latest_tag, None,
+                             "Could not compare versions")
 
-    # Count commits behind
-    result = run_cmd(
-        ["git", "rev-list", "--count", f"HEAD..origin/{branch}"],
-        cwd=repo_dir,
-    )
-    if result.returncode != 0:
-        # Try main as fallback
-        result = run_cmd(
-            ["git", "rev-list", "--count", "HEAD..origin/main"],
-            cwd=repo_dir,
-        )
-        branch = "main"
-
-    if result.returncode != 0:
-        return VersionStatus("skills", None, None, None,
-                             "Could not determine if skills are up to date")
-
-    behind = int(result.stdout.strip())
-    # Also check local tag
-    tag_result = run_cmd(
-        ["git", "describe", "--tags", "--abbrev=0", "--match", "v*"],
-        cwd=repo_dir,
-    )
-    local_tag = tag_result.stdout.strip() if tag_result.returncode == 0 else None
-
-    if behind == 0:
-        return VersionStatus("skills", local_tag or branch, f"origin/{branch}",
-                             True, "Up to date")
+    if not outdated:
+        return VersionStatus("skills", installed, latest_tag, True, "Up to date")
     else:
         return VersionStatus(
-            "skills", local_tag or branch, f"{behind} commits behind origin/{branch}",
-            False,
-            f"{behind} commits behind remote",
-            update_commands=[f"git -C {repo_dir} pull --ff-only"],
+            "skills", installed, latest_tag, False,
+            f"Outdated: installed {installed}, latest is {latest_tag}",
+            update_commands=["Tell Claude: /plugin install deriva"],
         )
 
 
 def update_skills(status: VersionStatus) -> VersionStatus:
-    """Pull latest skills from remote."""
-    print(f"  Updating skills ({status.message})...")
-    for cmd_str in status.update_commands:
-        cmd = cmd_str.split()
-        print(f"    $ {cmd_str}")
-        result = run_cmd(cmd, timeout=60)
-        if result.returncode != 0:
-            stderr = result.stderr or ""
-            if "not possible to fast-forward" in stderr or "diverged" in stderr:
-                status.update_message = (
-                    "Cannot fast-forward — local branch has diverged from remote. "
-                    "Resolve manually with git merge or git rebase."
-                )
-            else:
-                status.update_message = f"Failed: {cmd_str}\n{stderr}"
-            return status
+    """Update the skills plugin.
 
-    status.updated = True
-    status.up_to_date = True
-    status.update_message = "Pulled latest changes"
+    Plugin updates require running '/plugin install deriva' in Claude Code.
+    This function cannot do it programmatically, so it provides instructions.
+    """
+    status.update_message = (
+        "Skills plugin must be updated from within Claude Code.\n"
+        "    Run: /plugin install deriva"
+    )
     return status
-
-
-def _find_repo_dir() -> str | None:
-    """Find the deriva-mcp git repo by walking up from this script."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    repo_dir = script_dir
-    for _ in range(10):
-        if os.path.isdir(os.path.join(repo_dir, ".git")):
-            return repo_dir
-        repo_dir = os.path.dirname(repo_dir)
-    return None
 
 
 def _is_registry_image(image: str) -> bool:
@@ -319,7 +313,7 @@ def _check_native_mcp_server() -> VersionStatus:
         return VersionStatus("mcp-server", None, None, None,
                              "No running Docker container or installed package found")
 
-    latest_tag = get_latest_git_tag("informatics-isi-edu/deriva-mcp")
+    latest_tag = get_latest_git_tag(GITHUB_REPO)
     if not latest_tag:
         return VersionStatus("mcp-server", installed, None, None,
                              "Could not fetch latest version from GitHub")
@@ -330,20 +324,14 @@ def _check_native_mcp_server() -> VersionStatus:
                              "Could not compare versions")
 
     base = extract_base_version(installed)
-    repo_dir = _find_repo_dir()
-
     if not outdated:
         return VersionStatus("mcp-server", installed, latest_tag, True,
                              "Up to date")
     else:
-        cmds = []
-        if repo_dir:
-            cmds.append(f"git -C {repo_dir} pull --ff-only")
-        cmds.extend(["uv lock --upgrade-package deriva-mcp", "uv sync"])
         return VersionStatus(
             "mcp-server", installed, latest_tag, False,
             f"Outdated: installed {base}, latest is {latest_tag}",
-            update_commands=cmds,
+            update_commands=["uv lock --upgrade-package deriva-mcp", "uv sync"],
         )
 
 
@@ -367,7 +355,7 @@ def _check_registry_mcp_server(image: str) -> VersionStatus:
     )
     if result.returncode != 0:
         # Fall back to checking the latest git tag
-        latest_tag = get_latest_git_tag("informatics-isi-edu/deriva-mcp")
+        latest_tag = get_latest_git_tag(GITHUB_REPO)
         return VersionStatus("mcp-server", image, latest_tag or "unknown", None,
                              "Could not check remote registry for updates. "
                              "Try: docker pull " + image)
@@ -428,9 +416,43 @@ def _check_local_dev_mcp_server(image: str) -> VersionStatus:
                          "Container appears up to date")
 
 
+def _find_repo_dir() -> str | None:
+    """Find the deriva-mcp git repo.
+
+    Checks common locations since the script may run from the plugin cache
+    (not inside the repo).
+    """
+    # First try walking up from script location (works when run from repo)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_dir = script_dir
+    for _ in range(10):
+        if os.path.isdir(os.path.join(repo_dir, ".git")):
+            # Verify it's actually the deriva-mcp repo
+            plugin_json = os.path.join(repo_dir, "plugin", ".claude-plugin", "plugin.json")
+            if os.path.exists(plugin_json):
+                return repo_dir
+            # It's a git repo but not deriva-mcp, keep looking
+            break
+        repo_dir = os.path.dirname(repo_dir)
+
+    # Try common locations relative to home
+    home = Path.home()
+    for candidate in [
+        home / "GitHub" / "deriva-mcp",
+        home / "github" / "deriva-mcp",
+        home / "src" / "deriva-mcp",
+        home / "projects" / "deriva-mcp",
+        home / "code" / "deriva-mcp",
+    ]:
+        if (candidate / ".git").is_dir():
+            return str(candidate)
+
+    return None
+
+
 def update_mcp_server(status: VersionStatus) -> VersionStatus:
     """Rebuild and restart the MCP Docker container."""
-    print(f"  Rebuilding MCP server...")
+    print("  Rebuilding MCP server...")
     for cmd_str in status.update_commands:
         # Use shell=True for compose commands with pipes
         print(f"    $ {cmd_str}")

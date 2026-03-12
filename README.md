@@ -107,6 +107,20 @@ The Deriva plugin for [Claude Code](https://claude.ai/claude-code) provides 26 s
 /plugin install deriva
 ```
 
+### Updating the Plugin
+
+To update to the latest version:
+
+```
+/plugin install deriva
+```
+
+You can check whether your entire DerivaML ecosystem is up to date (skills plugin, deriva-ml library, and MCP server) by running:
+
+```
+/deriva:check-versions
+```
+
 ### Available Skills
 
 **User-invocable** — invoke with `/deriva:<skill-name>`:
@@ -130,6 +144,7 @@ The Deriva plugin for [Claude Code](https://claude.ai/claude-code) provides 26 s
 | **Notebooks** | `/deriva:setup-notebook-environment` | Set up Jupyter environment for DerivaML |
 | | `/deriva:run-notebook` | Develop and run notebooks with execution tracking |
 | **Standards** | `/deriva:coding-guidelines` | DerivaML project coding standards |
+| **Maintenance** | `/deriva:check-versions` | Check if deriva-ml, skills, and MCP server are up to date |
 
 **Auto-invoked** — Claude loads these automatically when relevant:
 
