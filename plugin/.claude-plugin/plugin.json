@@ -1,6 +1,6 @@
 {
   "name": "deriva",
-  "version": "0.1.0",
+  "version": "0.10.6",
   "description": "Skills for working with Deriva catalogs and DerivaML workflows - dataset management, ML execution, experiment configuration, and catalog operations",
   "author": {
     "name": "ISI Informatics",

@@ -65,11 +65,23 @@ load-my-data = "scripts.load_data:main"
 
 ## Git Workflow
 
+### Prerequisites
+
+Install the [GitHub CLI (`gh`)](https://cli.github.com/) for creating pull requests, reviewing diffs, and merging from the terminal. Claude Code can use `gh` to handle the full PR workflow for you.
+
+```bash
+# macOS
+brew install gh
+
+# Then authenticate
+gh auth login
+```
+
 ### Branch Strategy
 
 - Use feature branches for all work: `git checkout -b feature/add-segmentation-model`.
 - Keep `main` clean and passing.
-- Use pull requests for code review.
+- Use pull requests for code review — even for solo developers, PRs create a permanent record of what changed and why.
 
 ### Commit Before Running
 
@@ -132,6 +144,7 @@ class MyProjectML(DerivaML):
 ## Summary Checklist
 
 - [ ] Own repository with `uv` and committed `uv.lock`
+- [ ] GitHub CLI (`gh`) installed for PR workflow
 - [ ] Feature branches and pull requests
 - [ ] Google docstrings and type hints on all public APIs
 - [ ] `nbstripout` installed for notebooks
