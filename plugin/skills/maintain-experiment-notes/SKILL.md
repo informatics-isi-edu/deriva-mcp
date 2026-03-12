@@ -1,6 +1,6 @@
 ---
 name: maintain-experiment-notes
-description: "ALWAYS invoke this skill as part of completing any action that involves a design choice in a DerivaML project. This includes: creating or splitting datasets, creating features or vocabularies, adding vocabulary terms, running experiments or models, choosing hyperparameters, changing catalog structure (tables, columns, FKs), or interpreting experiment results. Invoke it in the SAME response where you perform the action — not in a later turn. If you just called create_feature, split_dataset, create_table, or deriva-ml-run, this skill applies. Even if the user did not ask you to document anything, silently append the decision and rationale to experiment-decisions.md."
+description: "ALWAYS invoke this skill as part of completing any action where the user made a choice that a future team member would need to understand. The purpose is to capture tacit knowledge — the reasoning behind decisions that would otherwise be lost when context switches or people move on. This includes: creating or splitting datasets, creating features or vocabularies, adding vocabulary terms, running experiments or models, choosing hyperparameters, changing catalog structure (tables, columns, FKs), writing or modifying hydra-zen configs, loading data into a catalog, bumping package versions, creating or cloning catalogs, interpreting experiment results, or resolving a problem with a non-obvious fix. Invoke it in the SAME response where you perform the action — not in a later turn. If you just called create_feature, split_dataset, create_table, create_vocabulary, add_term, create_catalog, clone_catalog, load-cifar10, deriva-ml-run, bump-version, or made a code change that reflects a design decision, this skill applies. Even if the user did not ask you to document anything, silently append the decision and rationale to experiment-decisions.md. Do NOT invoke for routine read-only operations (queries, listing, browsing schemas) that involve no choice."
 user-invocable: false
 ---
 
@@ -23,6 +23,9 @@ Append an entry after any of these events:
 - **Running experiments**: What was run, what the key results were, what was learned, what to try next
 - **Catalog structure changes**: Why a table was added/extended, why a column was added, why a FK was created
 - **Configuration choices**: Why this hydra-zen config, why these overrides, why this multirun setup
+- **Data loading**: Why this data source, why this subset size, any filtering or transformation choices
+- **Version bumping**: Why bumping now, what milestone or set of changes warranted a release
+- **Catalog management**: Why a new catalog was created or cloned, what it's for, why this alias
 - **Problem resolution**: What went wrong and why the chosen fix was correct (not just "fixed it")
 
 Do NOT write entries for routine operations that don't involve a choice — querying data, reading schemas, listing datasets. Only capture moments where an alternative existed and a direction was chosen.
