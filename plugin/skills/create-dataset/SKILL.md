@@ -10,6 +10,21 @@ Datasets are the primary unit for organizing data in DerivaML. A dataset is a ve
 
 For background on what datasets are, how versioning and element types work, nested datasets, and FK traversal in bag exports, see `references/concepts.md`.
 
+## Description Guidance
+
+Every dataset should have a description that explains its composition, purpose, and key characteristics. The description is visible in the Chaise UI and in execution records.
+
+**Good dataset descriptions:**
+- "500 CIFAR-10 images (50 per class), balanced across all 10 categories, for rapid iteration during development"
+- "80/20 patient-level stratified split of the full imaging cohort. Split at patient level to prevent data leakage from multiple images per subject"
+- "Complete labeled dataset of 12,450 chest X-rays with ground truth diagnosis annotations. Source data for all training and evaluation experiments"
+
+**Bad dataset descriptions:**
+- "Training data" or "My dataset" or "Images"
+- Leaving the description empty
+
+For split datasets, the description should note the split strategy and rationale (why this ratio, why this stratification column).
+
 ## Workflow Summary
 
 The standard sequence for creating a dataset:

@@ -50,10 +50,10 @@ Version descriptions are strongly recommended and should explain:
 - **Why** the change was made
 - **Impact** on experiments or downstream usage
 
-**Good descriptions:**
-- "Added severity grading feature (mild/moderate/severe) to all 12,450 images"
-- "Fixed 47 mislabeled pneumonia images identified in audit review"
-- "Added 2,000 new COVID-19 images from March 2026 collection"
+**Good descriptions** — state what changed, why, and impact on downstream usage:
+- "Added severity grading feature (mild/moderate/severe) to all 12,450 images. Required for new stratified training pipeline"
+- "Fixed 47 mislabeled pneumonia images identified in audit review. Retraining recommended for any model trained on v1.1.0"
+- "Added 2,000 new COVID-19 images from March 2026 collection. Increases COVID class from 3,200 to 5,200 images"
 
 **Bad descriptions:**
 - "Updated"

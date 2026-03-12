@@ -99,10 +99,30 @@ Descriptions are recorded in execution metadata and make experiments self-docume
 
 ### Good Descriptions
 
+General principles — descriptions should be specific, quantified, purposeful, and version-aware:
+
 - **Specific**: "ResNet-50 with 3-class output head, trained with cosine annealing LR schedule"
 - **Quantified**: "4,500 histopathology tiles at 224x224, balanced across 3 subtypes"
 - **Purposeful**: "Validation set held out by patient ID to prevent data leakage"
 - **Version-aware**: "Frozen at version 3, which excludes 12 QC-failed slides"
+
+#### By Config Type
+
+**Experiments** — State the goal or hypothesis, not just parameters. Parameters are already in the config; the description explains *why* the experiment exists:
+- Good: "Test whether dropout 0.25 reduces overfitting compared to the unregularized baseline"
+- Bad: "50 epochs, 64->128 channels, dropout 0.25"
+
+**Multiruns** — State what question the sweep answers and what the parameter range covers:
+- Good: "Sweep learning rates [1e-4, 1e-3, 1e-2, 1e-1] to find the optimal convergence/stability tradeoff for the 2-layer CNN on the small labeled split"
+
+**Datasets** — Describe composition, source, and intended use:
+- Good: "500 CIFAR-10 images (50 per class), balanced, for rapid iteration during development"
+
+**Assets** — Describe what the assets are, which experiments produced them, and how to use them:
+- Good: "Prediction probability CSVs from the learning rate sweep. Compare AUC scores in roc_analysis notebook"
+
+**Model configs** — Describe the architectural or training variant and when to choose it:
+- Good: "Extended training with full regularization — use when accuracy matters more than training time"
 
 ## Config Class Parameter Reference
 

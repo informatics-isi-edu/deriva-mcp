@@ -12,6 +12,21 @@ Common uses include classification labels, transformed data, statistical aggrega
 
 For background on feature types, metadata columns, multivalued features, and feature selection, see `references/concepts.md`.
 
+## Description Guidance
+
+Every feature should have a description that explains what it measures or annotates, what values it takes, and its role in the ML workflow.
+
+**Good feature descriptions:**
+- "Diagnostic classification of chest X-ray images. Values from the Diagnosis vocabulary (normal, pneumonia, COVID-19). Primary ground truth label for training classification models"
+- "Model-predicted class probabilities for each CIFAR-10 category. Float values 0-1 per class. Used for ROC analysis and model comparison across experiments"
+- "Image quality score assigned during manual review. Values from Quality vocabulary (acceptable, borderline, rejected). Used to filter training data"
+
+**Bad feature descriptions:**
+- "Classification" or "Labels" or "Feature for Image"
+- Leaving the description empty
+
+Since features are multivalued (multiple executions can produce different values for the same record), note whether the feature is intended for ground truth annotation, model predictions, or computed metrics.
+
 ## Critical Rules
 
 1. **Vocabulary must exist first** — create the vocabulary table and add terms before creating a term-based feature.
@@ -19,7 +34,10 @@ For background on feature types, metadata columns, multivalued features, and fea
 3. **Use the right tool for the job**:
    - `add_feature_value` — simple features with a single term or asset column
    - `add_feature_value_record` — features with multiple columns (e.g., term + confidence score)
-4. **Use feature selection for multivalued features** — when a record has multiple values, use `fetch_table_features` with `selector="newest"` or `workflow` to resolve to one value per record.
+4. **Use feature selection for multivalued features** — when a record has multiple values, use `fetch_table_features` with one of these options to resolve to one value per record:
+   - `selector="newest"` — picks the most recent value by creation time
+   - `workflow` — filters by workflow RID or workflow type name, then picks newest
+   - `execution` — filters by a specific execution RID, then picks newest
 
 ## Workflow Summary
 

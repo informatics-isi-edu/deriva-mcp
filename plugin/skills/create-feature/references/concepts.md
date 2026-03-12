@@ -72,40 +72,88 @@ This is by design — it enables inter-annotator agreement analysis, model compa
 
 ## Feature Selection
 
-Feature selection resolves multivalued features to one value per target record. DerivaML provides two mechanisms:
+When you need to *use* feature values — for training a model, computing metrics, or building a DataFrame — you typically need exactly one value per record. **Feature selection** is the process of choosing which value to keep when multiple exist for the same record and feature.
 
-### MCP tool: `fetch_table_features`
+The choice depends on your use case:
+- **Newest** — use the most recent value regardless of source (good for "latest state")
+- **By workflow** — use values from a specific workflow type, e.g., only expert annotations or only model predictions
+- **By execution** — use values from a specific execution run, e.g., comparing Run A vs Run B
 
-Call `fetch_table_features` with `table_name` and optionally:
-- `feature_name`: fetch only a specific feature (otherwise fetches all features on the table)
-- `selector`: `"newest"` — picks the value with the most recent creation time (RCT) per record
-- `workflow`: a Workflow RID or Workflow_Type name — filters to values from that workflow, then picks newest per record
+DerivaML provides three ways to access feature values, from simplest to most flexible:
 
-`selector` and `workflow` are mutually exclusive.
+### MCP resources (browsing and exploration)
 
-### MCP resources
+Resources provide quick, no-parameter access for exploring what feature data exists. They return all features on a table in a single response.
 
-- `deriva://table/{table_name}/feature-values` — all feature values for a table, grouped by feature
-- `deriva://table/{table_name}/feature-values/newest` — deduplicated to newest per target record
+| Resource | What it returns |
+|----------|----------------|
+| `deriva://table/{table}/feature-values` | All feature values for a table, grouped by feature name. Includes duplicates from multiple executions. |
+| `deriva://table/{table}/feature-values/newest` | Same, but deduplicated to one value per target record per feature — picks the most recently created value (by RCT). |
+| `deriva://feature/{table}/{feature}/values` | All values for a specific feature, with full provenance (Execution RID, RCT). |
+
+Use resources when you want a quick look at what annotations exist or need the newest values without any filtering.
+
+### MCP tool: `fetch_table_features` (parameterized queries)
+
+The tool provides filtering options that resources can't express. It returns a JSON dict mapping feature names to lists of feature value records.
+
+Call `fetch_table_features` with:
+- `table_name` (required): the target table (e.g., `"Image"`)
+- `feature_name` (optional): fetch only a specific feature; if omitted, fetches all features on the table
+- One of the following selection options (mutually exclusive):
+  - `selector="newest"` — picks the value with the most recent creation time (RCT) per record
+  - `workflow` — a Workflow RID (e.g., `"2-ABC1"`) or Workflow_Type name (e.g., `"Training"`). Filters to values from executions of that workflow, then picks newest per record
+  - `execution` — an Execution RID. Filters to values from that specific execution run, then picks newest per record. Use this when multiple executions of the same workflow exist and you want one specific run's results
+
+If none of `selector`, `workflow`, or `execution` is specified, all values are returned (including duplicates).
 
 ### Python API
 
-The `fetch_table_features` method accepts a `selector` callable:
+The `ml.fetch_table_features()` method accepts a `selector` callable with signature `(list[FeatureRecord]) -> FeatureRecord`. The selector is called once per group of records sharing the same target RID, and returns the single record to keep.
+
+**Built-in selectors:**
 
 ```python
 from deriva_ml.feature import FeatureRecord
 
-# Built-in: newest by creation time
+# Newest by creation time (equivalent to selector="newest" in MCP)
 features = ml.fetch_table_features("Image", selector=FeatureRecord.select_newest)
 
-# Custom: pick the record with highest confidence
+# Filter by execution RID, then pick newest
+# select_by_execution is a closure factory — call it to get the selector function
+features = ml.fetch_table_features(
+    "Image",
+    selector=FeatureRecord.select_by_execution("3WY2"),
+)
+```
+
+**Workflow-based selection** uses `ml.select_by_workflow()`, a method on the DerivaML instance (it needs catalog access to resolve workflow type names to execution RIDs). Unlike the other selectors, it operates on a pre-grouped list of records rather than being passed as a `selector=` argument:
+
+```python
+from collections import defaultdict
+
+features = ml.fetch_table_features("Image", feature_name="Classification")
+records = features.get("Classification", [])
+
+# Group by target record, then select by workflow
+grouped = defaultdict(list)
+for r in records:
+    grouped[r.Image].append(r)
+
+selected = [ml.select_by_workflow(group, "Training") for group in grouped.values()]
+```
+
+The MCP tool's `workflow` parameter handles this grouping automatically — it's the recommended way for interactive use.
+
+**Custom selectors** can implement any logic:
+
+```python
+# Pick the record with highest confidence score
 def select_best(records):
     return max(records, key=lambda r: getattr(r, "Confidence", 0))
 
 features = ml.fetch_table_features("Image", selector=select_best)
 ```
-
-The selector receives a list of FeatureRecord instances for the same target object and returns the one to keep.
 
 ## Feature Value Table Naming
 
@@ -145,13 +193,15 @@ Add records in batch with `exe.add_features(records)`. The execution RID is popu
 
 ## Operations Summary
 
-| Operation | MCP Tool | What it does |
-|-----------|----------|--------------|
+| Operation | MCP Tool / Resource | What it does |
+|-----------|---------------------|--------------|
 | Create feature | `create_feature` | Define a new feature on a target table |
 | Add values (simple) | `add_feature_value` | Assign term/asset values to records (batch) |
 | Add values (multi-column) | `add_feature_value_record` | Assign values with metadata columns (batch) |
-| Fetch values | `fetch_table_features` | Get feature values with optional deduplication |
+| Fetch with selection | `fetch_table_features` | Get feature values with filtering by selector, workflow, or execution |
 | Delete feature | `delete_feature` | Remove feature and its value table |
 | Browse features | `deriva://catalog/features` | List all features in the catalog |
 | Feature details | `deriva://feature/{table}/{name}` | Column types and requirements |
-| Feature values | `deriva://feature/{table}/{name}/values` | All values with provenance |
+| Feature values (all) | `deriva://feature/{table}/{name}/values` | All values for one feature, with provenance |
+| Table values (all) | `deriva://table/{table}/feature-values` | All feature values for a table, grouped by feature |
+| Table values (newest) | `deriva://table/{table}/feature-values/newest` | Deduplicated to one value per record per feature |

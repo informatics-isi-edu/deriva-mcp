@@ -21,11 +21,36 @@ To **browse terms** in a specific vocabulary, read the `deriva://vocabulary/{voc
 
 To **look up a specific term**, read the `deriva://vocabulary/{vocab_name}/{term_name}` resource. This matches against both names and synonyms — looking up `"Xray"` will find `"X-ray"`. In the Python API, `ml.lookup_term("Species", "Mouse")` provides the same synonym-aware lookup.
 
+## Description Guidance
+
+### Vocabulary Tables
+
+The `comment` on a vocabulary table should explain the classification scheme, its scope, and how terms relate to each other.
+
+**Good vocabulary descriptions:**
+- "Classification of biological tissue types for histology analysis. Terms are mutually exclusive tissue categories used for slide-level labeling"
+- "Image quality assessment grades assigned during manual QC review. Ordered from best to worst: excellent > acceptable > borderline > rejected"
+- "CIFAR-10 object categories. 10 mutually exclusive classes spanning vehicles and animals"
+
+**Bad vocabulary descriptions:**
+- "Types" or "Categories" or "A vocabulary"
+
+### Vocabulary Terms
+
+Every term must have a description that defines its meaning in context — not just restating the name. Explain when to use the term, and how it relates to other terms.
+
+**Good term descriptions:**
+- "Pneumonia detected in chest X-ray. Use when radiological signs of pneumonia are present regardless of etiology. Mutually exclusive with 'normal'"
+- "Borderline image quality — minor artifacts present but image is usable for training with caution. Review if model performance on this subset is unexpectedly poor"
+
+**Bad term descriptions:**
+- "Pneumonia" or "This is the pneumonia term" or leaving it empty
+
 ## Creating a Vocabulary
 
 Call `create_vocabulary` with:
 - `vocabulary_name`: table name in PascalCase with underscores (e.g., `"Tissue_Type"`)
-- `comment` (optional, recommended): what this vocabulary classifies (e.g., `"Classification of biological tissue types for histology analysis"`)
+- `comment` (required): what this vocabulary classifies (e.g., `"Classification of biological tissue types for histology analysis"`)
 
 This creates a table in the domain schema with the standard vocabulary columns.
 

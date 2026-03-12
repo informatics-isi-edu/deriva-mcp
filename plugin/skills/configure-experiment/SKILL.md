@@ -37,6 +37,16 @@ Example: `uv run deriva-ml-run +experiment=cifar10_quick` loads base defaults, t
 2. **Pin dataset versions** — Use `DatasetSpecConfig(rid="...", version="...")` for reproducibility
 3. **Use meaningful names** — `resnet50_extended` not `config2`
 4. **Test with `--info`** — `uv run deriva-ml-run +experiment=X --info` to inspect resolved config
+5. **Write goal-oriented experiment descriptions** — The `description` field on experiments and multiruns should state what question the experiment answers or what hypothesis it tests, not just list technical parameters. Technical details belong in the config; the description explains *why* the experiment exists.
+
+**Good experiment descriptions:**
+- "Test whether dropout 0.25 reduces overfitting on the small labeled split compared to the unregularized baseline"
+- "Sweep learning rates to find the optimal convergence/stability tradeoff for the 2-layer CNN"
+- "Evaluate whether the extended architecture (64→128 channels) improves accuracy enough to justify 10x training time"
+
+**Bad experiment descriptions (just restating parameters):**
+- "50 epochs, 64->128 channels, dropout 0.25, weight decay 1e-4"
+- "Quick CIFAR-10 training with batch size 128"
 
 ## Setup Steps
 

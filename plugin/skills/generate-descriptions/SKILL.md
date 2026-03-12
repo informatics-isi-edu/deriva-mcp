@@ -11,8 +11,11 @@ Every catalog entity that accepts a description MUST have one. If the user doesn
 ## Entities Requiring Descriptions
 
 - **Datasets**: `create_dataset` -- description parameter
+- **Experiments**: `experiment_store()` in `configs/experiments.py` -- description parameter on `make_config()`
+- **Multiruns**: `multirun_config()` in `configs/multiruns.py` -- description parameter
 - **Executions and Workflows**: `create_execution`, Workflow configuration -- description parameter
 - **Features**: `create_feature` -- description parameter
+- **Vocabularies**: `create_vocabulary` -- comment parameter
 - **Vocabulary Terms**: `add_term` -- description parameter
 - **Tables and Columns**: `create_table` (uses `comment` parameter), `set_table_description`, `set_column_description`
 - **Assets**: asset metadata descriptions
@@ -42,13 +45,35 @@ Always confirm the generated description with the user before creating the entit
 
 ### Datasets
 
+Dataset descriptions should cover composition (what's in it), purpose (what it's for), and any important characteristics (balance, splits, provenance). For split datasets, note the split strategy and rationale.
+
 ```
 <Purpose> of <source> with <count> <items>. <Key characteristics>. <Usage guidance>.
 ```
 
 Example: "Training dataset of chest X-ray images with 12,450 DICOM files. Balanced across 3 diagnostic categories (normal, pneumonia, COVID-19). Use with v2.1.0+ feature annotations."
 
+**For split datasets**, include the split rationale:
+
+Example: "80/20 patient-level stratified split of dataset `2-B4C8`. Split at patient level to prevent data leakage from multiple images per subject. Stratified by diagnosis to maintain class balance across partitions."
+
+### Experiments
+
+Experiment descriptions answer *why this experiment exists* — the goal, hypothesis, or question being tested. Technical parameters are already captured in the config; the description provides the scientific or engineering motivation.
+
+```
+<Goal/hypothesis>. <What is being compared or evaluated>. <Expected outcome or success criteria>.
+```
+
+Example: "Test whether dropout 0.25 reduces overfitting on the small labeled split compared to the unregularized baseline. Expect improved validation accuracy at the cost of slower convergence. Success: val accuracy within 2% of train accuracy by epoch 50."
+
+**For multiruns/sweeps**, describe what question the sweep answers:
+
+Example: "Sweep learning rates [1e-4 to 1e-1] to find the optimal convergence/stability tradeoff for the 2-layer CNN. Lower rates may underfit within the epoch budget; higher rates risk training instability."
+
 ### Executions
+
+Execution descriptions capture what was done and the key parameters. For experiments, prefer the experiment description template above; execution descriptions are for ad-hoc or one-off runs.
 
 ```
 <Action> <target> using <method>. <Key parameters>. <Expected outputs>.
@@ -60,13 +85,27 @@ Use markdown tables for complex workflows with multiple steps or parameters.
 
 ### Features
 
+Feature descriptions should explain what the feature measures or annotates, what values it takes, and how it's used in the ML workflow. Since features are multivalued (multiple executions can produce different values), note whether it's intended for ground truth, model predictions, or computed metrics.
+
 ```
-<What it labels> for <target table>. Values from <vocabulary>. <Usage context>.
+<What it labels/measures> for <target table>. Values from <vocabulary or type>. <Usage context — ground truth, prediction, metric>.
 ```
 
-Example: "Diagnostic classification label for Image table. Values from Diagnosis vocabulary (normal, pneumonia, COVID-19). Primary label for training classification models."
+Example: "Diagnostic classification label for Image table. Values from Diagnosis vocabulary (normal, pneumonia, COVID-19). Primary ground truth label for training classification models. Multiple annotators may label the same image; use `selector='newest'` or filter by execution for a single value per record."
+
+### Vocabularies
+
+Vocabulary table descriptions explain the classification scheme and its scope:
+
+```
+<What this vocabulary classifies>. <Domain context>. <How terms relate to each other>.
+```
+
+Example: "Classification of chest X-ray diagnostic findings. Terms are mutually exclusive primary diagnoses. Used by the Image_Diagnosis feature for ground truth labeling."
 
 ### Vocabulary Terms
+
+Term descriptions define the term's meaning in context — not just restating the name. Include when to use (and when not to), and how the term relates to other terms in the vocabulary.
 
 ```
 <Definition>. <When to use>. <Relationship to other terms>.

@@ -35,9 +35,17 @@ Tables are the foundation of a Deriva catalog schema. Choose the right table typ
 - `NO ACTION` (default) — Prevent parent deletion if children exist
 
 ### Documentation (Required)
-- Always set `comment` on tables and columns
+- Always set `comment` on tables and columns — these are the primary way users understand catalog structure
 - Use `set_row_name_pattern` so records are identifiable in the UI
 - Use `set_table_display_name` / `set_column_display_name` for user-friendly names
+
+**Table descriptions** should explain what records represent, key relationships, and primary use case:
+- Good: "Individual chest X-ray images with associated metadata. Links to Subject (patient) and Study (imaging session). Primary asset table for classification experiments."
+- Bad: "Images" or "Table for storing image data"
+
+**Column descriptions** should explain what the value represents, units/format, and constraints:
+- Good: "Patient age at time of imaging in years. Integer 0-120. Used for demographic stratification in training splits."
+- Bad: "Age" or "The age column"
 
 ## Quick Reference
 
