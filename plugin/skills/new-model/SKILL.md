@@ -142,7 +142,7 @@ experiment_store(
 )
 ```
 
-### 5. Test
+### 5. Test locally
 
 ```bash
 # Check config resolves
@@ -152,9 +152,57 @@ uv run deriva-ml-run +experiment=my_model_quick --info
 uv run deriva-ml-run +experiment=my_model_quick dry_run=true
 ```
 
+### 6. Git workflow for model development
+
+Model development should follow a branch-based workflow. DerivaML records the git commit hash for provenance, so code must be committed and merged before production runs.
+
+**Create a feature branch:**
+
+```bash
+git checkout -b feature/my-model
+```
+
+**Develop iteratively on the branch:**
+- Write the model function, configs, workflow, and experiments (steps 1–4)
+- Test with `dry_run=true` — dry runs don't record provenance, so uncommitted code is fine
+- Commit working increments as you go:
+
+```bash
+git add src/models/my_model.py src/configs/my_model.py src/configs/workflow.py src/configs/experiments.py
+git commit -m "Add my_model with quick and default configs"
+```
+
+**Push and create a pull request:**
+
+```bash
+git push -u origin feature/my-model
+gh pr create --title "Add my_model training pipeline" --body "..."
+```
+
+Use the PR for code review — reviewers can check the model function, config structure, and experiment descriptions. The PR should include:
+- Model function (`src/models/`)
+- Config files (`src/configs/`)
+- Updated `Experiments.md` if maintained
+- Any new dependencies in `pyproject.toml`
+
+**Merge and bump version:**
+
+After the PR is approved and merged:
+
+```bash
+git checkout main
+git pull
+uv run bump-version minor   # New model = new feature = minor bump
+```
+
+The version bump creates a git tag, giving production runs a clean version reference. Use `minor` for a new model; use `patch` if you're fixing an existing model.
+
+**Now run for real** — see the `run-experiment` skill for the pre-flight checklist. The key point: production runs (without `dry_run=true`) should only happen on `main` after the merge and version bump, so the recorded commit hash and version tag are meaningful.
+
 ## Related Skills
 
 - **`write-hydra-config`** — Config file syntax for every config group
+- **`configure-experiment`** — Project structure, config groups, and experiment descriptions
 - **`run-experiment`** — Pre-flight checklist and CLI commands for `deriva-ml-run`
 - **`run-ml-execution`** — Execution lifecycle, provenance, and output upload details
 - **`prepare-training-data`** — Dataset downloading, splitting, and restructuring
