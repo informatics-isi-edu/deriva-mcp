@@ -179,15 +179,19 @@ git push -u origin feature/my-model
 gh pr create --title "Add my_model training pipeline" --body "..."
 ```
 
-Use the PR for code review — reviewers can check the model function, config structure, and experiment descriptions. The PR should include:
+**Use a PR even if you're the only developer.** PRs create a permanent record of what changed and why — this is especially valuable for ML projects where you may need to trace back why a model was structured a certain way months later. The PR description becomes part of the project's institutional memory alongside `experiment-decisions.md`.
+
+The PR should include:
 - Model function (`src/models/`)
 - Config files (`src/configs/`)
 - Updated `Experiments.md` if maintained
 - Any new dependencies in `pyproject.toml`
 
+**Using the GitHub CLI (`gh`):** If you have the [GitHub CLI](https://cli.github.com/) installed, Claude Code can create PRs, review diffs, and merge directly from the terminal. This makes the branch workflow lightweight even for solo developers — ask Claude to "create a PR and merge it" and it will handle the `gh pr create` and `gh pr merge` commands.
+
 **Merge and bump version:**
 
-After the PR is approved and merged:
+After the PR is merged (or after you merge it yourself with `gh pr merge`):
 
 ```bash
 git checkout main
