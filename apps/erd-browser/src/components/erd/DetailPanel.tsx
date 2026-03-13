@@ -1,4 +1,4 @@
-import { ExternalLink, X, Table2, KeyRound, Database, MousePointerClick, List } from "lucide-react";
+import { ExternalLink, X, Table2, KeyRound, Database, MousePointerClick, List, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -15,6 +15,7 @@ import {
 import type { EnrichedTable, CatalogSchema } from "@/types";
 import { chaiseRecordsetUrl } from "@/ermrest-client";
 import DataBrowser from "./DataBrowser";
+import AnnotationsPanel from "./AnnotationsPanel";
 
 interface DetailPanelProps {
   // Table-level detail
@@ -323,6 +324,10 @@ function TableDetail({
               Features
             </TabsTrigger>
           )}
+          <TabsTrigger value="annotations" className="text-xs h-7 gap-1">
+            <Settings2 className="h-3 w-3" />
+            Annotations
+          </TabsTrigger>
         </TabsList>
 
         {/* Browse tab is NOT inside ScrollArea — it manages its own scrolling */}
@@ -419,6 +424,10 @@ function TableDetail({
               </div>
             </TabsContent>
           )}
+
+          <TabsContent value="annotations" className="mt-0 px-4 pb-4">
+            <AnnotationsPanel table={table} />
+          </TabsContent>
         </ScrollArea>
       </Tabs>
     </div>

@@ -254,6 +254,7 @@ function parseErmrestSchema(raw: any): CatalogSchema {
         display_name: displayName,
         row_name_pattern: rowNamePattern,
         features,
+        annotations,
       };
     }
 

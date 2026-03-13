@@ -29,6 +29,7 @@ export interface TableInfo {
   visible_columns?: string[]; // from tag:isrd.isi.edu,2016:visible-columns "compact" context
   display_name?: string; // from tag:isrd.isi.edu,2015:display
   row_name_pattern?: string; // from tag:isrd.isi.edu,2016:table-display
+  annotations: Record<string, any>; // raw annotation map keyed by tag URI
 }
 
 export interface SchemaInfo {
