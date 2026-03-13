@@ -12,15 +12,23 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { EnrichedTable, ColumnInfo } from "@/types";
+import {
+  TAG,
+  getTagInfo,
+  getMissingTags,
+  shortTagName,
+  type ModelObjectType,
+  type AnnotationTagInfo,
+} from "@/annotation-registry";
 
-// Annotation tag constants
+// Short aliases
 const TAGS = {
-  DISPLAY: "tag:misd.isi.edu,2015:display",
-  VISIBLE_COLUMNS: "tag:isrd.isi.edu,2016:visible-columns",
-  VISIBLE_FOREIGN_KEYS: "tag:isrd.isi.edu,2016:visible-foreign-keys",
-  TABLE_DISPLAY: "tag:isrd.isi.edu,2016:table-display",
-  COLUMN_DISPLAY: "tag:isrd.isi.edu,2016:column-display",
-  ASSET: "tag:isrd.isi.edu,2017:asset",
+  DISPLAY: TAG.display,
+  VISIBLE_COLUMNS: TAG.visible_columns,
+  VISIBLE_FOREIGN_KEYS: TAG.visible_foreign_keys,
+  TABLE_DISPLAY: TAG.table_display,
+  COLUMN_DISPLAY: TAG.column_display,
+  ASSET: TAG.asset,
 } as const;
 
 // Known context names
@@ -128,15 +136,11 @@ function TableAnnotations({ annotations }: { annotations: Record<string, any> })
   const hasVisibleFKs = !!annotations[TAGS.VISIBLE_FOREIGN_KEYS];
   const hasTableDisplay = !!annotations[TAGS.TABLE_DISPLAY];
 
-  const hasAny = hasDisplay || hasVisibleCols || hasVisibleFKs || hasTableDisplay;
+  // Other present annotations not handled by specialized sections
+  const specializedTags = new Set([TAGS.DISPLAY, TAGS.VISIBLE_COLUMNS, TAGS.VISIBLE_FOREIGN_KEYS, TAGS.TABLE_DISPLAY]);
+  const otherPresent = Object.keys(annotations).filter((t) => !specializedTags.has(t));
 
-  if (!hasAny) {
-    return (
-      <div className="py-4 text-center text-xs text-slate-400">
-        No display annotations on this table
-      </div>
-    );
-  }
+  const missing = getMissingTags("table", annotations);
 
   return (
     <div className="space-y-3">
@@ -144,6 +148,10 @@ function TableAnnotations({ annotations }: { annotations: Record<string, any> })
       {hasVisibleCols && <VisibleColumnsSection data={annotations[TAGS.VISIBLE_COLUMNS]} />}
       {hasVisibleFKs && <VisibleForeignKeysSection data={annotations[TAGS.VISIBLE_FOREIGN_KEYS]} />}
       {hasTableDisplay && <TableDisplaySection data={annotations[TAGS.TABLE_DISPLAY]} />}
+      {otherPresent.map((tag) => (
+        <RawAnnotationSection key={tag} tag={tag} data={annotations[tag]} />
+      ))}
+      <AvailableAnnotations missing={missing} />
     </div>
   );
 }
@@ -160,13 +168,7 @@ function ColumnAnnotations({ column }: { column: ColumnInfo }) {
   const knownTags = new Set([TAGS.DISPLAY, TAGS.COLUMN_DISPLAY, TAGS.ASSET]);
   const otherTags = Object.keys(anno).filter((t) => !knownTags.has(t));
 
-  if (!hasDisplay && !hasColumnDisplay && !hasAsset && otherTags.length === 0) {
-    return (
-      <div className="py-4 text-center text-xs text-slate-400">
-        No annotations on column <span className="font-mono">{column.name}</span>
-      </div>
-    );
-  }
+  const missing = getMissingTags("column", anno);
 
   return (
     <div className="space-y-3">
@@ -180,6 +182,7 @@ function ColumnAnnotations({ column }: { column: ColumnInfo }) {
       {otherTags.map((tag) => (
         <RawAnnotationSection key={tag} tag={tag} data={anno[tag]} />
       ))}
+      <AvailableAnnotations missing={missing} />
     </div>
   );
 }
@@ -197,13 +200,7 @@ export function SchemaAnnotationsPanel({
   const knownTags = new Set([TAGS.DISPLAY]);
   const otherTags = Object.keys(annotations).filter((t) => !knownTags.has(t));
 
-  if (!hasDisplay && otherTags.length === 0) {
-    return (
-      <div className="py-4 text-center text-xs text-slate-400">
-        No annotations on this schema
-      </div>
-    );
-  }
+  const missing = getMissingTags("schema", annotations);
 
   return (
     <div className="space-y-3">
@@ -211,6 +208,7 @@ export function SchemaAnnotationsPanel({
       {otherTags.map((tag) => (
         <RawAnnotationSection key={tag} tag={tag} data={annotations[tag]} />
       ))}
+      <AvailableAnnotations missing={missing} />
     </div>
   );
 }
@@ -229,18 +227,99 @@ function Section({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const info = getTagInfo(tag);
   return (
     <div className="border border-slate-200 rounded-md overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
+        className="w-full text-left px-3 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
       >
-        <span className="text-xs font-semibold text-slate-700">{title}</span>
-        <span className="text-[10px] font-mono text-slate-400 truncate ml-2 max-w-[160px]">
-          {tag.split(",").pop()}
-        </span>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-slate-700">{title}</span>
+          <span className="text-[10px] font-mono text-slate-400 truncate ml-2 max-w-[160px]">
+            {tag.split(",").pop()}
+          </span>
+        </div>
+        {info && (
+          <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+            {info.description}
+          </div>
+        )}
       </button>
       {open && <div className="px-3 py-2 space-y-2">{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * Shows annotations that are valid for this object type but not yet present.
+ * Mirrors the workbench's "Add missing annotations" context menu.
+ */
+function AvailableAnnotations({ missing }: { missing: AnnotationTagInfo[] }) {
+  const [open, setOpen] = useState(false);
+
+  if (missing.length === 0) return null;
+
+  return (
+    <div className="border border-dashed border-slate-200 rounded-md overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">
+            Available annotations
+          </span>
+          <Badge variant="secondary" className="text-[9px]">
+            {missing.length}
+          </Badge>
+        </div>
+        <div className="text-[10px] text-slate-300 mt-0.5">
+          Annotations that can be added to this object
+        </div>
+      </button>
+      {open && (
+        <div className="px-3 pb-2 space-y-1.5">
+          {missing.map((info) => (
+            <div
+              key={info.tag}
+              className="flex items-start gap-2 py-1 border-b border-slate-50 last:border-b-0"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-medium text-slate-500">
+                  {info.name}
+                  {info.contextualized && (
+                    <span className="ml-1 text-[9px] text-slate-300 font-normal">
+                      contextualized
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 leading-snug">
+                  {info.description}
+                </div>
+                {info.properties && info.properties.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {info.properties.slice(0, 5).map((p) => (
+                      <span
+                        key={p.name}
+                        className="text-[9px] font-mono text-slate-400 bg-slate-50 rounded px-1 py-0.5"
+                        title={p.description}
+                      >
+                        {p.name}
+                      </span>
+                    ))}
+                    {info.properties.length > 5 && (
+                      <span className="text-[9px] text-slate-300">
+                        +{info.properties.length - 5} more
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -757,9 +836,8 @@ function AssetSection({ data }: { data: any }) {
 // ── Raw/unknown annotation fallback ─────────────────────────────
 
 function RawAnnotationSection({ tag, data }: { tag: string; data: any }) {
-  const shortTag = tag.split(",").pop() || tag;
   return (
-    <Section title={shortTag} tag={tag} defaultOpen={false}>
+    <Section title={shortTagName(tag)} tag={tag} defaultOpen={false}>
       <pre className="text-[10px] font-mono text-slate-600 whitespace-pre-wrap break-all bg-slate-50 rounded p-2 max-h-40 overflow-auto">
         {JSON.stringify(data, null, 2)}
       </pre>
