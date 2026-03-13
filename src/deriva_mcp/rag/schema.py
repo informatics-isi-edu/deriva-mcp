@@ -43,7 +43,7 @@ def _table_to_markdown(
     schema_name: str,
     table_name: str,
     table_info: dict[str, Any],
-    vocabulary_terms: list[dict[str, str]] | None = None,
+    vocabulary_terms: list[dict[str, Any]] | None = None,
 ) -> str:
     """Render a single table as a markdown document.
 
@@ -51,8 +51,9 @@ def _table_to_markdown(
         schema_name: Schema containing the table.
         table_name: Table name.
         table_info: Table info dict from ``get_schema_description()``.
-        vocabulary_terms: Optional list of term dicts with 'Name' and 'Description'
-            keys. Included for vocabulary tables so RAG can answer
+        vocabulary_terms: Optional list of term dicts with ``Name``,
+            ``Description``, and optionally ``Synonyms`` (list of strings).
+            Included for vocabulary tables so RAG can answer
             "what values are available?" questions.
     """
     parts: list[str] = []
@@ -111,10 +112,13 @@ def _table_to_markdown(
         for term in vocabulary_terms:
             name = term.get("Name", "")
             desc = term.get("Description", "")
+            synonyms = term.get("Synonyms", []) or []
+            line = f"- **{name}**"
             if desc:
-                term_lines.append(f"- **{name}** — {desc}")
-            else:
-                term_lines.append(f"- **{name}**")
+                line += f" — {desc}"
+            if synonyms:
+                line += f" (synonyms: {', '.join(synonyms)})"
+            term_lines.append(line)
         parts.append("\n".join(term_lines))
 
     return "\n\n".join(parts)
@@ -122,16 +126,17 @@ def _table_to_markdown(
 
 def schema_to_markdown(
     schema_info: dict[str, Any],
-    vocabulary_terms: dict[str, list[dict[str, str]]] | None = None,
+    vocabulary_terms: dict[str, list[dict[str, Any]]] | None = None,
 ) -> str:
     """Convert a full catalog schema description to a markdown document.
 
     Args:
         schema_info: Output of ``ml.model.get_schema_description()``.
         vocabulary_terms: Optional mapping of ``table_name`` to a list of
-            term dicts (each with ``Name`` and ``Description`` keys).
-            Vocabulary terms are included in the markdown so RAG can
-            answer questions like "what diagnosis types exist?"
+            term dicts (each with ``Name``, ``Description``, and optionally
+            ``Synonyms`` keys). Vocabulary terms are included in the
+            markdown so RAG can answer questions like "what diagnosis
+            types exist?"
 
     Returns:
         A single markdown string covering all tables.
@@ -162,7 +167,7 @@ def index_catalog_schema(
     collection: Any,
     chunk_size_target: int = 800,
     overlap_sentences: int = 1,
-    vocabulary_terms: dict[str, list[dict[str, str]]] | None = None,
+    vocabulary_terms: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """Index a catalog schema into the RAG collection.
 
@@ -177,7 +182,8 @@ def index_catalog_schema(
         chunk_size_target: Target tokens per chunk.
         overlap_sentences: Sentence overlap between chunks.
         vocabulary_terms: Optional mapping of vocabulary table names to their
-            term lists (each term has ``Name`` and ``Description``).
+            term lists (each term has ``Name``, ``Description``, and
+            optionally ``Synonyms``).
 
     Returns:
         Dict with indexing statistics.

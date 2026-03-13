@@ -336,9 +336,13 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
             for table_name, table_info in tables.items():
                 if table_info.get("is_vocabulary"):
                     try:
-                        terms = ml.list_vocabulary(table_name)
+                        terms = ml.list_vocabulary_terms(table_name)
                         vocab_terms[table_name] = [
-                            {"Name": t.name, "Description": t.description or ""}
+                            {
+                                "Name": t.name,
+                                "Description": t.description or "",
+                                "Synonyms": list(t.synonyms) if t.synonyms else [],
+                            }
                             for t in terms
                         ]
                     except Exception:

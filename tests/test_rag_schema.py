@@ -158,6 +158,38 @@ class TestTableToMarkdownWithVocabTerms:
         assert "**Unknown**" in md
         assert "—" not in md.split("### Terms")[1]  # no dash for empty description
 
+    def test_term_with_synonyms(self):
+        terms = [
+            {"Name": "Normal", "Description": "No pathology", "Synonyms": ["Healthy", "NL"]},
+        ]
+        md = _table_to_markdown("isa", "Diagnosis", SAMPLE_VOCAB_TABLE_INFO, terms)
+        assert "synonyms: Healthy, NL" in md
+
+    def test_term_with_empty_synonyms(self):
+        terms = [{"Name": "Normal", "Description": "No pathology", "Synonyms": []}]
+        md = _table_to_markdown("isa", "Diagnosis", SAMPLE_VOCAB_TABLE_INFO, terms)
+        assert "synonyms" not in md
+
+    def test_term_with_no_synonyms_key(self):
+        terms = [{"Name": "Normal", "Description": "No pathology"}]
+        md = _table_to_markdown("isa", "Diagnosis", SAMPLE_VOCAB_TABLE_INFO, terms)
+        assert "synonyms" not in md
+
+    def test_term_with_synonyms_and_no_description(self):
+        terms = [{"Name": "Normal", "Description": "", "Synonyms": ["Healthy"]}]
+        md = _table_to_markdown("isa", "Diagnosis", SAMPLE_VOCAB_TABLE_INFO, terms)
+        assert "**Normal**" in md
+        assert "(synonyms: Healthy)" in md
+        # No dash before synonyms when description is empty
+        assert "— (synonyms" not in md
+
+    def test_term_with_description_and_synonyms(self):
+        terms = [
+            {"Name": "Glaucoma", "Description": "Optic nerve damage", "Synonyms": ["GLC"]},
+        ]
+        md = _table_to_markdown("isa", "Diagnosis", SAMPLE_VOCAB_TABLE_INFO, terms)
+        assert "**Glaucoma** — Optic nerve damage (synonyms: GLC)" in md
+
 
 class TestSchemaToMarkdown:
     def test_contains_header(self):
@@ -185,6 +217,18 @@ class TestSchemaToMarkdown:
         assert "Optic nerve damage" in md
         # Non-vocabulary tables should NOT have terms
         assert md.count("### Terms") == 1  # only Diagnosis
+
+    def test_vocab_synonyms_in_full_schema(self):
+        vocab = {"Diagnosis": [
+            {"Name": "Normal", "Description": "Healthy", "Synonyms": ["NL", "Neg"]},
+            {"Name": "Glaucoma", "Description": "Optic nerve damage", "Synonyms": []},
+        ]}
+        md = schema_to_markdown(SAMPLE_SCHEMA_INFO, vocabulary_terms=vocab)
+        assert "synonyms: NL, Neg" in md
+        # Glaucoma has empty synonyms list — no synonyms text
+        assert "Glaucoma** — Optic nerve damage" in md
+        glaucoma_section = md.split("Glaucoma")[1].split("\n")[0]
+        assert "synonyms" not in glaucoma_section
 
     def test_chunks_properly(self):
         """Schema markdown should be chunkable."""
