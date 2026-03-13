@@ -465,6 +465,7 @@ class RAGManager:
         schema_info: dict[str, Any],
         hostname: str,
         catalog_id: str | int,
+        vocabulary_terms: dict[str, list[dict[str, str]]] | None = None,
     ) -> dict[str, Any]:
         """Index a catalog's schema for RAG search.
 
@@ -476,6 +477,9 @@ class RAGManager:
             schema_info: Output of ``ml.model.get_schema_description()``.
             hostname: Catalog hostname.
             catalog_id: Catalog ID.
+            vocabulary_terms: Optional mapping of vocabulary table names to their
+                term lists. Included in the index so RAG can answer questions
+                about available vocabulary values.
 
         Returns:
             Dict with indexing statistics.
@@ -490,6 +494,7 @@ class RAGManager:
             collection=self._collection,
             chunk_size_target=self._config.chunk_size_target,
             overlap_sentences=self._config.chunk_overlap_sentences,
+            vocabulary_terms=vocabulary_terms,
         )
 
     def remove_catalog_schema(self, hostname: str, catalog_id: str | int) -> dict[str, Any]:

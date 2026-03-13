@@ -43,8 +43,18 @@ def _table_to_markdown(
     schema_name: str,
     table_name: str,
     table_info: dict[str, Any],
+    vocabulary_terms: list[dict[str, str]] | None = None,
 ) -> str:
-    """Render a single table as a markdown document."""
+    """Render a single table as a markdown document.
+
+    Args:
+        schema_name: Schema containing the table.
+        table_name: Table name.
+        table_info: Table info dict from ``get_schema_description()``.
+        vocabulary_terms: Optional list of term dicts with 'Name' and 'Description'
+            keys. Included for vocabulary tables so RAG can answer
+            "what values are available?" questions.
+    """
     parts: list[str] = []
 
     # Table classification
@@ -94,18 +104,39 @@ def _table_to_markdown(
             feat_lines.append(f"- **{f['name']}** (table: {f['feature_table']})")
         parts.append("\n".join(feat_lines))
 
+    # Vocabulary terms (for vocabulary tables)
+    if vocabulary_terms:
+        parts.append("### Terms")
+        term_lines = []
+        for term in vocabulary_terms:
+            name = term.get("Name", "")
+            desc = term.get("Description", "")
+            if desc:
+                term_lines.append(f"- **{name}** — {desc}")
+            else:
+                term_lines.append(f"- **{name}**")
+        parts.append("\n".join(term_lines))
+
     return "\n\n".join(parts)
 
 
-def schema_to_markdown(schema_info: dict[str, Any]) -> str:
+def schema_to_markdown(
+    schema_info: dict[str, Any],
+    vocabulary_terms: dict[str, list[dict[str, str]]] | None = None,
+) -> str:
     """Convert a full catalog schema description to a markdown document.
 
     Args:
         schema_info: Output of ``ml.model.get_schema_description()``.
+        vocabulary_terms: Optional mapping of ``table_name`` to a list of
+            term dicts (each with ``Name`` and ``Description`` keys).
+            Vocabulary terms are included in the markdown so RAG can
+            answer questions like "what diagnosis types exist?"
 
     Returns:
         A single markdown string covering all tables.
     """
+    vocab_terms = vocabulary_terms or {}
     parts: list[str] = []
 
     domain_schemas = schema_info.get("domain_schemas", [])
@@ -118,7 +149,8 @@ def schema_to_markdown(schema_info: dict[str, Any]) -> str:
     for schema_name, schema_data in schemas.items():
         tables = schema_data.get("tables", {})
         for table_name, table_info in sorted(tables.items()):
-            parts.append(_table_to_markdown(schema_name, table_name, table_info))
+            terms = vocab_terms.get(table_name)
+            parts.append(_table_to_markdown(schema_name, table_name, table_info, terms))
 
     return "\n\n".join(parts)
 
@@ -130,6 +162,7 @@ def index_catalog_schema(
     collection: Any,
     chunk_size_target: int = 800,
     overlap_sentences: int = 1,
+    vocabulary_terms: dict[str, list[dict[str, str]]] | None = None,
 ) -> dict[str, Any]:
     """Index a catalog schema into the RAG collection.
 
@@ -143,12 +176,16 @@ def index_catalog_schema(
         collection: ChromaDB collection.
         chunk_size_target: Target tokens per chunk.
         overlap_sentences: Sentence overlap between chunks.
+        vocabulary_terms: Optional mapping of vocabulary table names to their
+            term lists (each term has ``Name`` and ``Description``).
 
     Returns:
         Dict with indexing statistics.
     """
     source = schema_source_name(hostname, catalog_id)
-    current_hash = _schema_hash(schema_info)
+    # Include vocab terms in hash so term changes trigger re-indexing
+    hash_input = {**schema_info, "_vocab_terms": vocabulary_terms or {}}
+    current_hash = _schema_hash(hash_input)
 
     # Check if already indexed with same hash
     try:
@@ -172,7 +209,7 @@ def index_catalog_schema(
     _remove_schema_chunks(collection, source)
 
     # Convert to markdown and chunk
-    markdown = schema_to_markdown(schema_info)
+    markdown = schema_to_markdown(schema_info, vocabulary_terms=vocabulary_terms)
     chunks = chunk_markdown(
         markdown,
         chunk_size_target=chunk_size_target,

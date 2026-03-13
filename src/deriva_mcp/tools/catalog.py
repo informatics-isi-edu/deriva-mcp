@@ -21,6 +21,10 @@ logger = logging.getLogger("deriva-mcp")
 def _index_schema_background(ml: Any, hostname: str, catalog_id: str | int) -> None:
     """Index the catalog schema for RAG search in a background thread.
 
+    Indexes table structure (columns, FKs, features) and vocabulary terms
+    so RAG can answer questions like "what tables exist?", "how are images
+    related to subjects?", and "what diagnosis types are available?".
+
     Runs silently — failures are logged but don't affect the connection.
     Uses schema hashing for change detection, so repeated connects
     to the same catalog are fast (no-op if schema unchanged).
@@ -36,7 +40,27 @@ def _index_schema_background(ml: Any, hostname: str, catalog_id: str | int) -> N
                 return
 
             schema_info = ml.model.get_schema_description()
-            result = manager.index_catalog_schema(schema_info, hostname, catalog_id)
+
+            # Fetch vocabulary terms for all vocabulary tables
+            vocab_terms: dict[str, list[dict[str, str]]] = {}
+            schemas = schema_info.get("schemas", {})
+            for schema_data in schemas.values():
+                tables = schema_data.get("tables", {})
+                for table_name, table_info in tables.items():
+                    if table_info.get("is_vocabulary"):
+                        try:
+                            terms = ml.list_vocabulary(table_name)
+                            vocab_terms[table_name] = [
+                                {"Name": t.name, "Description": t.description or ""}
+                                for t in terms
+                            ]
+                        except Exception:
+                            pass  # Skip vocabs that can't be read
+
+            result = manager.index_catalog_schema(
+                schema_info, hostname, catalog_id,
+                vocabulary_terms=vocab_terms,
+            )
             status = result.get("status", "unknown")
             if status == "indexed":
                 logger.info(

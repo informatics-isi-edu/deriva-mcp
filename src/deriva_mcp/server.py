@@ -97,11 +97,12 @@ Always call `connect_catalog` before using other tools. This establishes the con
 2. `connect_catalog` - Connect using catalog ID or alias name
 
 **Exploring a catalog:**
-1. `connect_catalog` - Connect to the catalog
-2. Read `deriva://catalog/schema` resource - Understand the full schema (tables, columns, FKs, features)
-3. Read `deriva://catalog/datasets` resource - See available datasets
-4. Read `deriva://catalog/vocabularies` resource - Explore controlled vocabularies
-5. Read `deriva://catalog/features` resource - Examine feature definitions
+1. `connect_catalog` - Connect to the catalog (also indexes the schema for semantic search)
+2. `rag_search("your question")` - Search schema and docs with natural language (best for discovery)
+3. Read `deriva://catalog/schema` resource - Get full schema as structured JSON (best for programmatic use)
+4. Read `deriva://catalog/datasets` resource - See available datasets
+5. Read `deriva://catalog/vocabularies` resource - Explore controlled vocabularies
+6. Read `deriva://catalog/features` resource - Examine feature definitions
 
 **Creating a new catalog:**
 1. `create_catalog` - Create a new DerivaML catalog (optionally with an alias)
@@ -700,6 +701,20 @@ The `cite()` method:
 ## Before Calling Tools
 
 **Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
+
+## Searching Documentation and Catalog Schema
+
+Use `rag_search()` for natural language questions about Deriva APIs or the connected catalog's schema. The RAG index includes both static documentation (deriva-ml, ermrest, chaise, deriva-py) and the connected catalog's schema (tables, columns, foreign keys, features, vocabulary terms).
+
+**When to use `rag_search` vs structured resources:**
+
+- `rag_search("how are subjects related to images?")` — discovery questions, fuzzy lookup, understanding relationships
+- `rag_search("what diagnosis types are available?")` — find vocabulary terms by meaning
+- `rag_search("how to create a dataset with train/test split")` — API usage questions
+- Read `deriva://catalog/schema` — get the complete schema as JSON for programmatic use
+- Read `deriva://table/{name}/schema` — get one table's full structure
+
+After schema changes (creating tables, adding columns, creating features), call `rag_index_schema()` to update the search index.
 
 ## Background Tasks for Long-Running Operations
 

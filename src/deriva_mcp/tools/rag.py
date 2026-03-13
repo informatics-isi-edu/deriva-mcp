@@ -327,6 +327,24 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
         manager = get_rag_manager()
         ml = conn_info.ml_instance
         schema_info = ml.model.get_schema_description()
+
+        # Fetch vocabulary terms for richer indexing
+        vocab_terms: dict = {}
+        schemas = schema_info.get("schemas", {})
+        for schema_data in schemas.values():
+            tables = schema_data.get("tables", {})
+            for table_name, table_info in tables.items():
+                if table_info.get("is_vocabulary"):
+                    try:
+                        terms = ml.list_vocabulary(table_name)
+                        vocab_terms[table_name] = [
+                            {"Name": t.name, "Description": t.description or ""}
+                            for t in terms
+                        ]
+                    except Exception:
+                        pass
+
         return manager.index_catalog_schema(
-            schema_info, conn_info.hostname, conn_info.catalog_id
+            schema_info, conn_info.hostname, conn_info.catalog_id,
+            vocabulary_terms=vocab_terms,
         )

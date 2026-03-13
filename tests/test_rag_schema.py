@@ -136,6 +136,29 @@ class TestTableToMarkdown:
         assert "### Features" not in md
 
 
+class TestTableToMarkdownWithVocabTerms:
+    def test_vocab_terms_included(self):
+        terms = [
+            {"Name": "Normal", "Description": "No pathology detected"},
+            {"Name": "Abnormal", "Description": "Pathology present"},
+        ]
+        md = _table_to_markdown("isa", "Diagnosis", SAMPLE_VOCAB_TABLE_INFO, terms)
+        assert "### Terms" in md
+        assert "**Normal**" in md
+        assert "No pathology detected" in md
+        assert "**Abnormal**" in md
+
+    def test_no_terms_section_without_terms(self):
+        md = _table_to_markdown("isa", "Image", SAMPLE_TABLE_INFO, None)
+        assert "### Terms" not in md
+
+    def test_term_without_description(self):
+        terms = [{"Name": "Unknown", "Description": ""}]
+        md = _table_to_markdown("isa", "Diagnosis", SAMPLE_VOCAB_TABLE_INFO, terms)
+        assert "**Unknown**" in md
+        assert "—" not in md.split("### Terms")[1]  # no dash for empty description
+
+
 class TestSchemaToMarkdown:
     def test_contains_header(self):
         md = schema_to_markdown(SAMPLE_SCHEMA_INFO)
@@ -150,6 +173,18 @@ class TestSchemaToMarkdown:
         assert "Image" in md
         assert "Diagnosis" in md
         assert "Dataset" in md
+
+    def test_vocab_terms_in_full_schema(self):
+        vocab = {"Diagnosis": [
+            {"Name": "Normal", "Description": "Healthy"},
+            {"Name": "Glaucoma", "Description": "Optic nerve damage"},
+        ]}
+        md = schema_to_markdown(SAMPLE_SCHEMA_INFO, vocabulary_terms=vocab)
+        assert "Normal" in md
+        assert "Glaucoma" in md
+        assert "Optic nerve damage" in md
+        # Non-vocabulary tables should NOT have terms
+        assert md.count("### Terms") == 1  # only Diagnosis
 
     def test_chunks_properly(self):
         """Schema markdown should be chunkable."""
