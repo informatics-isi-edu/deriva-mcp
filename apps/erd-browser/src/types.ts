@@ -36,6 +36,7 @@ export interface TableInfo {
 export interface SchemaInfo {
   comment: string;
   tables: Record<string, TableInfo>;
+  annotations: Record<string, any>;
 }
 
 export interface CatalogSchema {

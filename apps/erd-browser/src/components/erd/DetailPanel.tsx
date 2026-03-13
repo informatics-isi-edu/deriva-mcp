@@ -15,7 +15,7 @@ import {
 import type { EnrichedTable, CatalogSchema } from "@/types";
 import { chaiseRecordsetUrl } from "@/ermrest-client";
 import DataBrowser from "./DataBrowser";
-import AnnotationsPanel from "./AnnotationsPanel";
+import AnnotationsPanel, { SchemaAnnotationsPanel } from "./AnnotationsPanel";
 
 interface DetailPanelProps {
   // Table-level detail
@@ -183,6 +183,13 @@ function SchemaDetail({
               )}
             </Section>
           )}
+
+          {/* Schema annotations */}
+          <Section title="Annotations">
+            <SchemaAnnotationsPanel
+              annotations={schema.schemas[schemaName]?.annotations || {}}
+            />
+          </Section>
         </div>
       </ScrollArea>
     </div>

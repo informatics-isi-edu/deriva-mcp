@@ -184,6 +184,37 @@ function ColumnAnnotations({ column }: { column: ColumnInfo }) {
   );
 }
 
+// ── Schema-level annotations ────────────────────────────────────
+
+export function SchemaAnnotationsPanel({
+  annotations,
+}: {
+  annotations: Record<string, any>;
+}) {
+  const hasDisplay = !!annotations[TAGS.DISPLAY];
+
+  // Show any other annotations as raw JSON
+  const knownTags = new Set([TAGS.DISPLAY]);
+  const otherTags = Object.keys(annotations).filter((t) => !knownTags.has(t));
+
+  if (!hasDisplay && otherTags.length === 0) {
+    return (
+      <div className="py-4 text-center text-xs text-slate-400">
+        No annotations on this schema
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {hasDisplay && <DisplaySection data={annotations[TAGS.DISPLAY]} />}
+      {otherTags.map((tag) => (
+        <RawAnnotationSection key={tag} tag={tag} data={annotations[tag]} />
+      ))}
+    </div>
+  );
+}
+
 // ── Section wrapper ─────────────────────────────────────────────
 
 function Section({

@@ -259,7 +259,11 @@ function parseErmrestSchema(raw: any): CatalogSchema {
       };
     }
 
-    schemas[schemaName] = { comment: (schemaObj as any).comment || "", tables };
+    schemas[schemaName] = {
+      comment: (schemaObj as any).comment || "",
+      tables,
+      annotations: (schemaObj as any).annotations || {},
+    };
   }
 
   return {
