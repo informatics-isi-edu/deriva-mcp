@@ -331,12 +331,39 @@ class RAGManager:
                 "last_indexed_at": source.last_indexed_at.isoformat() if source.last_indexed_at else None,
             })
 
+        # Find indexed catalog schemas (source names starting with "schema:")
+        schema_sources = []
+        try:
+            all_results = self._collection.get(
+                where={"doc_type": "catalog-schema"},
+                include=["metadatas"],
+            )
+            if all_results and all_results["metadatas"]:
+                # Group by source
+                schema_counts: dict[str, int] = {}
+                schema_hashes: dict[str, str] = {}
+                for metadata in all_results["metadatas"]:
+                    src = metadata.get("source", "")
+                    schema_counts[src] = schema_counts.get(src, 0) + 1
+                    if "schema_hash" in metadata:
+                        schema_hashes[src] = metadata["schema_hash"]
+                for src, count in sorted(schema_counts.items()):
+                    schema_sources.append({
+                        "name": src,
+                        "doc_type": "catalog-schema",
+                        "chunk_count": count,
+                        "schema_hash": schema_hashes.get(src, ""),
+                    })
+        except Exception:
+            pass
+
         return {
             "initialized": self._initialized,
             "total_chunks": self._collection.count() if self._collection else 0,
             "persist_dir": str(self._config.persist_dir),
             "collection_name": self._config.collection_name,
             "sources": sources_info,
+            "catalog_schemas": schema_sources,
         }
 
     def add_source(
@@ -432,6 +459,55 @@ class RAGManager:
             "source": name,
             "chunks_deleted": chunks_deleted,
         }
+
+    def index_catalog_schema(
+        self,
+        schema_info: dict[str, Any],
+        hostname: str,
+        catalog_id: str | int,
+    ) -> dict[str, Any]:
+        """Index a catalog's schema for RAG search.
+
+        Converts the schema to markdown, chunks it, and stores it in the
+        same collection as documentation. Uses schema hashing for change
+        detection — returns immediately if the schema hasn't changed.
+
+        Args:
+            schema_info: Output of ``ml.model.get_schema_description()``.
+            hostname: Catalog hostname.
+            catalog_id: Catalog ID.
+
+        Returns:
+            Dict with indexing statistics.
+        """
+        self._ensure_initialized()
+        from deriva_mcp.rag.schema import index_catalog_schema
+
+        return index_catalog_schema(
+            schema_info=schema_info,
+            hostname=hostname,
+            catalog_id=catalog_id,
+            collection=self._collection,
+            chunk_size_target=self._config.chunk_size_target,
+            overlap_sentences=self._config.chunk_overlap_sentences,
+        )
+
+    def remove_catalog_schema(self, hostname: str, catalog_id: str | int) -> dict[str, Any]:
+        """Remove indexed schema chunks for a catalog.
+
+        Args:
+            hostname: Catalog hostname.
+            catalog_id: Catalog ID.
+
+        Returns:
+            Dict with removal status.
+        """
+        self._ensure_initialized()
+        from deriva_mcp.rag.schema import _remove_schema_chunks, schema_source_name
+
+        source = schema_source_name(hostname, catalog_id)
+        deleted = _remove_schema_chunks(self._collection, source)
+        return {"source": source, "chunks_deleted": deleted}
 
     def shutdown(self) -> None:
         """Clean shutdown of the RAG manager."""

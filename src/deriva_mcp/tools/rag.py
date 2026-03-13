@@ -36,17 +36,24 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
         limit: int = 10,
         source: str | None = None,
         doc_type: str | None = None,
+        include_schema: bool = True,
     ) -> dict:
         """Search Deriva documentation using semantic similarity.
 
         Searches across indexed documentation from Deriva ecosystem repositories
         (deriva-ml, ermrest, chaise, deriva-py) using vector embeddings.
 
+        When connected to a catalog, also searches the catalog's indexed schema
+        (tables, columns, foreign keys, features) unless include_schema=False.
+
         Args:
             query: Natural language search query (e.g., "how to create a dataset")
             limit: Maximum number of results to return (default 10)
             source: Filter by source name (e.g., "deriva-ml-docs", "ermrest-docs")
-            doc_type: Filter by document type (e.g., "api-reference", "user-guide", "sdk-reference")
+            doc_type: Filter by document type (e.g., "api-reference", "user-guide",
+                     "sdk-reference", "catalog-schema")
+            include_schema: If True (default), include catalog schema results when
+                          connected. Set to False to search only documentation.
 
         Returns:
             Dict with search results including text snippets, relevance scores,
@@ -59,12 +66,39 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
         from deriva_mcp.rag import get_rag_manager
 
         manager = get_rag_manager()
-        results = manager.search(query=query, limit=limit, source=source, doc_type=doc_type)
+
+        # If caller specified a source or doc_type filter, use it directly
+        if source or doc_type:
+            results = manager.search(query=query, limit=limit, source=source, doc_type=doc_type)
+            return {
+                "query": query,
+                "result_count": len(results),
+                "results": results,
+            }
+
+        # Default: search docs, and optionally include catalog schema
+        doc_results = manager.search(query=query, limit=limit)
+
+        schema_results = []
+        if include_schema:
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                from deriva_mcp.rag.schema import schema_source_name
+
+                catalog_source = schema_source_name(conn_info.hostname, conn_info.catalog_id)
+                schema_results = manager.search(
+                    query=query, limit=limit, source=catalog_source
+                )
+
+        # Merge and re-rank by relevance
+        all_results = doc_results + schema_results
+        all_results.sort(key=lambda r: r.get("relevance", 0), reverse=True)
+        all_results = all_results[:limit]
 
         return {
             "query": query,
-            "result_count": len(results),
-            "results": results,
+            "result_count": len(all_results),
+            "results": all_results,
         }
 
     @mcp_server.tool()
@@ -265,3 +299,34 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
 
         manager = get_rag_manager()
         return manager.remove_source(name)
+
+    @mcp_server.tool()
+    def rag_index_schema() -> dict:
+        """Re-index the connected catalog's schema for RAG search.
+
+        Fetches the current schema from the connected catalog and indexes
+        it for semantic search. This happens automatically on connect_catalog,
+        but can be called manually after schema changes (e.g., after creating
+        tables, adding columns, or creating features).
+
+        Uses schema hashing — returns immediately if unchanged.
+
+        Returns:
+            Dict with indexing statistics (status, chunks_created, schema_hash).
+        """
+        error = _get_rag_or_error()
+        if error:
+            return error
+
+        conn_info = conn_manager.get_active_connection_info()
+        if not conn_info:
+            return {"error": "No active catalog connection. Run connect_catalog first."}
+
+        from deriva_mcp.rag import get_rag_manager
+
+        manager = get_rag_manager()
+        ml = conn_info.ml_instance
+        schema_info = ml.model.get_schema_description()
+        return manager.index_catalog_schema(
+            schema_info, conn_info.hostname, conn_info.catalog_id
+        )
