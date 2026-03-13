@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import { Search, Filter, ChevronRight, LayoutGrid, ZoomIn, ZoomOut, Maximize2, Map } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Search, Filter, ChevronDown, ChevronRight, LayoutGrid, ZoomIn, ZoomOut, Maximize2, Map } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuCheckboxItem,
+  DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
   DropdownMenuLabel,
@@ -28,18 +29,20 @@ interface ToolbarProps {
   viewMode: "schemas" | "tables";
   activeSchema: string | null;
   onBackToSchemas: () => void;
+  onDrillIntoSchema: (schemaName: string) => void;
   // Autocomplete
   allTables: EnrichedTable[];
   onJumpToTable: (table: EnrichedTable) => void;
   canvasControls: CanvasControls | null;
+  onCatalogClick?: () => void;
 }
 
 const TYPE_DOT_COLORS: Record<string, string> = {
-  domain: "bg-slate-600",
-  ml: "bg-amber-600",
-  vocabulary: "bg-emerald-600",
-  asset: "bg-sky-600",
-  association: "bg-zinc-400",
+  domain: "bg-slate-700",
+  ml: "bg-amber-700",
+  vocabulary: "bg-emerald-700",
+  asset: "bg-sky-700",
+  association: "bg-zinc-500",
 };
 
 export default function Toolbar({
@@ -56,13 +59,21 @@ export default function Toolbar({
   viewMode,
   activeSchema,
   onBackToSchemas,
+  onDrillIntoSchema,
   allTables,
   onJumpToTable,
   canvasControls,
+  onCatalogClick,
 }: ToolbarProps) {
   const [open, setOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Derive unique schema names from tables for the schema dropdown
+  const schemaNames = useMemo(() => {
+    const names = new Set(allTables.map((t) => t.schema));
+    return [...names].sort();
+  }, [allTables]);
 
   // Compute filtered suggestions
   const suggestions = (() => {
@@ -115,40 +126,64 @@ export default function Toolbar({
   );
 
   return (
-    <div className="h-12 border-b border-slate-200 bg-white px-4 flex items-center gap-3">
+    <div className="h-11 border-b border-chaise-navbar bg-chaise-navbar px-4 flex items-center gap-3">
       {/* Breadcrumb navigation */}
       <div className="flex items-center gap-1.5">
         <button
-          onClick={onBackToSchemas}
+          onClick={viewMode === "schemas" ? onCatalogClick : onBackToSchemas}
           className={`text-sm font-semibold tracking-tight transition-colors ${
             viewMode === "schemas"
-              ? "text-slate-800"
-              : "text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+              ? "text-chaise-navbar-text hover:text-white cursor-pointer"
+              : "text-sky-300 hover:text-white hover:underline cursor-pointer"
           }`}
+          title={viewMode === "schemas" ? "View catalog annotations" : "Back to schemas"}
         >
           {hostname}
-          <span className="font-mono text-xs text-slate-400 ml-1">
+          <span className="font-mono text-[11px] text-chaise-navbar-text/60 ml-1">
             #{catalogId}
           </span>
         </button>
 
         {viewMode === "tables" && activeSchema && (
           <>
-            <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-            <span className="text-sm font-semibold text-slate-800">
-              {activeSchema}
-            </span>
+            <ChevronRight className="h-3.5 w-3.5 text-chaise-navbar-text/50" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1 text-sm font-semibold text-chaise-navbar-text hover:text-white transition-colors">
+                  {activeSchema}
+                  <ChevronDown className="h-3 w-3 text-chaise-navbar-text/50" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[160px]">
+                <DropdownMenuLabel className="text-[11px]">
+                  Switch schema
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {schemaNames.map((name) => (
+                  <DropdownMenuItem
+                    key={name}
+                    onClick={() => onDrillIntoSchema(name)}
+                    className={`text-xs ${name === activeSchema ? "font-semibold text-brand" : ""}`}
+                  >
+                    {name}
+                    {name === activeSchema && (
+                      <span className="ml-auto text-[10px] text-slate-400">current</span>
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         )}
       </div>
 
       {viewMode === "tables" && (
         <>
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="h-5 w-px bg-white/20" />
           <Button
             variant="outline"
             size="sm"
-            className="h-7 text-xs gap-1"
+            className="h-7 text-xs gap-1 bg-transparent border-white/30 text-chaise-navbar-text hover:bg-white/10 hover:text-white"
             onClick={onBackToSchemas}
           >
             <LayoutGrid className="h-3 w-3" />
@@ -157,11 +192,11 @@ export default function Toolbar({
         </>
       )}
 
-      <div className="h-5 w-px bg-slate-200" />
+      <div className="h-5 w-px bg-white/20" />
 
       {/* Search with autocomplete */}
       <div className="relative flex-1 max-w-sm">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 z-10" />
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/50 z-10" />
         <Input
           ref={inputRef}
           placeholder="Jump to table..."
@@ -177,7 +212,7 @@ export default function Toolbar({
             setTimeout(() => setOpen(false), 200);
           }}
           onKeyDown={handleKeyDown}
-          className="pl-8 h-8 text-xs"
+          className="pl-8 h-8 text-xs bg-white/10 border-white/20 text-white placeholder:text-white/40 focus:bg-white/15 focus:border-white/40"
         />
 
         {/* Autocomplete dropdown */}
@@ -193,8 +228,8 @@ export default function Toolbar({
                 onMouseEnter={() => setHighlightIndex(i)}
                 className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
                   i === highlightIndex
-                    ? "bg-slate-100"
-                    : "hover:bg-slate-50"
+                    ? "bg-chaise-hover"
+                    : "hover:bg-chaise-hover/50"
                 }`}
               >
                 <div
@@ -214,7 +249,7 @@ export default function Toolbar({
                 {t.recordCount !== null && t.recordCount >= 0 && (
                   <Badge
                     variant="secondary"
-                    className="text-[9px] px-1.5 py-0 flex-shrink-0"
+                    className="text-[10px] px-1.5 py-0 flex-shrink-0"
                   >
                     {t.recordCount.toLocaleString()}
                   </Badge>
@@ -232,7 +267,7 @@ export default function Toolbar({
             <Button
               variant="outline"
               size="sm"
-              className="h-8 text-xs gap-1.5"
+              className="h-8 text-xs gap-1.5 bg-transparent border-white/30 text-chaise-navbar-text hover:bg-white/10 hover:text-white"
             >
               <Filter className="h-3.5 w-3.5" />
               {filter === "all" ? "All types" : filter}
@@ -270,7 +305,7 @@ export default function Toolbar({
       )}
 
       {/* Count */}
-      <span className="text-[11px] text-slate-400 ml-auto">
+      <span className="text-xs text-chaise-navbar-text/60 ml-auto">
         {viewMode === "schemas" ? (
           <>{tableCount} tables across schemas</>
         ) : (
@@ -283,12 +318,12 @@ export default function Toolbar({
       {/* Canvas controls */}
       {canvasControls && (
         <>
-          <div className="h-5 w-px bg-slate-200" />
+          <div className="h-5 w-px bg-white/20" />
           <div className="flex items-center gap-0.5">
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="h-7 w-7 p-0 text-chaise-navbar-text/70 hover:text-white hover:bg-white/10"
               onClick={canvasControls.zoomIn}
               title="Zoom in"
             >
@@ -297,7 +332,7 @@ export default function Toolbar({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="h-7 w-7 p-0 text-chaise-navbar-text/70 hover:text-white hover:bg-white/10"
               onClick={canvasControls.zoomOut}
               title="Zoom out"
             >
@@ -306,7 +341,7 @@ export default function Toolbar({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              className="h-7 w-7 p-0 text-chaise-navbar-text/70 hover:text-white hover:bg-white/10"
               onClick={canvasControls.fitView}
               title="Fit view"
             >
@@ -315,7 +350,7 @@ export default function Toolbar({
             <Button
               variant="ghost"
               size="sm"
-              className={`h-7 w-7 p-0 ${canvasControls.showMiniMap ? "text-slate-700" : "text-slate-400"}`}
+              className={`h-7 w-7 p-0 hover:bg-white/10 ${canvasControls.showMiniMap ? "text-white" : "text-chaise-navbar-text/50"}`}
               onClick={() => canvasControls.setShowMiniMap(!canvasControls.showMiniMap)}
               title={canvasControls.showMiniMap ? "Hide mini map" : "Show mini map"}
             >
@@ -325,7 +360,7 @@ export default function Toolbar({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-1.5 text-[10px] font-medium text-slate-500"
+                className="h-7 px-1.5 text-[10px] font-medium text-chaise-navbar-text/60 hover:text-white hover:bg-white/10"
                 onClick={canvasControls.cycleMapSize}
                 title={`Map size: ${canvasControls.mapSize}`}
               >

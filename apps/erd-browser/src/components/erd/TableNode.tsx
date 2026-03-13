@@ -57,7 +57,7 @@ function TableNode({ data }: NodeProps) {
         px-5 py-4 rounded-lg border-2 shadow-sm min-w-[240px] max-w-[320px]
         transition-all duration-150 cursor-pointer
         ${colors.bg} ${colors.border}
-        ${selected ? "ring-2 ring-offset-2 ring-blue-500 shadow-lg scale-[1.02]" : ""}
+        ${selected ? "ring-2 ring-offset-2 ring-brand shadow-lg scale-[1.02]" : ""}
         hover:shadow-md hover:scale-[1.01]
       `}
     >

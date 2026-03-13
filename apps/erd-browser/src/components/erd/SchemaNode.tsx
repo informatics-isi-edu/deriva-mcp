@@ -22,7 +22,7 @@ function SchemaNode({ data }: NodeProps) {
 
   const bg = d.isMlSchema ? "bg-amber-50" : "bg-white";
   const border = d.isMlSchema ? "border-amber-400" : "border-slate-400";
-  const headerBg = d.isMlSchema ? "bg-amber-600" : "bg-slate-700";
+  const headerBg = d.isMlSchema ? "bg-amber-600" : "bg-chaise-navbar";
 
   return (
     <NodeTooltip
@@ -31,7 +31,7 @@ function SchemaNode({ data }: NodeProps) {
         rounded-lg border-2 shadow-md min-w-[220px] overflow-hidden
         transition-all duration-150 cursor-pointer
         ${bg} ${border}
-        ${selected ? "ring-2 ring-offset-2 ring-blue-500 shadow-lg scale-[1.02]" : ""}
+        ${selected ? "ring-2 ring-offset-2 ring-brand shadow-lg scale-[1.02]" : ""}
         hover:shadow-lg hover:scale-[1.01]
       `}
     >
@@ -68,16 +68,16 @@ function SchemaNode({ data }: NodeProps) {
       {/* Breakdown */}
       <div className="px-4 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1">
         {d.domainCount > 0 && (
-          <TypeRow label="Domain" count={d.domainCount} color="bg-slate-600" />
+          <TypeRow label="Domain" count={d.domainCount} color="bg-slate-700" />
         )}
         {d.vocabCount > 0 && (
-          <TypeRow label="Vocab" count={d.vocabCount} color="bg-emerald-600" />
+          <TypeRow label="Vocab" count={d.vocabCount} color="bg-emerald-700" />
         )}
         {d.assetCount > 0 && (
-          <TypeRow label="Asset" count={d.assetCount} color="bg-sky-600" />
+          <TypeRow label="Asset" count={d.assetCount} color="bg-sky-700" />
         )}
         {d.assocCount > 0 && (
-          <TypeRow label="Assoc" count={d.assocCount} color="bg-zinc-400" />
+          <TypeRow label="Assoc" count={d.assocCount} color="bg-zinc-500" />
         )}
       </div>
 
@@ -94,10 +94,10 @@ function TypeRow({ label, count, color }: { label: string; count: number; color:
   return (
     <div className="flex items-center gap-1.5">
       <div className={`w-2 h-2 rounded-sm ${color}`} />
-      <span className="text-[11px] text-slate-600">
+      <span className="text-xs text-slate-600">
         {label}
       </span>
-      <span className="text-[11px] font-semibold text-slate-800 ml-auto">
+      <span className="text-xs font-semibold text-slate-800 ml-auto">
         {count}
       </span>
     </div>

@@ -115,11 +115,13 @@ To update to the latest version:
 /plugin install deriva
 ```
 
-You can check whether your entire DerivaML ecosystem is up to date (skills plugin, deriva-ml library, and MCP server) by running:
+You can check whether your entire DerivaML ecosystem is up to date by running:
 
 ```
 /deriva:check-versions
 ```
+
+This checks three components — the **deriva-ml** Python package, the **deriva-mcp skills plugin**, and the **deriva-mcp MCP server** (Docker or native) — against upstream releases and offers to update outdated ones. You can also just ask *"check deriva versions"* or *"am I up to date?"* and the skill will be invoked automatically.
 
 ### Available Skills
 
@@ -144,7 +146,7 @@ You can check whether your entire DerivaML ecosystem is up to date (skills plugi
 | **Notebooks** | `/deriva:setup-notebook-environment` | Set up Jupyter environment for DerivaML |
 | | `/deriva:run-notebook` | Develop and run notebooks with execution tracking |
 | **Standards** | `/deriva:coding-guidelines` | DerivaML project coding standards |
-| **Maintenance** | `/deriva:check-versions` | Check if deriva-ml, skills, and MCP server are up to date |
+| **Maintenance** | `/deriva:check-versions` | Check all 3 ecosystem components (deriva-ml, skills plugin, MCP server) against upstream and update |
 
 **Auto-invoked** — Claude loads these automatically when relevant:
 

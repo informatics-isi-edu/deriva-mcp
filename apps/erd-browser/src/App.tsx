@@ -13,6 +13,7 @@ import {
   getCatalogInfo,
 } from "@/ermrest-client";
 import { hasCatalogConfig, getCatalogConfig } from "@/catalog-config";
+import { Toaster } from "@/components/ui/sonner";
 
 export default function App() {
   const [schema, setSchema] = useState<CatalogSchema | null>(null);
@@ -31,6 +32,7 @@ export default function App() {
   const [filter, setFilter] = useState<SchemaFilter>("all");
   const [hideAssociations, setHideAssociations] = useState(true);
   const [canvasControls, setCanvasControls] = useState<CanvasControls | null>(null);
+  const [showCatalog, setShowCatalog] = useState(false);
 
   const { hostname, catalogId } = getCatalogInfo();
 
@@ -105,6 +107,13 @@ export default function App() {
     setSelectedTable(null);
     setSearchQuery("");
     setFilter("all");
+    setShowCatalog(false);
+  }, []);
+
+  const onCatalogClick = useCallback(() => {
+    setShowCatalog((v) => !v);
+    setActiveSchema(null);
+    setSelectedTable(null);
   }, []);
 
   const handleJumpToTable = useCallback(
@@ -124,6 +133,7 @@ export default function App() {
 
   const onSelectTable = useCallback(
     (qn: string | null) => {
+      setShowCatalog(false);
       if (viewMode === "schemas") {
         setActiveSchema(qn);
         setSelectedTable(null);
@@ -206,6 +216,8 @@ export default function App() {
   }
 
   return (
+    <>
+    <Toaster position="bottom-right" />
     <div className="h-screen flex flex-col bg-white">
       <Toolbar
         hostname={hostname}
@@ -223,9 +235,11 @@ export default function App() {
         viewMode={viewMode}
         activeSchema={activeSchema}
         onBackToSchemas={onBackToSchemas}
+        onDrillIntoSchema={onDrillIntoSchema}
         allTables={tables}
         onJumpToTable={handleJumpToTable}
         canvasControls={canvasControls}
+        onCatalogClick={onCatalogClick}
       />
 
       <SplitLayout
@@ -254,6 +268,7 @@ export default function App() {
             table={selectedTableData}
             onClose={() => {
               setSelectedTable(null);
+              setShowCatalog(false);
               if (viewMode === "schemas") setActiveSchema(null);
             }}
             viewMode={viewMode}
@@ -261,9 +276,12 @@ export default function App() {
             schema={schema}
             tables={tables}
             onDrillIntoSchema={onDrillIntoSchema}
+            onJumpToTable={handleJumpToTable}
+            showCatalog={showCatalog}
           />
         }
       />
     </div>
+    </>
   );
 }

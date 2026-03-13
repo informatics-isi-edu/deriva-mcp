@@ -80,7 +80,7 @@ export default function CatalogPicker() {
               Connect
             </Button>
           </div>
-          <p className="text-[11px] text-slate-400 mt-2">
+          <p className="text-xs text-slate-400 mt-2">
             Public catalogs work directly. Private catalogs require CORS
             configuration on the server, or use the{" "}
             <span className="font-mono">Vite dev proxy</span> locally.
@@ -105,7 +105,7 @@ export default function CatalogPicker() {
                   </span>
                   <ExternalLink className="h-3.5 w-3.5 text-slate-300 group-hover:text-slate-500" />
                 </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
+                <div className="text-xs text-slate-400 mt-0.5">
                   {ex.hostname} / #{ex.catalogId}
                   {ex.description && ` — ${ex.description}`}
                 </div>

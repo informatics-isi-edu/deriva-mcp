@@ -211,7 +211,7 @@ export default function DataBrowser({ table }: DataBrowserProps) {
             <Button variant="outline" size="sm" className="h-7 text-[11px] gap-1">
               <Columns3 className="h-3 w-3" />
               Columns
-              <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-1">
+              <Badge variant="secondary" className="text-[10px] px-1 py-0 ml-1">
                 {activeColumns.length}
               </Badge>
             </Button>
@@ -278,11 +278,11 @@ export default function DataBrowser({ table }: DataBrowserProps) {
           <div className="px-2">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-chaise-header/40">
                   {activeColumns.map((col) => (
                     <TableHead
                       key={col}
-                      className="text-[10px] h-7 whitespace-nowrap font-semibold"
+                      className="text-[10px] h-7 whitespace-nowrap font-semibold text-chaise-header-text"
                     >
                       {col}
                     </TableHead>
@@ -291,7 +291,7 @@ export default function DataBrowser({ table }: DataBrowserProps) {
               </TableHeader>
               <TableBody>
                 {data.rows.map((row, i) => (
-                  <TableRow key={i}>
+                  <TableRow key={i} className="hover:bg-chaise-hover">
                     {activeColumns.map((col) => (
                       <TableCell
                         key={col}

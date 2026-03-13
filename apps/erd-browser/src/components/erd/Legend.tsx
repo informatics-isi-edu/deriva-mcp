@@ -14,7 +14,7 @@ export default function Legend() {
       {LEGEND_ITEMS.map((item) => (
         <div key={item.type} className="flex items-center gap-1.5">
           <div className={`w-2.5 h-2.5 rounded-sm ${item.color}`} />
-          <span className="text-[10px] text-slate-600">{item.label}</span>
+          <span className="text-[11px] text-slate-600">{item.label}</span>
         </div>
       ))}
     </div>

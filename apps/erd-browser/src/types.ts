@@ -8,10 +8,18 @@ export interface ColumnInfo {
   annotations: Record<string, any>;
 }
 
+export interface KeyInfo {
+  columns: string[];
+  constraint_name: [string, string]; // [schema_name, constraint_name]
+  annotations: Record<string, any>;
+}
+
 export interface ForeignKeyInfo {
   columns: string[];
   referenced_table: string; // "schema.TableName"
   referenced_columns: string[];
+  constraint_name: [string, string]; // [schema_name, constraint_name]
+  annotations: Record<string, any>;
 }
 
 export interface FeatureInfo {
@@ -25,6 +33,7 @@ export interface TableInfo {
   is_asset: boolean;
   is_association: boolean;
   columns: ColumnInfo[];
+  keys: KeyInfo[];
   foreign_keys: ForeignKeyInfo[];
   features?: FeatureInfo[];
   visible_columns?: string[]; // from tag:isrd.isi.edu,2016:visible-columns "compact" context
@@ -46,6 +55,7 @@ export interface CatalogSchema {
   hostname: string;
   catalog_id: string;
   schemas: Record<string, SchemaInfo>;
+  annotations: Record<string, any>; // catalog-level annotations
 }
 
 // Enriched table with schema context + computed data

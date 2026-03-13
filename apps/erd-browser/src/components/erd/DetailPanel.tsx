@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ExternalLink, X, Table2, KeyRound, Database, MousePointerClick, List, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,7 @@ import {
 import type { EnrichedTable, CatalogSchema } from "@/types";
 import { chaiseRecordsetUrl } from "@/ermrest-client";
 import DataBrowser from "./DataBrowser";
-import AnnotationsPanel, { SchemaAnnotationsPanel } from "./AnnotationsPanel";
+import AnnotationsPanel, { SchemaAnnotationsPanel, CatalogAnnotationsPanel } from "./AnnotationsPanel";
 
 interface DetailPanelProps {
   // Table-level detail
@@ -27,6 +28,9 @@ interface DetailPanelProps {
   schema: CatalogSchema | null;
   tables: EnrichedTable[];
   onDrillIntoSchema: (schemaName: string) => void;
+  onJumpToTable?: (table: EnrichedTable) => void;
+  // Catalog-level detail
+  showCatalog?: boolean;
 }
 
 export default function DetailPanel({
@@ -37,7 +41,13 @@ export default function DetailPanel({
   schema,
   tables,
   onDrillIntoSchema,
+  onJumpToTable,
+  showCatalog,
 }: DetailPanelProps) {
+  if (showCatalog && schema) {
+    return <CatalogDetail schema={schema} onClose={onClose} />;
+  }
+
   if (viewMode === "schemas" && activeSchema && schema) {
     return (
       <SchemaDetail
@@ -46,6 +56,7 @@ export default function DetailPanel({
         schema={schema}
         onDrillIn={() => onDrillIntoSchema(activeSchema)}
         onClose={onClose}
+        onJumpToTable={onJumpToTable}
       />
     );
   }
@@ -81,12 +92,14 @@ function SchemaDetail({
   schema,
   onDrillIn,
   onClose,
+  onJumpToTable,
 }: {
   schemaName: string;
   tables: EnrichedTable[];
   schema: CatalogSchema;
   onDrillIn: () => void;
   onClose: () => void;
+  onJumpToTable?: (table: EnrichedTable) => void;
 }) {
   const schemaTables = tables.filter((t) => t.schema === schemaName);
   const domainTables = schemaTables.filter((t) => t.tableType === "domain");
@@ -111,14 +124,18 @@ function SchemaDetail({
   }
 
   const schemaComment = schema.schemas[schemaName]?.comment;
+  const schemaAnnotations = schema.schemas[schemaName]?.annotations || {};
+  const annotationCount = Object.keys(schemaAnnotations).length;
+  const [annotationsDirty, setAnnotationsDirty] = useState(false);
 
   return (
     <div className="h-full flex flex-col">
-      <div className="px-4 py-3 border-b border-slate-200 flex-shrink-0">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-chaise-header bg-chaise-header/30 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-900">{schemaName}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-base font-bold text-chaise-header-text">{schemaName}</h2>
+            <p className="text-xs text-chaise-header-text/60 mt-0.5">
               {schemaTables.length} tables
             </p>
           </div>
@@ -132,66 +149,160 @@ function SchemaDetail({
           </Button>
         </div>
         {schemaComment && (
-          <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+          <p className="text-xs text-chaise-header-text/70 mt-2 leading-relaxed">
             {schemaComment}
           </p>
         )}
         <Button
           size="sm"
-          className="mt-3 w-full text-xs"
+          className="mt-3 w-full text-xs bg-brand hover:bg-brand/90"
           onClick={onDrillIn}
         >
           View tables in {schemaName}
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="px-4 py-3 space-y-4">
-          {/* Table breakdown */}
-          <Section title="Table breakdown">
-            {domainTables.length > 0 && (
-              <TypeList label="Domain" tables={domainTables} color="bg-slate-600" />
+      {/* Tabs */}
+      <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0">
+        <TabsList className="mx-4 mt-2 h-8 shrink-0">
+          <TabsTrigger value="overview" className="text-xs h-7 gap-1">
+            <Database className="h-3 w-3" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="annotations" className="text-xs h-7 gap-1 relative">
+            <Settings2 className="h-3 w-3" />
+            Annotations
+            {annotationCount > 0 && (
+              <Badge variant="secondary" className="text-[10px] ml-0.5 px-1 py-0 h-4">
+                {annotationCount}
+              </Badge>
             )}
-            {mlTables.length > 0 && (
-              <TypeList label="ML" tables={mlTables} color="bg-amber-600" />
+            {annotationsDirty && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
             )}
-            {vocabTables.length > 0 && (
-              <TypeList label="Vocabulary" tables={vocabTables} color="bg-emerald-600" />
-            )}
-            {assetTables.length > 0 && (
-              <TypeList label="Asset" tables={assetTables} color="bg-sky-600" />
-            )}
-            {assocTables.length > 0 && (
-              <TypeList label="Association" tables={assocTables} color="bg-zinc-400" />
-            )}
-          </Section>
+          </TabsTrigger>
+        </TabsList>
 
-          {/* Cross-schema relationships */}
-          {(outgoing.size > 0 || incoming.size > 0) && (
-            <Section title="Cross-schema relationships">
-              {outgoing.size > 0 && (
-                <div className="text-xs text-slate-600">
-                  <span className="font-medium">References →</span>{" "}
-                  {[...outgoing].join(", ")}
-                </div>
+        <ScrollArea className="flex-1 min-h-0">
+          <TabsContent value="overview" className="mt-0 px-4 py-3 space-y-4">
+            {/* Table breakdown */}
+            <Section title="Table breakdown">
+              {domainTables.length > 0 && (
+                <TypeList label="Domain" tables={domainTables} color="bg-slate-700" onSelect={onJumpToTable} />
               )}
-              {incoming.size > 0 && (
-                <div className="text-xs text-slate-600 mt-1">
-                  <span className="font-medium">Referenced by ←</span>{" "}
-                  {[...incoming].join(", ")}
-                </div>
+              {mlTables.length > 0 && (
+                <TypeList label="ML" tables={mlTables} color="bg-amber-700" onSelect={onJumpToTable} />
+              )}
+              {vocabTables.length > 0 && (
+                <TypeList label="Vocabulary" tables={vocabTables} color="bg-emerald-700" onSelect={onJumpToTable} />
+              )}
+              {assetTables.length > 0 && (
+                <TypeList label="Asset" tables={assetTables} color="bg-sky-700" onSelect={onJumpToTable} />
+              )}
+              {assocTables.length > 0 && (
+                <TypeList label="Association" tables={assocTables} color="bg-zinc-500" onSelect={onJumpToTable} />
               )}
             </Section>
-          )}
 
-          {/* Schema annotations */}
-          <Section title="Annotations">
-            <SchemaAnnotationsPanel
-              annotations={schema.schemas[schemaName]?.annotations || {}}
-            />
-          </Section>
+            {/* Cross-schema relationships */}
+            {(outgoing.size > 0 || incoming.size > 0) && (
+              <Section title="Cross-schema relationships">
+                {outgoing.size > 0 && (
+                  <div className="text-xs text-slate-600">
+                    <span className="font-medium">References →</span>{" "}
+                    {[...outgoing].join(", ")}
+                  </div>
+                )}
+                {incoming.size > 0 && (
+                  <div className="text-xs text-slate-600 mt-1">
+                    <span className="font-medium">Referenced by ←</span>{" "}
+                    {[...incoming].join(", ")}
+                  </div>
+                )}
+              </Section>
+            )}
+          </TabsContent>
+
+          <TabsContent value="annotations" className="mt-0 px-4 pb-4">
+            <SchemaAnnotationsPanel annotations={schemaAnnotations} schemaName={schemaName} onDirtyChange={setAnnotationsDirty} />
+          </TabsContent>
+        </ScrollArea>
+      </Tabs>
+    </div>
+  );
+}
+
+// ── Catalog detail ─────────────────────────────────────────────────
+
+function CatalogDetail({
+  schema,
+  onClose,
+}: {
+  schema: CatalogSchema;
+  onClose: () => void;
+}) {
+  const annotationCount = Object.keys(schema.annotations).length;
+  const totalTables = Object.values(schema.schemas).reduce(
+    (sum, s) => sum + Object.keys(s.tables).length,
+    0
+  );
+  const [annotationsDirty, setAnnotationsDirty] = useState(false);
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-chaise-header bg-chaise-header/30 flex-shrink-0">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-base font-bold text-chaise-header-text">
+              {schema.hostname}
+            </h2>
+            <p className="text-xs text-chaise-header-text/60 mt-0.5 font-mono">
+              Catalog #{schema.catalog_id}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-7 w-7 -mr-1 -mt-1"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-      </ScrollArea>
+        <div className="flex items-center gap-1.5 mt-2">
+          <Badge variant="secondary" className="text-[10px]">
+            {schema.domain_schemas.length} schemas
+          </Badge>
+          <Badge variant="outline" className="text-[10px]">
+            {totalTables} tables
+          </Badge>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="annotations" className="flex-1 flex flex-col min-h-0">
+        <TabsList className="mx-4 mt-2 h-8 shrink-0">
+          <TabsTrigger value="annotations" className="text-xs h-7 gap-1 relative">
+            <Settings2 className="h-3 w-3" />
+            Annotations
+            {annotationCount > 0 && (
+              <Badge variant="secondary" className="text-[10px] ml-0.5 px-1 py-0 h-4">
+                {annotationCount}
+              </Badge>
+            )}
+            {annotationsDirty && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <ScrollArea className="flex-1 min-h-0">
+          <TabsContent value="annotations" className="mt-0 px-4 pb-4">
+            <CatalogAnnotationsPanel annotations={schema.annotations} onDirtyChange={setAnnotationsDirty} />
+          </TabsContent>
+        </ScrollArea>
+      </Tabs>
     </div>
   );
 }
@@ -205,7 +316,7 @@ function Section({
 }) {
   return (
     <div>
-      <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+      <h3 className="text-[11px] font-semibold text-chaise-header-text uppercase tracking-wider mb-2 bg-chaise-header/50 -mx-4 px-4 py-1.5">
         {title}
       </h3>
       {children}
@@ -217,10 +328,12 @@ function TypeList({
   label,
   tables,
   color,
+  onSelect,
 }: {
   label: string;
   tables: EnrichedTable[];
   color: string;
+  onSelect?: (table: EnrichedTable) => void;
 }) {
   return (
     <div className="mb-2">
@@ -232,14 +345,21 @@ function TypeList({
       </div>
       <div className="pl-3.5 space-y-0.5">
         {tables.map((t) => (
-          <div key={t.qualifiedName} className="text-[11px] text-slate-500 flex items-center justify-between">
+          <button
+            key={t.qualifiedName}
+            onClick={() => onSelect?.(t)}
+            className={`w-full text-left text-[11px] text-slate-500 flex items-center justify-between py-0.5 px-1 -mx-1 rounded transition-colors ${
+              onSelect ? "hover:bg-chaise-hover hover:text-slate-800 cursor-pointer" : ""
+            }`}
+            title={t.info.comment || t.qualifiedName}
+          >
             <span className="truncate">{t.name}</span>
             {t.recordCount !== null && t.recordCount >= 0 && (
-              <span className="text-[10px] text-slate-400 ml-2 whitespace-nowrap">
+              <span className="text-[11px] text-slate-400 ml-2 whitespace-nowrap">
                 {t.recordCount.toLocaleString()}
               </span>
             )}
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -258,17 +378,18 @@ function TableDetail({
   const { info } = table;
   const chaiseUrl = chaiseRecordsetUrl(table.schema, table.name);
   const systemCols = new Set(["RID", "RCT", "RMT", "RCB", "RMB"]);
+  const [annotationsDirty, setAnnotationsDirty] = useState(false);
 
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-200 flex-shrink-0">
+      <div className="px-4 py-3 border-b border-chaise-header bg-chaise-header/30 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-bold text-slate-900 truncate">
+            <h2 className="text-base font-bold text-chaise-header-text truncate">
               {table.name}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">{table.schema}</p>
+            <p className="text-xs text-chaise-header-text/60 mt-0.5">{table.schema}</p>
           </div>
           <Button
             variant="ghost"
@@ -292,7 +413,7 @@ function TableDetail({
         </div>
 
         {info.comment && (
-          <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+          <p className="text-xs text-chaise-header-text/70 mt-2 leading-relaxed">
             {info.comment}
           </p>
         )}
@@ -302,7 +423,7 @@ function TableDetail({
             href={chaiseUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+            className="inline-flex items-center gap-1 text-xs text-brand hover:text-brand/80 hover:underline"
           >
             Open in Chaise
             <ExternalLink className="h-3 w-3" />
@@ -331,9 +452,12 @@ function TableDetail({
               Features
             </TabsTrigger>
           )}
-          <TabsTrigger value="annotations" className="text-xs h-7 gap-1">
+          <TabsTrigger value="annotations" className="text-xs h-7 gap-1 relative">
             <Settings2 className="h-3 w-3" />
             Annotations
+            {annotationsDirty && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -346,25 +470,25 @@ function TableDetail({
           <TabsContent value="columns" className="mt-0 px-4 pb-4">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="text-[11px] h-8">Name</TableHead>
-                  <TableHead className="text-[11px] h-8">Type</TableHead>
-                  <TableHead className="text-[11px] h-8 w-12">Null</TableHead>
+                <TableRow className="bg-chaise-header/40">
+                  <TableHead className="text-[11px] h-8 text-chaise-header-text font-semibold">Name</TableHead>
+                  <TableHead className="text-[11px] h-8 text-chaise-header-text font-semibold">Type</TableHead>
+                  <TableHead className="text-[11px] h-8 w-12 text-chaise-header-text font-semibold">Null</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {info.columns.map((col) => (
                   <TableRow
                     key={col.name}
-                    className={
+                    className={`hover:bg-chaise-hover ${
                       systemCols.has(col.name) ? "opacity-50" : ""
-                    }
+                    }`}
                     title={col.comment || ""}
                   >
                     <TableCell className="text-xs py-1.5">
                       <span className="font-mono">{col.name}</span>
                       {col.comment && (
-                        <p className="text-[10px] text-slate-400 mt-0.5 font-sans leading-snug truncate max-w-[200px]">
+                        <p className="text-[11px] text-slate-400 mt-0.5 font-sans leading-snug truncate max-w-[200px]">
                           {col.comment}
                         </p>
                       )}
@@ -396,7 +520,7 @@ function TableDetail({
                     </div>
                     <Separator className="my-1.5" />
                     <div className="text-slate-500 flex items-center gap-1">
-                      <span className="text-[10px]">→</span>
+                      <span className="text-xs">→</span>
                       <span className="font-mono">
                         {fk.referenced_table}
                       </span>
@@ -423,7 +547,7 @@ function TableDetail({
                     <div className="font-semibold text-slate-700">
                       {feat.name}
                     </div>
-                    <div className="text-slate-500 font-mono text-[10px] mt-0.5">
+                    <div className="text-slate-500 font-mono text-[11px] mt-0.5">
                       {feat.feature_table}
                     </div>
                   </div>
@@ -433,7 +557,7 @@ function TableDetail({
           )}
 
           <TabsContent value="annotations" className="mt-0 px-4 pb-4">
-            <AnnotationsPanel table={table} />
+            <AnnotationsPanel table={table} onDirtyChange={setAnnotationsDirty} />
           </TabsContent>
         </ScrollArea>
       </Tabs>

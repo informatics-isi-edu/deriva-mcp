@@ -7,12 +7,28 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['"DM Sans"', "system-ui", "sans-serif"],
+        mono: ['"JetBrains Mono"', "ui-monospace", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        brand: {
+          DEFAULT: "hsl(var(--brand))",
+          foreground: "hsl(var(--brand-foreground))",
+          muted: "hsl(var(--brand-muted))",
+        },
+        chaise: {
+          header: "hsl(var(--chaise-header))",
+          "header-text": "hsl(var(--chaise-header-text))",
+          hover: "hsl(var(--chaise-hover))",
+          navbar: "hsl(var(--chaise-navbar))",
+          "navbar-text": "hsl(var(--chaise-navbar-text))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

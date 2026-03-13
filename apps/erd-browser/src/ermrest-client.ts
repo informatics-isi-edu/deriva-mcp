@@ -124,6 +124,266 @@ export async function fetchPagedData(
   return { rows, hasMore };
 }
 
+// ── Annotation writes ─────────────────────────────────────────────
+
+/**
+ * Add or update a single annotation on a table.
+ * Uses PUT /schema/{schema}/table/{table}/annotation/{tag}
+ */
+export async function putTableAnnotation(
+  schema: string,
+  table: string,
+  tag: string,
+  value: any = {}
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const url = `${base}/schema/${encodeURIComponent(schema)}/table/${encodeURIComponent(table)}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, {
+    ...opts,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(value),
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to set annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Add or update a single annotation on a column.
+ * Uses PUT /schema/{schema}/table/{table}/column/{column}/annotation/{tag}
+ */
+export async function putColumnAnnotation(
+  schema: string,
+  table: string,
+  column: string,
+  tag: string,
+  value: any = {}
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const url = `${base}/schema/${encodeURIComponent(schema)}/table/${encodeURIComponent(table)}/column/${encodeURIComponent(column)}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, {
+    ...opts,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(value),
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to set column annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Add or update a single annotation on a schema.
+ * Uses PUT /schema/{schema}/annotation/{tag}
+ */
+export async function putSchemaAnnotation(
+  schema: string,
+  tag: string,
+  value: any = {}
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const url = `${base}/schema/${encodeURIComponent(schema)}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, {
+    ...opts,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(value),
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to set schema annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Add or update a single annotation on a key constraint.
+ * Uses PUT /schema/{schema}/table/{table}/key/{col,...}/annotation/{tag}
+ */
+export async function putKeyAnnotation(
+  schema: string,
+  table: string,
+  keyColumns: string[],
+  tag: string,
+  value: any = {}
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const colPath = keyColumns.map(encodeURIComponent).join(",");
+  const url = `${base}/schema/${encodeURIComponent(schema)}/table/${encodeURIComponent(table)}/key/${colPath}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, {
+    ...opts,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(value),
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to set key annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Add or update a single annotation on a foreign key constraint.
+ * Uses PUT /schema/{schema}/table/{table}/foreignkey/{fk_cols}/reference/{ref_schema}:{ref_table}/{ref_cols}/annotation/{tag}
+ */
+export async function putForeignKeyAnnotation(
+  schema: string,
+  table: string,
+  fkColumns: string[],
+  refSchema: string,
+  refTable: string,
+  refColumns: string[],
+  tag: string,
+  value: any = {}
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const fkPath = fkColumns.map(encodeURIComponent).join(",");
+  const refPath = refColumns.map(encodeURIComponent).join(",");
+  const url = `${base}/schema/${encodeURIComponent(schema)}/table/${encodeURIComponent(table)}/foreignkey/${fkPath}/reference/${encodeURIComponent(refSchema)}:${encodeURIComponent(refTable)}/${refPath}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, {
+    ...opts,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(value),
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to set FK annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Add or update a single catalog-level annotation.
+ * Uses PUT /annotation/{tag}
+ */
+export async function putCatalogAnnotation(
+  tag: string,
+  value: any = {}
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const url = `${base}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, {
+    ...opts,
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(value),
+  });
+  if (!resp.ok) {
+    throw new Error(`Failed to set catalog annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Delete a single annotation from a table.
+ */
+export async function deleteTableAnnotation(
+  schema: string,
+  table: string,
+  tag: string
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const url = `${base}/schema/${encodeURIComponent(schema)}/table/${encodeURIComponent(table)}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, { ...opts, method: "DELETE" });
+  if (!resp.ok) {
+    throw new Error(`Failed to delete annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Delete a single annotation from a column.
+ */
+export async function deleteColumnAnnotation(
+  schema: string,
+  table: string,
+  column: string,
+  tag: string
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const url = `${base}/schema/${encodeURIComponent(schema)}/table/${encodeURIComponent(table)}/column/${encodeURIComponent(column)}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, { ...opts, method: "DELETE" });
+  if (!resp.ok) {
+    throw new Error(`Failed to delete column annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Delete a single annotation from a schema.
+ */
+export async function deleteSchemaAnnotation(
+  schema: string,
+  tag: string
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const url = `${base}/schema/${encodeURIComponent(schema)}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, { ...opts, method: "DELETE" });
+  if (!resp.ok) {
+    throw new Error(`Failed to delete schema annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Delete a single annotation from a key constraint.
+ */
+export async function deleteKeyAnnotation(
+  schema: string,
+  table: string,
+  keyColumns: string[],
+  tag: string
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const colPath = keyColumns.map(encodeURIComponent).join(",");
+  const url = `${base}/schema/${encodeURIComponent(schema)}/table/${encodeURIComponent(table)}/key/${colPath}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, { ...opts, method: "DELETE" });
+  if (!resp.ok) {
+    throw new Error(`Failed to delete key annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Delete a single annotation from a foreign key constraint.
+ */
+export async function deleteForeignKeyAnnotation(
+  schema: string,
+  table: string,
+  fkColumns: string[],
+  refSchema: string,
+  refTable: string,
+  refColumns: string[],
+  tag: string
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const fkPath = fkColumns.map(encodeURIComponent).join(",");
+  const refPath = refColumns.map(encodeURIComponent).join(",");
+  const url = `${base}/schema/${encodeURIComponent(schema)}/table/${encodeURIComponent(table)}/foreignkey/${fkPath}/reference/${encodeURIComponent(refSchema)}:${encodeURIComponent(refTable)}/${refPath}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, { ...opts, method: "DELETE" });
+  if (!resp.ok) {
+    throw new Error(`Failed to delete FK annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
+/**
+ * Delete a single catalog-level annotation.
+ */
+export async function deleteCatalogAnnotation(
+  tag: string
+): Promise<void> {
+  const base = ermrestBaseUrl();
+  const opts = ermrestFetchOptions();
+  const url = `${base}/annotation/${encodeURIComponent(tag)}`;
+  const resp = await fetch(url, { ...opts, method: "DELETE" });
+  if (!resp.ok) {
+    throw new Error(`Failed to delete catalog annotation: ${resp.status} ${resp.statusText}`);
+  }
+}
+
 // ── Schema parsing ────────────────────────────────────────────────
 
 const SYSTEM_COLS = new Set(["RID", "RCT", "RMT", "RCB", "RMB"]);
@@ -194,6 +454,12 @@ function parseErmrestSchema(raw: any): CatalogSchema {
 
       const userColumns = columns.filter((c: any) => !SYSTEM_COLS.has(c.name));
 
+      const keys = (tableObj.keys || []).map((k: any) => ({
+        columns: k.unique_columns?.map((c: any) => c.column_name) || [],
+        constraint_name: k.names?.[0] || ["", ""],
+        annotations: k.annotations || {},
+      }));
+
       const foreignKeys = (tableObj.foreign_keys || []).map((fk: any) => {
         const fkCols = fk.foreign_key_columns?.map((c: any) => c.column_name) || [];
         const refCols = fk.referenced_columns?.map((c: any) => c.column_name) || [];
@@ -203,6 +469,8 @@ function parseErmrestSchema(raw: any): CatalogSchema {
           columns: fkCols,
           referenced_table: refSchema && refTable ? `${refSchema}.${refTable}` : "",
           referenced_columns: refCols,
+          constraint_name: fk.names?.[0] || ["", ""],
+          annotations: fk.annotations || {},
         };
       }).filter((fk: any) => fk.referenced_table); // drop malformed FKs
 
@@ -250,6 +518,7 @@ function parseErmrestSchema(raw: any): CatalogSchema {
         is_asset: isAsset,
         is_association: isAssociation,
         columns: userColumns,
+        keys,
         foreign_keys: foreignKeys,
         visible_columns: visibleColumns,
         display_name: displayName,
@@ -273,6 +542,7 @@ function parseErmrestSchema(raw: any): CatalogSchema {
     hostname,
     catalog_id: catalogId,
     schemas,
+    annotations: raw.annotations || {},
   };
 }
 
