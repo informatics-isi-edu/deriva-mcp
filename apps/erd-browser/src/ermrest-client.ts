@@ -189,6 +189,7 @@ function parseErmrestSchema(raw: any): CatalogSchema {
         type: col.type?.typename || "unknown",
         nullok: col.nullok ?? true,
         comment: col.comment || "",
+        annotations: col.annotations || {},
       }));
 
       const userColumns = columns.filter((c: any) => !SYSTEM_COLS.has(c.name));

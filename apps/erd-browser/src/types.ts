@@ -5,6 +5,7 @@ export interface ColumnInfo {
   type: string;
   nullok: boolean;
   comment: string;
+  annotations: Record<string, any>;
 }
 
 export interface ForeignKeyInfo {
