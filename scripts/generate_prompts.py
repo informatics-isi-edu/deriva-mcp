@@ -173,8 +173,8 @@ def main():
     parser.add_argument("--list", action="store_true",
                         help="List skills and their prompt names")
     parser.add_argument("--plugin-dir", type=Path,
-                        default=Path(__file__).parent.parent / "plugin" / "skills",
-                        help="Path to the plugin/skills directory")
+                        default=Path(__file__).parent.parent.parent / "deriva-skills" / "skills",
+                        help="Path to the skills directory (default: sibling deriva-skills repo)")
     parser.add_argument("--output", type=Path,
                         default=Path(__file__).parent.parent / "src" / "deriva_mcp" / "prompts.py",
                         help="Output path for prompts.py")

@@ -95,13 +95,13 @@ uv sync
 
 ## Claude Code Plugin (Skills)
 
-The Deriva plugin for [Claude Code](https://claude.ai/claude-code) provides 26 skills that guide Claude through common Deriva and DerivaML workflows. Skills are more efficient than MCP prompts — they use progressive loading (~100 tokens for discovery, full content only when needed) and can auto-invoke when relevant.
+The Deriva skills plugin for [Claude Code](https://claude.ai/claude-code) provides 30+ skills that guide Claude through common Deriva and DerivaML workflows. The skills are maintained in a separate repository: **[deriva-skills](https://github.com/informatics-isi-edu/deriva-skills)**.
 
 ### Installing the Plugin
 
 ```bash
 # Add the marketplace (one-time)
-/plugin marketplace add informatics-isi-edu/deriva-mcp
+/plugin marketplace add informatics-isi-edu/deriva-skills
 
 # Install the plugin
 /plugin install deriva
@@ -115,75 +115,22 @@ To update to the latest version:
 /plugin install deriva
 ```
 
-You can check whether your entire DerivaML ecosystem is up to date by running:
+Or check your entire DerivaML ecosystem:
 
 ```
 /deriva:check-versions
 ```
 
-This checks three components — the **deriva-ml** Python package, the **deriva-mcp skills plugin**, and the **deriva-mcp MCP server** (Docker or native) — against upstream releases and offers to update outdated ones. You can also just ask *"check deriva versions"* or *"am I up to date?"* and the skill will be invoked automatically.
+This checks three components — the **deriva-ml** Python package, the **deriva-skills** plugin, and the **deriva-mcp** MCP server — against upstream releases and offers to update outdated ones.
 
-### Available Skills
-
-**User-invocable** — invoke with `/deriva:<skill-name>`:
-
-| Category | Skill | Description |
-|----------|-------|-------------|
-| **Catalog** | `/deriva:create-table` | Create domain tables with columns and foreign keys |
-| | `/deriva:create-feature` | Create and populate features for ML labeling |
-| | `/deriva:customize-display` | Customize Chaise web UI using MCP annotation tools |
-| | `/deriva:use-annotation-builders` | Python type-safe annotation builder classes |
-| | `/deriva:manage-vocabulary` | Create and manage controlled vocabularies |
-| | `/deriva:query-catalog-data` | Query and explore data in a Deriva catalog |
-| **Datasets** | `/deriva:create-dataset` | Create, populate, and split datasets for ML |
-| | `/deriva:prepare-training-data` | Prepare datasets for ML training via denormalization |
-| | `/deriva:debug-bag-contents` | Diagnose missing data in dataset bag exports |
-| **Execution** | `/deriva:run-ml-execution` | ML execution lifecycle with provenance tracking |
-| | `/deriva:work-with-assets` | Asset lookup, provenance, and management |
-| **Experiments** | `/deriva:configure-experiment` | Set up DerivaML experiment project structure |
-| | `/deriva:run-experiment` | Pre-flight checklist and CLI for deriva-ml-run |
-| | `/deriva:write-hydra-config` | Write and validate hydra-zen config files |
-| **Notebooks** | `/deriva:setup-notebook-environment` | Set up Jupyter environment for DerivaML |
-| | `/deriva:run-notebook` | Develop and run notebooks with execution tracking |
-| **Standards** | `/deriva:coding-guidelines` | DerivaML project coding standards |
-| **Maintenance** | `/deriva:check-versions` | Check all 3 ecosystem components (deriva-ml, skills plugin, MCP server) against upstream and update |
-
-**Auto-invoked** — Claude loads these automatically when relevant:
-
-| Skill | When it activates |
-|-------|-------------------|
-| `semantic-match` | When searching for or referring to any catalog entity |
-| `semantic-awareness` | Before creating any new catalog entity — decides reuse, extend, or create |
-| `generate-descriptions` | When creating entities without descriptions |
-| `maintain-experiment-notes` | After significant experiment design decisions — auto-captures rationale |
-| `dataset-versioning` | When working with dataset versions |
-| `catalog-operations-workflow` | When performing catalog mutations |
-| `api-naming-conventions` | When writing DerivaML Python code |
-| `troubleshoot-execution` | When any execution fails, errors, or produces unexpected results |
-
-### Skills Directory Structure
-
-```
-plugin/skills/
-├── catalog/
-│   ├── annotations/      # Chaise UI customization
-│   ├── data/             # Querying and exploring data
-│   ├── tables/           # Table and feature creation
-│   └── vocabularies/     # Vocabulary management
-├── datasets/             # Dataset management and versioning
-├── execution/            # ML execution lifecycle
-├── experiments/          # Hydra-zen configuration and running
-├── guidelines/           # Auto-invoked best practices
-├── notebooks/            # Jupyter notebook workflows
-└── troubleshooting/      # Debugging guides
-```
+See the [deriva-skills README](https://github.com/informatics-isi-edu/deriva-skills) for the full list of available skills.
 
 ### Development: Testing Skills Locally
 
 During development, load the plugin from a local path without installing:
 
 ```bash
-claude --plugin-dir /path/to/deriva-mcp/plugin
+claude --plugin-dir /path/to/deriva-skills
 ```
 
 ## Configuration
