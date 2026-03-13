@@ -239,8 +239,9 @@ function parseErmrestSchema(raw: any): CatalogSchema {
       const rowNamePattern = tableDisplayAnno?.row_name?.row_markdown_pattern || undefined;
 
       // Extract features: look for DerivaML-style feature associations
-      // Features are tables named <TargetTable>_<VocabTerm> with FK refs to both
-      const features = detectFeatures(tableName, schemaName, raw);
+      // Feature tables follow the pattern Execution_<TargetTable>_<FeatureName>
+      // and have FKs to the target table, ML schema Execution, and Feature_Name
+      const features = detectFeatures(tableName, schemaName, mlSchema, raw);
 
       tables[tableName] = {
         comment: tableObj.comment || "",
@@ -270,32 +271,50 @@ function parseErmrestSchema(raw: any): CatalogSchema {
 }
 
 // Detect DerivaML feature tables that reference a given target table.
-// Feature tables follow the naming pattern: <TargetTable>_<FeatureName>
-// and have FKs to both the target table and a vocabulary table.
+// Feature tables follow the naming pattern: Execution_<TargetTable>_<FeatureName>
+// and must have FKs to all three: the target table, the ML schema's Execution table,
+// and the ML schema's Feature_Name vocabulary.
 function detectFeatures(
   targetTable: string,
   schemaName: string,
+  mlSchema: string,
   rawSchema: any
 ): { name: string; feature_table: string }[] {
   const features: { name: string; feature_table: string }[] = [];
   const schemaObj = rawSchema.schemas?.[schemaName];
   if (!schemaObj?.tables) return features;
 
-  for (const [tblName, tblObj] of Object.entries(schemaObj.tables as Record<string, any>)) {
-    // Feature tables start with the target table name + underscore
-    if (!tblName.startsWith(targetTable + "_")) continue;
-    if (tblName === targetTable) continue;
+  const prefix = `Execution_${targetTable}_`;
 
-    // Check it has a FK to the target table
-    const fks = (tblObj as any).foreign_keys || [];
+  for (const [tblName, tblObj] of Object.entries(schemaObj.tables as Record<string, any>)) {
+    if (!tblName.startsWith(prefix)) continue;
+
+    const fks: any[] = (tblObj as any).foreign_keys || [];
+
+    // Must have FK to target table in same schema
     const refsTarget = fks.some((fk: any) =>
       fk.referenced_columns?.some(
         (rc: any) => rc.table_name === targetTable && rc.schema_name === schemaName
       )
     );
-    if (!refsTarget) continue;
 
-    const featureName = tblName.slice(targetTable.length + 1);
+    // Must have FK to Execution table in ML schema
+    const refsExecution = fks.some((fk: any) =>
+      fk.referenced_columns?.some(
+        (rc: any) => rc.table_name === "Execution" && rc.schema_name === mlSchema
+      )
+    );
+
+    // Must have FK to Feature_Name vocabulary in ML schema
+    const refsFeatureName = fks.some((fk: any) =>
+      fk.referenced_columns?.some(
+        (rc: any) => rc.table_name === "Feature_Name" && rc.schema_name === mlSchema
+      )
+    );
+
+    if (!refsTarget || !refsExecution || !refsFeatureName) continue;
+
+    const featureName = tblName.slice(prefix.length);
     features.push({
       name: featureName,
       feature_table: `${schemaName}.${tblName}`,
