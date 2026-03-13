@@ -204,7 +204,7 @@ def start_proxy(
     if not (static_dir / "index.html").exists():
         raise FileNotFoundError(
             f"No index.html found in {static_dir}. "
-            "Build the app first (e.g., cd erd-browser && pnpm build)."
+            "Build the app first (e.g., cd schema-workbench && pnpm build)."
         )
 
     if not backend.startswith("http"):
@@ -274,8 +274,8 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python -m deriva_mcp.proxy --backend dev.example.org --app /path/to/erd-browser/dist
-  python -m deriva_mcp.proxy --backend dev.example.org --app /path/to/erd-browser/dist --port 9000
+  python -m deriva_mcp.proxy --backend dev.example.org --app /path/to/schema-workbench/dist
+  python -m deriva_mcp.proxy --backend dev.example.org --app /path/to/schema-workbench/dist --port 9000
         """,
     )
     parser.add_argument(

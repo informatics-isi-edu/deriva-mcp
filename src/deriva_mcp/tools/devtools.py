@@ -408,33 +408,33 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             })
 
     # =========================================================================
-    # ERD Browser Tools
+    # Schema Workbench Tools
     # =========================================================================
 
     @mcp.tool()
-    def start_erd_browser(
+    def start_schema_workbench(
         app_path: str | None = None,
         port: int = 0,
     ) -> str:
-        """Start a local ERD browser for the connected Deriva catalog.
+        """Start a local Schema Workbench for the connected Deriva catalog.
 
-        Launches a reverse proxy that serves the ERD browser application and
+        Launches a reverse proxy that serves the Schema Workbench application and
         proxies API requests to the connected Deriva server. The browser opens
         automatically.
 
-        The ERD browser provides an interactive visualization of the catalog
+        The Schema Workbench provides an interactive visualization of the catalog
         schema: tables, foreign keys, annotations, and sample data.
 
         **Prerequisites:**
         - Must be connected to a catalog (run connect_catalog first)
-        - The deriva-ml-apps repo must be cloned and the erd-browser built:
+        - The deriva-ml-apps repo must be cloned and the schema-workbench built:
           ```
           git clone https://github.com/informatics-isi-edu/deriva-ml-apps
-          cd deriva-ml-apps/erd-browser && pnpm install && pnpm build
+          cd deriva-ml-apps/schema-workbench && pnpm install && pnpm build
           ```
 
         Args:
-            app_path: Path to the erd-browser build directory (containing index.html).
+            app_path: Path to the schema-workbench build directory (containing index.html).
                 If not provided, searches common locations automatically.
             port: Local port to serve on. 0 = auto-select a free port.
 
@@ -459,16 +459,16 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             stop_proxy()
 
         # Find the built app
-        static_dir = _find_erd_browser(app_path)
+        static_dir = _find_schema_workbench(app_path)
         if static_dir is None:
             return json.dumps({
                 "status": "error",
                 "error": (
-                    "Could not find built ERD browser. Either:\n"
+                    "Could not find built Schema Workbench. Either:\n"
                     "  1. Provide app_path pointing to the built dist/ directory\n"
                     "  2. Clone and build the app:\n"
                     "     git clone https://github.com/informatics-isi-edu/deriva-ml-apps\n"
-                    "     cd deriva-ml-apps/erd-browser && pnpm install && pnpm build"
+                    "     cd deriva-ml-apps/schema-workbench && pnpm install && pnpm build"
                 ),
             })
 
@@ -501,12 +501,12 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             "backend": f"https://{hostname}",
             "catalog_id": catalog_id,
             "static_dir": str(static_dir),
-            "message": f"ERD browser running at {app_url}",
+            "message": f"Schema Workbench running at {app_url}",
         })
 
     @mcp.tool()
-    def stop_erd_browser() -> str:
-        """Stop the running ERD browser proxy server.
+    def stop_schema_workbench() -> str:
+        """Stop the running Schema Workbench proxy server.
 
         Returns:
             JSON with status.
@@ -522,7 +522,7 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         stop_proxy()
         return json.dumps({
             "status": "success",
-            "message": "ERD browser proxy stopped.",
+            "message": "Schema Workbench proxy stopped.",
         })
 
     # =========================================================================
@@ -817,8 +817,8 @@ def _find_kernel_for_venv() -> str | None:
     return None
 
 
-def _find_erd_browser(app_path: str | None = None) -> Path | None:
-    """Find the built ERD browser directory containing index.html.
+def _find_schema_workbench(app_path: str | None = None) -> Path | None:
+    """Find the built Schema Workbench directory containing index.html.
 
     Searches in order:
     1. Explicit path provided by the user
@@ -837,10 +837,10 @@ def _find_erd_browser(app_path: str | None = None) -> Path | None:
     # Derive candidate paths relative to this package's repo root
     repo_root = Path(__file__).resolve().parent.parent.parent.parent  # tools -> deriva_mcp -> src -> repo
     candidates = [
-        repo_root.parent / "deriva-ml-apps" / "erd-browser" / "dist",
-        repo_root.parent / "deriva-ml-apps" / "erd-browser",
-        Path.home() / "GitHub" / "deriva-ml-apps" / "erd-browser" / "dist",
-        Path.home() / "GitHub" / "deriva-ml-apps" / "erd-browser",
+        repo_root.parent / "deriva-ml-apps" / "schema-workbench" / "dist",
+        repo_root.parent / "deriva-ml-apps" / "schema-workbench",
+        Path.home() / "GitHub" / "deriva-ml-apps" / "schema-workbench" / "dist",
+        Path.home() / "GitHub" / "deriva-ml-apps" / "schema-workbench",
     ]
 
     for candidate in candidates:
