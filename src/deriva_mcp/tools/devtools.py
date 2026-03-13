@@ -408,6 +408,124 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             })
 
     # =========================================================================
+    # ERD Browser Tools
+    # =========================================================================
+
+    @mcp.tool()
+    def start_erd_browser(
+        app_path: str | None = None,
+        port: int = 0,
+    ) -> str:
+        """Start a local ERD browser for the connected Deriva catalog.
+
+        Launches a reverse proxy that serves the ERD browser application and
+        proxies API requests to the connected Deriva server. The browser opens
+        automatically.
+
+        The ERD browser provides an interactive visualization of the catalog
+        schema: tables, foreign keys, annotations, and sample data.
+
+        **Prerequisites:**
+        - Must be connected to a catalog (run connect_catalog first)
+        - The deriva-ml-apps repo must be cloned and the erd-browser built:
+          ```
+          git clone https://github.com/informatics-isi-edu/deriva-ml-apps
+          cd deriva-ml-apps/erd-browser && pnpm install && pnpm build
+          ```
+
+        Args:
+            app_path: Path to the erd-browser build directory (containing index.html).
+                If not provided, searches common locations automatically.
+            port: Local port to serve on. 0 = auto-select a free port.
+
+        Returns:
+            JSON with the URL to open and proxy status.
+        """
+        from deriva_mcp.proxy import is_proxy_running, start_proxy, stop_proxy
+
+        # Get connected catalog info
+        conn_info = conn_manager.get_active_connection_info()
+        if not conn_info:
+            return json.dumps({
+                "status": "error",
+                "error": "No active catalog connection. Run connect_catalog first.",
+            })
+
+        hostname = conn_info.hostname
+        catalog_id = conn_info.catalog_id
+
+        # Stop existing proxy if running
+        if is_proxy_running():
+            stop_proxy()
+
+        # Find the built app
+        static_dir = _find_erd_browser(app_path)
+        if static_dir is None:
+            return json.dumps({
+                "status": "error",
+                "error": (
+                    "Could not find built ERD browser. Either:\n"
+                    "  1. Provide app_path pointing to the built dist/ directory\n"
+                    "  2. Clone and build the app:\n"
+                    "     git clone https://github.com/informatics-isi-edu/deriva-ml-apps\n"
+                    "     cd deriva-ml-apps/erd-browser && pnpm install && pnpm build"
+                ),
+            })
+
+        try:
+            url, actual_port = start_proxy(
+                backend=hostname,
+                static_dir=static_dir,
+                port=port,
+            )
+        except Exception as e:
+            return json.dumps({
+                "status": "error",
+                "error": f"Failed to start proxy: {e}",
+            })
+
+        # Build the app URL with catalog info in hash
+        app_url = f"{url}/#host=localhost&catalog={catalog_id}"
+
+        # Try to open browser
+        try:
+            import webbrowser
+            webbrowser.open(app_url)
+        except Exception:
+            pass
+
+        return json.dumps({
+            "status": "success",
+            "url": app_url,
+            "port": actual_port,
+            "backend": f"https://{hostname}",
+            "catalog_id": catalog_id,
+            "static_dir": str(static_dir),
+            "message": f"ERD browser running at {app_url}",
+        })
+
+    @mcp.tool()
+    def stop_erd_browser() -> str:
+        """Stop the running ERD browser proxy server.
+
+        Returns:
+            JSON with status.
+        """
+        from deriva_mcp.proxy import is_proxy_running, stop_proxy
+
+        if not is_proxy_running():
+            return json.dumps({
+                "status": "success",
+                "message": "No proxy was running.",
+            })
+
+        stop_proxy()
+        return json.dumps({
+            "status": "success",
+            "message": "ERD browser proxy stopped.",
+        })
+
+    # =========================================================================
     # Notebook Execution Tools
     # =========================================================================
 
@@ -696,4 +814,37 @@ def _find_kernel_for_venv() -> str | None:
                     continue
     except Exception:
         pass
+    return None
+
+
+def _find_erd_browser(app_path: str | None = None) -> Path | None:
+    """Find the built ERD browser directory containing index.html.
+
+    Searches in order:
+    1. Explicit path provided by the user
+    2. Common sibling repo locations relative to this repo
+    3. Home directory GitHub checkout
+    """
+    if app_path:
+        p = Path(app_path).resolve()
+        if (p / "index.html").exists():
+            return p
+        # Maybe they pointed at the app root, not dist/
+        if (p / "dist" / "index.html").exists():
+            return p / "dist"
+        return None
+
+    # Derive candidate paths relative to this package's repo root
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent  # tools -> deriva_mcp -> src -> repo
+    candidates = [
+        repo_root.parent / "deriva-ml-apps" / "erd-browser" / "dist",
+        repo_root.parent / "deriva-ml-apps" / "erd-browser",
+        Path.home() / "GitHub" / "deriva-ml-apps" / "erd-browser" / "dist",
+        Path.home() / "GitHub" / "deriva-ml-apps" / "erd-browser",
+    ]
+
+    for candidate in candidates:
+        if candidate.is_dir() and (candidate / "index.html").exists():
+            return candidate
+
     return None
