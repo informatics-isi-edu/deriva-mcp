@@ -46,6 +46,7 @@ from deriva_mcp.tools import (
     register_devtools,
     register_execution_tools,
     register_feature_tools,
+    register_rag_tools,
     register_schema_tools,
     register_storage_tools,
     register_vocabulary_tools,
@@ -96,11 +97,12 @@ Always call `connect_catalog` before using other tools. This establishes the con
 2. `connect_catalog` - Connect using catalog ID or alias name
 
 **Exploring a catalog:**
-1. `connect_catalog` - Connect to the catalog
-2. Read `deriva://catalog/schema` resource - Understand the full schema (tables, columns, FKs, features)
-3. Read `deriva://catalog/datasets` resource - See available datasets
-4. Read `deriva://catalog/vocabularies` resource - Explore controlled vocabularies
-5. Read `deriva://catalog/features` resource - Examine feature definitions
+1. `connect_catalog` - Connect to the catalog (also indexes the schema for semantic search)
+2. `rag_search("your question")` - Search schema and docs with natural language (best for discovery)
+3. Read `deriva://catalog/schema` resource - Get full schema as structured JSON (best for programmatic use)
+4. Read `deriva://catalog/datasets` resource - See available datasets
+5. Read `deriva://catalog/vocabularies` resource - Explore controlled vocabularies
+6. Read `deriva://catalog/features` resource - Examine feature definitions
 
 **Creating a new catalog:**
 1. `create_catalog` - Create a new DerivaML catalog (optionally with an alias)
@@ -700,6 +702,20 @@ The `cite()` method:
 
 **Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
 
+## Searching Documentation and Catalog Schema
+
+Use `rag_search()` for natural language questions about Deriva APIs or the connected catalog's schema. The RAG index includes both static documentation (deriva-ml, ermrest, chaise, deriva-py) and the connected catalog's schema (tables, columns, foreign keys, features, vocabulary terms).
+
+**When to use `rag_search` vs structured resources:**
+
+- `rag_search("how are subjects related to images?")` — discovery questions, fuzzy lookup, understanding relationships
+- `rag_search("what diagnosis types are available?")` — find vocabulary terms by meaning
+- `rag_search("how to create a dataset with train/test split")` — API usage questions
+- Read `deriva://catalog/schema` — get the complete schema as JSON for programmatic use
+- Read `deriva://table/{name}/schema` — get one table's full structure
+
+After schema changes (creating tables, adding columns, creating features), call `rag_index_schema()` to update the search index.
+
 ## Background Tasks for Long-Running Operations
 
 Some operations like catalog cloning can take many minutes. Use the async versions
@@ -792,6 +808,7 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     register_storage_tools(mcp_server, conn_manager)
     register_data_tools(mcp_server, conn_manager)
     register_devtools(mcp_server, conn_manager)
+    register_rag_tools(mcp_server, conn_manager)
 
     # Register resources
     register_resources(mcp_server, conn_manager)
@@ -962,21 +979,42 @@ def main() -> None:
         retention_hours=task_retention_hours,
     )
 
+    # Initialize RAG manager
+    from deriva_mcp.rag import RAGConfig, init_rag_manager
+
+    rag_persist_dir = os.environ.get("DERIVA_MCP_RAG_DIR")
+    rag_auto_update = bool(os.environ.get("DERIVA_MCP_RAG_AUTO_UPDATE", ""))
+    rag_config = RAGConfig(
+        persist_dir=Path(rag_persist_dir) if rag_persist_dir else Path.home() / ".deriva-ml" / "rag",
+        auto_update_on_start=rag_auto_update,
+    )
+    init_rag_manager(rag_config)
+    logger.info("RAG documentation service initialized")
+
     # Create server with appropriate settings
     server = create_server(host=args.host, port=args.port)
 
-    # Register shutdown handler for background task manager
-    def shutdown_task_manager() -> None:
-        logger.info("Shutting down background task manager")
+    # Register shutdown handlers
+    def shutdown_services() -> None:
+        logger.info("Shutting down background services")
         try:
             from deriva_mcp.tasks import get_task_manager
 
             task_manager = get_task_manager()
-            task_manager.shutdown(wait=False)  # Don't block on pending tasks
+            task_manager.shutdown(wait=False)
         except Exception as e:
             logger.warning(f"Error shutting down task manager: {e}")
 
-    atexit.register(shutdown_task_manager)
+        try:
+            from deriva_mcp.rag import get_rag_manager
+
+            rag = get_rag_manager()
+            if rag:
+                rag.shutdown()
+        except Exception as e:
+            logger.warning(f"Error shutting down RAG manager: {e}")
+
+    atexit.register(shutdown_services)
 
     transport: Literal["stdio", "streamable-http"] = args.transport
     if transport == "streamable-http":

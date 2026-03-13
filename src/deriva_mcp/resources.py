@@ -18,7 +18,6 @@ from mcp.server.fastmcp import FastMCP
 
 from deriva_mcp import __version__
 from deriva_mcp.connection import ConnectionManager
-from deriva_mcp.github_docs import fetch_doc
 
 
 def register_resources(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
@@ -1423,165 +1422,87 @@ multirun_config(
         )
 
     # =========================================================================
-    # Documentation Resources - Fetched from GitHub
+    # Documentation Resources - Backed by RAG index
     # =========================================================================
 
-    # DerivaML User Guide
-    @mcp.resource(
-        "deriva://docs/overview",
-        name="DerivaML Overview",
-        description="Overview of DerivaML concepts and architecture",
-        mime_type="text/markdown",
-    )
-    def get_overview_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/overview.md")
+    # Mapping of resource URI suffix -> (query, source filter, name, description)
+    _doc_resources = [
+        ("overview", "DerivaML overview concepts architecture", "deriva-ml-docs",
+         "DerivaML Overview", "Overview of DerivaML concepts and architecture"),
+        ("datasets", "creating managing datasets", "deriva-ml-docs",
+         "Datasets Guide", "Guide to creating and managing datasets in DerivaML"),
+        ("features", "defining using features", "deriva-ml-docs",
+         "Features Guide", "Guide to defining and using features in DerivaML"),
+        ("execution-configuration", "execution configuration datasets assets", "deriva-ml-docs",
+         "Execution Configuration Guide", "Guide to configuring ML executions with datasets and assets"),
+        ("hydra-zen", "hydra-zen configuration management", "deriva-ml-docs",
+         "Hydra-zen Configuration Guide", "Guide to using hydra-zen for configuration management"),
+        ("file-assets", "file assets management upload download", "deriva-ml-docs",
+         "File Assets Guide", "Guide to managing file assets in DerivaML"),
+        ("notebooks", "jupyter notebooks DerivaML", "deriva-ml-docs",
+         "Notebooks Guide", "Guide to using Jupyter notebooks with DerivaML"),
+        ("annotations", "catalog annotations chaise display builders", "deriva-ml-docs",
+         "Catalog Annotations Guide", "Guide to configuring Chaise display using annotation builders"),
+        ("identifiers", "RID MINID identifiers", "deriva-ml-docs",
+         "Identifiers Guide", "Guide to RIDs, MINIDs and other identifiers in DerivaML"),
+        ("install", "installation install DerivaML", "deriva-ml-docs",
+         "Installation Guide", "Installation instructions for DerivaML"),
+        ("ermrest/data-api", "ERMrest REST API data operations entity attribute", "ermrest-docs",
+         "ERMrest Data API", "ERMrest REST API for data operations"),
+        ("ermrest/naming", "ERMrest URL naming conventions entities attributes", "ermrest-docs",
+         "ERMrest Naming Conventions", "ERMrest URL naming conventions for entities and attributes"),
+        ("ermrest/catalog", "ERMrest catalog API operations create delete", "ermrest-docs",
+         "ERMrest Catalog API", "ERMrest REST API for catalog operations"),
+        ("chaise/config", "Chaise configuration options settings", "chaise-docs",
+         "Chaise Configuration", "Configuration options for the Chaise web UI"),
+        ("chaise/query-parameters", "Chaise URL query parameters pages", "chaise-docs",
+         "Chaise Query Parameters", "URL query parameters for Chaise pages"),
+        ("deriva-py/install", "deriva-py installation install SDK", "deriva-py-docs",
+         "Deriva-py Installation", "Installation guide for the deriva-py Python SDK"),
+        ("deriva-py/tutorial", "deriva-py tutorial project getting started", "deriva-py-docs",
+         "Deriva-py Tutorial", "Project tutorial for deriva-py"),
+    ]
 
-    @mcp.resource(
-        "deriva://docs/datasets",
-        name="Datasets Guide",
-        description="Guide to creating and managing datasets in DerivaML",
-        mime_type="text/markdown",
-    )
-    def get_datasets_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/datasets.md")
+    def _rag_doc_query(query: str, source: str, limit: int = 15) -> str:
+        """Query the RAG index and format results as markdown."""
+        from deriva_mcp.rag import get_rag_manager
 
-    @mcp.resource(
-        "deriva://docs/features",
-        name="Features Guide",
-        description="Guide to defining and using features in DerivaML",
-        mime_type="text/markdown",
-    )
-    def get_features_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/features.md")
+        manager = get_rag_manager()
+        if manager is None:
+            return "RAG index not available. Try again after the index has been populated."
 
-    @mcp.resource(
-        "deriva://docs/execution-configuration",
-        name="Execution Configuration Guide",
-        description="Guide to configuring ML executions with datasets and assets",
-        mime_type="text/markdown",
-    )
-    def get_execution_config_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/execution-configuration.md")
+        results = manager.search(query=query, limit=limit, source=source)
+        if not results:
+            return f"No results found for: {query}"
 
-    @mcp.resource(
-        "deriva://docs/hydra-zen",
-        name="Hydra-zen Configuration Guide",
-        description="Guide to using hydra-zen for configuration management",
-        mime_type="text/markdown",
-    )
-    def get_hydra_zen_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/hydra-zen-configuration.md")
+        parts = []
+        for r in results:
+            heading = r.get("section_heading", "")
+            hierarchy = r.get("heading_hierarchy", "")
+            header = hierarchy if hierarchy else heading
+            if header:
+                parts.append(f"### {header}\n")
+            parts.append(r["text"])
+            url = r.get("github_url", "")
+            if url:
+                parts.append(f"\n*Source: [{r.get('path', '')}]({url})*")
+            parts.append("\n---\n")
 
-    @mcp.resource(
-        "deriva://docs/file-assets",
-        name="File Assets Guide",
-        description="Guide to managing file assets in DerivaML",
-        mime_type="text/markdown",
-    )
-    def get_file_assets_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/file-assets.md")
+        return "\n".join(parts)
 
-    @mcp.resource(
-        "deriva://docs/notebooks",
-        name="Notebooks Guide",
-        description="Guide to using Jupyter notebooks with DerivaML",
-        mime_type="text/markdown",
-    )
-    def get_notebooks_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/notebooks.md")
+    for _suffix, _query, _source, _name, _desc in _doc_resources:
+        # Use default args to capture loop variables
+        def _make_resource(suffix=_suffix, query=_query, source=_source, name=_name, desc=_desc):
+            @mcp.resource(
+                f"deriva://docs/{suffix}",
+                name=name,
+                description=desc,
+                mime_type="text/markdown",
+            )
+            def _resource() -> str:
+                return _rag_doc_query(query, source)
 
-    @mcp.resource(
-        "deriva://docs/annotations",
-        name="Catalog Annotations Guide",
-        description="Guide to configuring Chaise display using annotation builders",
-        mime_type="text/markdown",
-    )
-    def get_annotations_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/annotations.md")
-
-    @mcp.resource(
-        "deriva://docs/identifiers",
-        name="Identifiers Guide",
-        description="Guide to RIDs, MINIDs and other identifiers in DerivaML",
-        mime_type="text/markdown",
-    )
-    def get_identifiers_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/identifiers.md")
-
-    @mcp.resource(
-        "deriva://docs/install",
-        name="Installation Guide",
-        description="Installation instructions for DerivaML",
-        mime_type="text/markdown",
-    )
-    def get_install_doc() -> str:
-        return fetch_doc("deriva-ml", "docs/user-guide/install.md")
-
-    # ERMrest Documentation
-    @mcp.resource(
-        "deriva://docs/ermrest/data-api",
-        name="ERMrest Data API",
-        description="ERMrest REST API for data operations",
-        mime_type="text/markdown",
-    )
-    def get_ermrest_data_doc() -> str:
-        return fetch_doc("ermrest", "docs/api-doc/data/rest.md")
-
-    @mcp.resource(
-        "deriva://docs/ermrest/naming",
-        name="ERMrest Naming Conventions",
-        description="ERMrest URL naming conventions for entities and attributes",
-        mime_type="text/markdown",
-    )
-    def get_ermrest_naming_doc() -> str:
-        return fetch_doc("ermrest", "docs/api-doc/data/naming.md")
-
-    @mcp.resource(
-        "deriva://docs/ermrest/catalog",
-        name="ERMrest Catalog API",
-        description="ERMrest REST API for catalog operations",
-        mime_type="text/markdown",
-    )
-    def get_ermrest_catalog_doc() -> str:
-        return fetch_doc("ermrest", "docs/api-doc/rest-catalog.md")
-
-    # Chaise Documentation
-    @mcp.resource(
-        "deriva://docs/chaise/config",
-        name="Chaise Configuration",
-        description="Configuration options for the Chaise web UI",
-        mime_type="text/markdown",
-    )
-    def get_chaise_config_doc() -> str:
-        return fetch_doc("chaise", "docs/user-docs/chaise-config.md")
-
-    @mcp.resource(
-        "deriva://docs/chaise/query-parameters",
-        name="Chaise Query Parameters",
-        description="URL query parameters for Chaise pages",
-        mime_type="text/markdown",
-    )
-    def get_chaise_query_params_doc() -> str:
-        return fetch_doc("chaise", "docs/user-docs/query-parameters.md")
-
-    # deriva-py Documentation
-    @mcp.resource(
-        "deriva://docs/deriva-py/install",
-        name="Deriva-py Installation",
-        description="Installation guide for the deriva-py Python SDK",
-        mime_type="text/markdown",
-    )
-    def get_derivapy_install_doc() -> str:
-        return fetch_doc("deriva-py", "docs/install.md")
-
-    @mcp.resource(
-        "deriva://docs/deriva-py/tutorial",
-        name="Deriva-py Tutorial",
-        description="Project tutorial for deriva-py",
-        mime_type="text/markdown",
-    )
-    def get_derivapy_tutorial_doc() -> str:
-        return fetch_doc("deriva-py", "docs/project-tutorial.md")
+        _make_resource()
 
     # =========================================================================
     # Dynamic Resources - Assets

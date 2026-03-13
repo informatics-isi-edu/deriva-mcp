@@ -1,11 +1,11 @@
-name: Deploy ERD Browser to GitHub Pages
+name: Deploy Schema Workbench to GitHub Pages
 
 on:
   push:
     branches: [main]
     paths:
-      - 'apps/erd-browser/**'
-      - '.github/workflows/deploy-erd-browser.yml'
+      - 'apps/schema-workbench/**'
+      - '.github/workflows/deploy-schema-workbench.yml'
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/erd-browser
+        working-directory: apps/schema-workbench
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +41,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/erd-browser/dist
+          path: apps/schema-workbench/dist
 
   deploy:
     needs: build

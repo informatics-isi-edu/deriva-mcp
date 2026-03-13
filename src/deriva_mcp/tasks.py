@@ -57,7 +57,8 @@ class TaskType(Enum):
     """Types of background tasks."""
 
     CLONE_CATALOG = "clone_catalog"
-    # Future task types can be added here
+    RAG_INGEST = "rag_ingest"
+    RAG_UPDATE = "rag_update"
 
 
 @dataclass
