@@ -29,6 +29,7 @@ dependencies = [
     "bump-my-version",
     "psutil>=5.9",
     "scikit-learn>=1.8.0",
+    "chromadb>=1.0.0",
 ]
 
 [project.optional-dependencies]

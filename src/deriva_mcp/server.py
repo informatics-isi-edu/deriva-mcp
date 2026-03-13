@@ -46,6 +46,7 @@ from deriva_mcp.tools import (
     register_devtools,
     register_execution_tools,
     register_feature_tools,
+    register_rag_tools,
     register_schema_tools,
     register_storage_tools,
     register_vocabulary_tools,
@@ -792,6 +793,7 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     register_storage_tools(mcp_server, conn_manager)
     register_data_tools(mcp_server, conn_manager)
     register_devtools(mcp_server, conn_manager)
+    register_rag_tools(mcp_server, conn_manager)
 
     # Register resources
     register_resources(mcp_server, conn_manager)
@@ -962,21 +964,42 @@ def main() -> None:
         retention_hours=task_retention_hours,
     )
 
+    # Initialize RAG manager
+    from deriva_mcp.rag import RAGConfig, init_rag_manager
+
+    rag_persist_dir = os.environ.get("DERIVA_MCP_RAG_DIR")
+    rag_auto_update = bool(os.environ.get("DERIVA_MCP_RAG_AUTO_UPDATE", ""))
+    rag_config = RAGConfig(
+        persist_dir=Path(rag_persist_dir) if rag_persist_dir else Path.home() / ".deriva-ml" / "rag",
+        auto_update_on_start=rag_auto_update,
+    )
+    init_rag_manager(rag_config)
+    logger.info("RAG documentation service initialized")
+
     # Create server with appropriate settings
     server = create_server(host=args.host, port=args.port)
 
-    # Register shutdown handler for background task manager
-    def shutdown_task_manager() -> None:
-        logger.info("Shutting down background task manager")
+    # Register shutdown handlers
+    def shutdown_services() -> None:
+        logger.info("Shutting down background services")
         try:
             from deriva_mcp.tasks import get_task_manager
 
             task_manager = get_task_manager()
-            task_manager.shutdown(wait=False)  # Don't block on pending tasks
+            task_manager.shutdown(wait=False)
         except Exception as e:
             logger.warning(f"Error shutting down task manager: {e}")
 
-    atexit.register(shutdown_task_manager)
+        try:
+            from deriva_mcp.rag import get_rag_manager
+
+            rag = get_rag_manager()
+            if rag:
+                rag.shutdown()
+        except Exception as e:
+            logger.warning(f"Error shutting down RAG manager: {e}")
+
+    atexit.register(shutdown_services)
 
     transport: Literal["stdio", "streamable-http"] = args.transport
     if transport == "streamable-http":
