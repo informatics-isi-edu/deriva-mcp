@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { Search, Filter, ChevronRight, LayoutGrid } from "lucide-react";
+import { Search, Filter, ChevronRight, LayoutGrid, ZoomIn, ZoomOut, Maximize2, Map } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import type { EnrichedTable, SchemaFilter } from "@/types";
+import type { CanvasControls } from "./ERDCanvas";
 
 interface ToolbarProps {
   hostname: string;
@@ -30,6 +31,7 @@ interface ToolbarProps {
   // Autocomplete
   allTables: EnrichedTable[];
   onJumpToTable: (table: EnrichedTable) => void;
+  canvasControls: CanvasControls | null;
 }
 
 const TYPE_DOT_COLORS: Record<string, string> = {
@@ -56,6 +58,7 @@ export default function Toolbar({
   onBackToSchemas,
   allTables,
   onJumpToTable,
+  canvasControls,
 }: ToolbarProps) {
   const [open, setOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(0);
@@ -276,6 +279,62 @@ export default function Toolbar({
           </>
         )}
       </span>
+
+      {/* Canvas controls */}
+      {canvasControls && (
+        <>
+          <div className="h-5 w-px bg-slate-200" />
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={canvasControls.zoomIn}
+              title="Zoom in"
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={canvasControls.zoomOut}
+              title="Zoom out"
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={canvasControls.fitView}
+              title="Fit view"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-7 w-7 p-0 ${canvasControls.showMiniMap ? "text-slate-700" : "text-slate-400"}`}
+              onClick={() => canvasControls.setShowMiniMap(!canvasControls.showMiniMap)}
+              title={canvasControls.showMiniMap ? "Hide mini map" : "Show mini map"}
+            >
+              <Map className="h-3.5 w-3.5" />
+            </Button>
+            {canvasControls.showMiniMap && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-1.5 text-[10px] font-medium text-slate-500"
+                onClick={canvasControls.cycleMapSize}
+                title={`Map size: ${canvasControls.mapSize}`}
+              >
+                {canvasControls.mapSize}
+              </Button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 
-import ERDCanvas from "@/components/erd/ERDCanvas";
+import ERDCanvas, { type CanvasControls } from "@/components/erd/ERDCanvas";
 import DetailPanel from "@/components/erd/DetailPanel";
 import Toolbar from "@/components/erd/Toolbar";
 import SplitLayout from "@/components/erd/SplitLayout";
@@ -30,6 +30,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<SchemaFilter>("all");
   const [hideAssociations, setHideAssociations] = useState(true);
+  const [canvasControls, setCanvasControls] = useState<CanvasControls | null>(null);
 
   const { hostname, catalogId } = getCatalogInfo();
 
@@ -224,6 +225,7 @@ export default function App() {
         onBackToSchemas={onBackToSchemas}
         allTables={tables}
         onJumpToTable={handleJumpToTable}
+        canvasControls={canvasControls}
       />
 
       <SplitLayout
@@ -243,6 +245,7 @@ export default function App() {
               viewMode={viewMode}
               activeSchema={activeSchema}
               onDrillIntoSchema={onDrillIntoSchema}
+              onControlsReady={setCanvasControls}
             />
           </ReactFlowProvider>
         }

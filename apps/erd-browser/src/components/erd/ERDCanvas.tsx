@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
-  Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
@@ -22,6 +21,16 @@ import type { EnrichedTable, SchemaFilter, CatalogSchema } from "@/types";
 
 const nodeTypes = { tableNode: TableNode, schemaNode: SchemaNode };
 
+export interface CanvasControls {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  fitView: () => void;
+  showMiniMap: boolean;
+  setShowMiniMap: (v: boolean) => void;
+  mapSize: "S" | "M" | "L";
+  cycleMapSize: () => void;
+}
+
 interface ERDCanvasProps {
   tables: EnrichedTable[];
   schema: CatalogSchema;
@@ -33,6 +42,7 @@ interface ERDCanvasProps {
   viewMode: "schemas" | "tables";
   activeSchema: string | null;
   onDrillIntoSchema: (schemaName: string) => void;
+  onControlsReady?: (controls: CanvasControls) => void;
 }
 
 // ── Schema-level view ──────────────────────────────────────────────
@@ -204,15 +214,29 @@ function ERDCanvasInner({
   viewMode,
   activeSchema,
   onDrillIntoSchema,
+  onControlsReady,
 }: ERDCanvasProps) {
-  const { fitView } = useReactFlow();
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
   const [showMiniMap, setShowMiniMap] = useState(true);
   const [mapSize, setMapSize] = useState<"S" | "M" | "L">("M");
 
   const mapDimensions = { S: { w: 140, h: 100 }, M: { w: 200, h: 150 }, L: { w: 300, h: 220 } };
   const { w: mapW, h: mapH } = mapDimensions[mapSize];
 
-  const cycleMapSize = () => setMapSize((s) => (s === "S" ? "M" : s === "M" ? "L" : "S"));
+  const cycleMapSize = useCallback(() => setMapSize((s) => (s === "S" ? "M" : s === "M" ? "L" : "S")), []);
+
+  // Expose controls to parent
+  useEffect(() => {
+    onControlsReady?.({
+      zoomIn: () => zoomIn({ duration: 200 }),
+      zoomOut: () => zoomOut({ duration: 200 }),
+      fitView: () => fitView({ padding: 0.2, duration: 300 }),
+      showMiniMap,
+      setShowMiniMap,
+      mapSize,
+      cycleMapSize,
+    });
+  }, [onControlsReady, zoomIn, zoomOut, fitView, showMiniMap, mapSize, cycleMapSize]);
 
   // Compute layout only when structure changes (not on selection)
   const { nodes: baseNodes, edges: baseEdges } = useMemo(() => {
@@ -278,10 +302,6 @@ function ERDCanvasInner({
     onSelectTable(null);
   }, [onSelectTable]);
 
-  const handleFitView = useCallback(() => {
-    fitView({ padding: 0.2, duration: 300 });
-  }, [fitView]);
-
   return (
     <div className="relative w-full h-full">
       <ReactFlow
@@ -304,12 +324,6 @@ function ERDCanvasInner({
           gap={24}
           size={1}
           color="#d1d5db"
-        />
-        <Controls
-          showInteractive={false}
-          position="top-right"
-          className="!bg-white !border-slate-300 !shadow-sm"
-          style={{ top: 48 }}
         />
         {showMiniMap && (
           <MiniMap
@@ -336,37 +350,6 @@ function ERDCanvasInner({
           />
         )}
       </ReactFlow>
-
-      {/* Top-right controls */}
-      <div className="absolute top-4 right-4 z-10 flex gap-1.5">
-        <button
-          onClick={() => setShowMiniMap((v) => !v)}
-          className={`bg-white border border-slate-300 rounded-md px-3 py-1.5 text-xs font-medium hover:bg-slate-50 shadow-sm transition-colors ${
-            showMiniMap
-              ? "text-slate-600 hover:text-slate-900"
-              : "text-slate-400 hover:text-slate-600"
-          }`}
-          title={showMiniMap ? "Hide overview map" : "Show overview map"}
-        >
-          {showMiniMap ? "Hide map" : "Show map"}
-        </button>
-        {showMiniMap && (
-          <button
-            onClick={cycleMapSize}
-            className="bg-white border border-slate-300 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-colors"
-            title={`Map size: ${mapSize} (click to cycle)`}
-          >
-            Map {mapSize}
-          </button>
-        )}
-        <button
-          onClick={handleFitView}
-          className="bg-white border border-slate-300 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-colors"
-          title="Reset zoom and center (fit view)"
-        >
-          Fit view
-        </button>
-      </div>
 
       {viewMode === "tables" && <Legend />}
     </div>
