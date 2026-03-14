@@ -103,6 +103,10 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._api_storage_list(parsed.query)
         elif path == "/api/storage/delete" and method == "POST":
             self._api_storage_delete()
+        elif path == "/api/registry" and method == "GET":
+            self._api_registry(parsed.query)
+        elif path == "/api/apps" and method == "GET":
+            self._api_apps()
         else:
             self._send_json(404, {"status": "error", "error": f"Unknown API endpoint: {path}"})
 
@@ -242,6 +246,43 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             "errors": errors,
         })
 
+    def _api_registry(self, query_string: str) -> None:
+        """Query the Deriva registry (catalog 0) for available catalogs and aliases."""
+        params = urllib.parse.parse_qs(query_string)
+        hostname = params.get("hostname", [None])[0]
+
+        if not hostname:
+            self._send_json(400, {"status": "error", "error": "Missing 'hostname' parameter"})
+            return
+
+        try:
+            catalogs, aliases = _query_registry(hostname)
+            self._send_json(200, {
+                "status": "success",
+                "hostname": hostname,
+                "catalogs": catalogs,
+                "aliases": aliases,
+            })
+        except Exception as e:
+            self._send_json(502, {
+                "status": "error",
+                "error": f"Failed to query registry on {hostname}: {e}",
+            })
+
+    def _api_apps(self) -> None:
+        """Return the app catalog from the local apps.json file."""
+        try:
+            apps = _load_apps_catalog()
+            self._send_json(200, {
+                "status": "success",
+                "apps": apps,
+            })
+        except Exception as e:
+            self._send_json(500, {
+                "status": "error",
+                "error": f"Failed to load app catalog: {e}",
+            })
+
     def _serve_static(self) -> None:
         """Serve static files, falling back to index.html for SPA routing."""
         translated = self.translate_path(self.path)
@@ -363,6 +404,72 @@ def _discover_storage_entries() -> list[dict]:
             "Install with: pip install deriva-ml"
         )
     return [entry.to_dict() for entry in discover_entries()]
+
+
+# ---------------------------------------------------------------------------
+# Registry API helpers
+# ---------------------------------------------------------------------------
+
+def _query_registry(hostname: str) -> tuple[list[dict], list[dict]]:
+    """Query the Deriva registry on a server, returning (catalogs, aliases)."""
+    from deriva.core import DerivaServer, get_credential
+
+    credentials = get_credential(hostname)
+    server = DerivaServer("https", hostname, credentials=credentials)
+    registry_catalog = server.connect_ermrest(0)
+    pb = registry_catalog.getPathBuilder()
+    registry = pb.schemas["ermrest"].tables["registry"]
+    entries = list(registry.entities().fetch())
+
+    catalogs = []
+    aliases = []
+    for entry in entries:
+        if entry.get("deleted_on") is not None:
+            continue
+        item = {
+            "id": entry.get("id"),
+            "name": entry.get("name"),
+            "description": entry.get("description"),
+        }
+        if entry.get("is_catalog"):
+            item["is_persistent"] = entry.get("is_persistent", True)
+            catalogs.append(item)
+        elif entry.get("alias_target") is not None:
+            item["alias_target"] = entry["alias_target"]
+            aliases.append(item)
+
+    return catalogs, aliases
+
+
+def _load_apps_catalog() -> list[dict]:
+    """Load app metadata from the local apps.json file.
+
+    Searches for the apps.json in the same directory as the static_dir's
+    parent repo, or falls back to the devtools helper.
+    """
+    # Try to find apps.json relative to the currently-served static dir
+    if _active_server is not None:
+        handler_class = _active_server.RequestHandlerClass
+        if hasattr(handler_class, "static_dir"):
+            # static_dir is like: .../deriva-ml-apps/app-launcher/dist
+            # apps.json is at: .../deriva-ml-apps/apps.json
+            candidate = handler_class.static_dir
+            for _ in range(4):  # Walk up a few levels
+                candidate = candidate.parent
+                apps_file = candidate / "apps.json"
+                if apps_file.exists():
+                    return json.loads(apps_file.read_text()).get("apps", [])
+
+    # Fallback: try the devtools helper
+    try:
+        from deriva_mcp.tools.devtools import _load_app_catalog
+        catalog = _load_app_catalog()
+        if catalog:
+            return catalog.get("apps", [])
+    except ImportError:
+        pass
+
+    return []
 
 
 # ---------------------------------------------------------------------------
