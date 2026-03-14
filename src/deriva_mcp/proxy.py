@@ -204,8 +204,13 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         deleted = []
         errors = []
         bytes_freed = 0
+        deriva_root = (Path.home() / ".deriva-ml").resolve()
         for entry in matches:
-            entry_path = Path(entry["path"])
+            entry_path = Path(entry["path"]).resolve()
+            # Safety: only delete paths inside ~/.deriva-ml/
+            if not entry_path.is_relative_to(deriva_root):
+                errors.append({"path": entry["path"], "error": "Path is outside ~/.deriva-ml"})
+                continue
             try:
                 shutil.rmtree(entry_path)
                 bytes_freed += entry["size_bytes"]
@@ -213,13 +218,12 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 errors.append({"path": entry["path"], "error": str(e)})
 
-        # Clean up empty parent directories
-        deriva_root = Path.home() / ".deriva-ml"
+        # Clean up empty parent directories (only within ~/.deriva-ml/)
         for entry in deleted:
-            entry_path = Path(entry["path"])
+            entry_path = Path(entry["path"]).resolve()
             if not entry_path.exists():
                 parent = entry_path.parent
-                while parent != deriva_root and parent.exists():
+                while parent != deriva_root and parent.is_relative_to(deriva_root) and parent.exists():
                     try:
                         if not any(parent.iterdir()):
                             parent.rmdir()

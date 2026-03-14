@@ -432,17 +432,19 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                 ),
             })
 
-        # Check which apps are built
+        # Check which apps are built (copy to avoid mutating cached catalog)
         apps_repo = _find_apps_repo()
+        apps = []
         for app in catalog.get("apps", []):
-            app["built"] = False
+            app_info = {**app, "built": False}
             if apps_repo:
                 dist_path = apps_repo / app["dist_path"]
-                app["built"] = (dist_path / "index.html").exists()
+                app_info["built"] = (dist_path / "index.html").exists()
+            apps.append(app_info)
 
         return json.dumps({
             "status": "success",
-            "apps": catalog["apps"],
+            "apps": apps,
         })
 
     @mcp.tool()
@@ -482,7 +484,7 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         app_meta = _get_app_metadata(app_id)
 
         # Check catalog connection for apps that need it
-        requires_catalog = app_meta.get("requires_catalog", False) if app_meta else True
+        requires_catalog = app_meta.get("requires_catalog", False) if app_meta else False
         hostname = None
         catalog_id = None
 
@@ -914,7 +916,7 @@ def _find_apps_repo() -> Path | None:
     env_path = os.environ.get("DERIVA_ML_APPS_PATH")
     if env_path:
         p = Path(env_path).resolve()
-        if p.is_dir():
+        if p.is_dir() and (p / "apps.json").exists():
             return p
 
     # This file lives at: repo/src/deriva_mcp/tools/devtools.py
