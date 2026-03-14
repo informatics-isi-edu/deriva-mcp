@@ -497,8 +497,10 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             catalog_id = conn_info.catalog_id
 
         # Stop existing proxy if running
+        stopped_previous = False
         if is_proxy_running():
             stop_proxy()
+            stopped_previous = True
 
         # Find the built app
         static_dir = _find_app(app_id, app_path)
@@ -553,6 +555,8 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         if hostname:
             result["backend"] = f"https://{hostname}"
             result["catalog_id"] = catalog_id
+        if stopped_previous:
+            result["note"] = "Stopped a previously running app to start this one."
         return json.dumps(result)
 
     @mcp.tool()
@@ -903,9 +907,16 @@ def _find_apps_repo() -> Path | None:
     """Find the local deriva-ml-apps repository.
 
     Searches in order:
-    1. Sibling directory relative to this package's repo
-    2. Common checkout locations under $HOME
+    1. DERIVA_ML_APPS_PATH environment variable
+    2. Sibling directory relative to this package's repo
+    3. Common checkout locations under $HOME
     """
+    env_path = os.environ.get("DERIVA_ML_APPS_PATH")
+    if env_path:
+        p = Path(env_path).resolve()
+        if p.is_dir():
+            return p
+
     # This file lives at: repo/src/deriva_mcp/tools/devtools.py
     repo_root = Path(__file__).resolve().parent.parent.parent.parent
 

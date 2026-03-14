@@ -1097,7 +1097,7 @@ class TestDevtoolRegistration:
     """Tests that all devtools are properly registered."""
 
     def test_all_tools_registered(self, devtools):
-        """All 8 devtools should be registered."""
+        """All 11 devtools should be registered."""
         expected = {
             "bump_version",
             "get_current_version",
@@ -1105,6 +1105,9 @@ class TestDevtoolRegistration:
             "list_jupyter_kernels",
             "inspect_notebook",
             "run_notebook",
+            "list_apps",
+            "start_app",
+            "stop_app",
             "start_schema_workbench",
             "stop_schema_workbench",
         }

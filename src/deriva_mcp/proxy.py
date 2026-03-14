@@ -19,6 +19,7 @@ import http.server
 import json
 import logging
 import mimetypes
+import re
 import shutil
 import socket
 import ssl
@@ -28,6 +29,10 @@ import urllib.request
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+MAX_REQUEST_BODY = 1_048_576  # 1 MB
+
+_RID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 # Paths that get proxied to the Deriva backend
 PROXY_PREFIXES = ("/ermrest", "/authn", "/chaise")
@@ -145,6 +150,10 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(400, {"status": "error", "error": "Missing request body"})
             return
 
+        if content_length > MAX_REQUEST_BODY:
+            self._send_json(413, {"status": "error", "error": f"Request body too large (max {MAX_REQUEST_BODY} bytes)"})
+            return
+
         try:
             body = json.loads(self.rfile.read(content_length))
         except json.JSONDecodeError:
@@ -156,6 +165,11 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
 
         if not rids:
             self._send_json(400, {"status": "error", "error": "No RIDs provided"})
+            return
+
+        invalid_rids = [r for r in rids if not _RID_PATTERN.match(r)]
+        if invalid_rids:
+            self._send_json(400, {"status": "error", "error": f"Invalid RID format: {', '.join(invalid_rids)}"})
             return
 
         try:
@@ -337,7 +351,13 @@ def _human_size(size_bytes: int) -> str:
 
 def _discover_storage_entries() -> list[dict]:
     """Import and call cache_tui.discover_entries(), returning dicts."""
-    from deriva_ml.cache_tui import discover_entries
+    try:
+        from deriva_ml.cache_tui import discover_entries
+    except ImportError:
+        raise RuntimeError(
+            "deriva-ml is not installed or does not include cache_tui. "
+            "Install with: pip install deriva-ml"
+        )
     return [entry.to_dict() for entry in discover_entries()]
 
 
@@ -345,6 +365,7 @@ def _discover_storage_entries() -> list[dict]:
 # Server lifecycle (for use as MCP tool)
 # ---------------------------------------------------------------------------
 
+_server_lock = threading.Lock()
 _active_server: http.server.HTTPServer | None = None
 _active_thread: threading.Thread | None = None
 
@@ -358,7 +379,9 @@ def start_proxy(
     """Start the proxy server in a background thread.
 
     Args:
-        backend: Deriva server hostname (e.g., "dev.example.org").
+        backend: Deriva server hostname (e.g., "dev.example.org") or full URL
+            (e.g., "https://dev.example.org"). A bare hostname will be prefixed
+            with ``https://`` automatically.
         static_dir: Path to directory with built static files (index.html).
         port: Port to bind to. 0 = auto-select a free port.
         bind: Address to bind to.
@@ -371,68 +394,71 @@ def start_proxy(
     """
     global _active_server, _active_thread
 
-    if _active_server is not None:
-        raise RuntimeError("Proxy already running. Call stop_proxy() first.")
+    with _server_lock:
+        if _active_server is not None:
+            raise RuntimeError("Proxy already running. Call stop_proxy() first.")
 
-    static_dir = static_dir.resolve()
-    if not (static_dir / "index.html").exists():
-        raise FileNotFoundError(
-            f"No index.html found in {static_dir}. "
-            "Build the app first (e.g., cd schema-workbench && pnpm build)."
+        static_dir = static_dir.resolve()
+        if not (static_dir / "index.html").exists():
+            raise FileNotFoundError(
+                f"No index.html found in {static_dir}. "
+                "Build the app first (e.g., cd schema-workbench && pnpm build)."
+            )
+
+        if not backend.startswith("http"):
+            backend = f"https://{backend}"
+
+        if port == 0:
+            port = _find_free_port()
+
+        # SSL context for backend connections (accept self-signed certs)
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+
+        # Configure handler class
+        ProxyHandler.backend = backend
+        ProxyHandler.static_dir = static_dir
+        ProxyHandler.ssl_context = ssl_ctx
+
+        # Ensure common MIME types
+        mimetypes.add_type("application/javascript", ".js")
+        mimetypes.add_type("text/css", ".css")
+        mimetypes.add_type("image/svg+xml", ".svg")
+
+        _active_server = http.server.HTTPServer((bind, port), ProxyHandler)
+        _active_thread = threading.Thread(
+            target=_active_server.serve_forever,
+            daemon=True,
+            name="deriva-proxy",
         )
+        _active_thread.start()
 
-    if not backend.startswith("http"):
-        backend = f"https://{backend}"
-
-    if port == 0:
-        port = _find_free_port()
-
-    # SSL context for backend connections (accept self-signed certs)
-    ssl_ctx = ssl.create_default_context()
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
-
-    # Configure handler class
-    ProxyHandler.backend = backend
-    ProxyHandler.static_dir = static_dir
-    ProxyHandler.ssl_context = ssl_ctx
-
-    # Ensure common MIME types
-    mimetypes.add_type("application/javascript", ".js")
-    mimetypes.add_type("text/css", ".css")
-    mimetypes.add_type("image/svg+xml", ".svg")
-
-    _active_server = http.server.HTTPServer((bind, port), ProxyHandler)
-    _active_thread = threading.Thread(
-        target=_active_server.serve_forever,
-        daemon=True,
-        name="deriva-proxy",
-    )
-    _active_thread.start()
-
-    url = f"http://{bind}:{port}"
-    logger.info(f"Proxy started: {url} -> {backend}")
-    return url, port
+        url = f"http://{bind}:{port}"
+        logger.info(f"Proxy started: {url} -> {backend}")
+        return url, port
 
 
 def stop_proxy() -> None:
     """Stop the running proxy server."""
     global _active_server, _active_thread
 
-    if _active_server is not None:
-        _active_server.shutdown()
-        _active_server.server_close()
-        _active_server = None
-        logger.info("Proxy stopped")
+    with _server_lock:
+        if _active_server is not None:
+            _active_server.shutdown()
+            _active_server.server_close()
+            _active_server = None
+            logger.info("Proxy stopped")
 
-    if _active_thread is not None:
-        _active_thread.join(timeout=5)
-        _active_thread = None
+        if _active_thread is not None:
+            _active_thread.join(timeout=5)
+            _active_thread = None
 
 
 def is_proxy_running() -> bool:
     """Check if the proxy server is currently running."""
-    return _active_server is not None
+    with _server_lock:
+        return _active_server is not None
 
 
 # ---------------------------------------------------------------------------
