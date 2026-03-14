@@ -68,6 +68,9 @@ services:
       # CA bundle for self-signed localhost certificates
       # pip-system-certs/truststore ignores REQUESTS_CA_BUNDLE but respects SSL_CERT_FILE
       - SSL_CERT_FILE=${HOME}/.deriva/allCAbundle-with-local.pem
+      # Workaround: chromadb pins opentelemetry-exporter-otlp-proto-grpc 1.11.1
+      # whose generated _pb2.py files are incompatible with protobuf >=4
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
     restart: unless-stopped
     healthcheck:
       # Health check uses dedicated /health endpoint that does NOT create MCP sessions.

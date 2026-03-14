@@ -112,6 +112,11 @@ ENV DERIVA_MCP_IMAGE_NAME="ghcr.io/informatics-isi-edu/deriva-mcp"
 # Flag to indicate running in Docker container
 ENV DERIVA_MCP_IN_DOCKER="true"
 
+# Workaround: chromadb pins opentelemetry-exporter-otlp-proto-grpc 1.11.1
+# whose generated _pb2.py files are incompatible with protobuf >=4.
+# Use pure-Python protobuf parsing until chromadb updates its dependency.
+ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
+
 # Task persistence and SSE keepalive configuration
 # These can be overridden at runtime via docker run -e or docker-compose
 ENV DERIVA_MCP_TASK_STATE_PATH="/app/data/task_state.json"
