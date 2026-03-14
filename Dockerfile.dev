@@ -87,6 +87,10 @@ exec "$@"\n\
 ENV DERIVA_MCP_WORKFLOW_NAME="Deriva MCP Server (dev)"
 ENV DERIVA_MCP_WORKFLOW_TYPE="Deriva MCP"
 ENV DERIVA_MCP_IN_DOCKER="true"
+
+# Workaround: chromadb pins opentelemetry-exporter-otlp-proto-grpc 1.11.1
+# whose generated _pb2.py files are incompatible with protobuf >=4.
+ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
 ENV DERIVA_MCP_TASK_STATE_PATH="/app/data/task_state.json"
 ENV DERIVA_MCP_TASK_RETENTION_HOURS="168"
 ENV DERIVA_MCP_TASK_SYNC_INTERVAL="5"
