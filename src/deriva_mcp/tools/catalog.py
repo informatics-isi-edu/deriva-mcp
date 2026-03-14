@@ -18,22 +18,31 @@ if TYPE_CHECKING:
 logger = logging.getLogger("deriva-mcp")
 
 
-def _index_schema_background(ml: Any, hostname: str, catalog_id: str | int) -> None:
+def _index_schema_background(
+    ml: Any,
+    hostname: str,
+    catalog_id: str | int,
+    conn_info: Any = None,
+) -> None:
     """Index the catalog schema for RAG search in a background thread.
 
     Indexes table structure (columns, FKs, features) and vocabulary terms
     so RAG can answer questions like "what tables exist?", "how are images
     related to subjects?", and "what diagnosis types are available?".
 
+    The schema hash serves as a **visibility-class fingerprint**: users
+    whose ``/schema`` responses hash to the same value share an index.
+    The hash is stored on ``conn_info.schema_hash`` so ``rag_search``
+    can resolve the correct source at query time.
+
     Runs silently — failures are logged but don't affect the connection.
-    Uses schema hashing for change detection, so repeated connects
-    to the same catalog are fast (no-op if schema unchanged).
     """
     import threading
 
     def _do_index():
         try:
             from deriva_mcp.rag import get_rag_manager
+            from deriva_mcp.rag.schema import compute_schema_hash
 
             manager = get_rag_manager()
             if manager is None:
@@ -61,6 +70,12 @@ def _index_schema_background(ml: Any, hostname: str, catalog_id: str | int) -> N
                         except Exception:
                             pass  # Skip vocabs that can't be read
 
+            # Compute and store the schema hash on the connection info
+            # so rag_search can resolve the correct source at query time.
+            schema_hash = compute_schema_hash(schema_info, vocab_terms)
+            if conn_info is not None:
+                conn_info.schema_hash = schema_hash
+
             result = manager.index_catalog_schema(
                 schema_info, hostname, catalog_id,
                 vocabulary_terms=vocab_terms,
@@ -68,11 +83,15 @@ def _index_schema_background(ml: Any, hostname: str, catalog_id: str | int) -> N
             status = result.get("status", "unknown")
             if status == "indexed":
                 logger.info(
-                    f"Indexed catalog schema for {hostname}:{catalog_id}: "
+                    f"Indexed catalog schema for {hostname}:{catalog_id} "
+                    f"(visibility class {schema_hash}): "
                     f"{result.get('chunks_created', 0)} chunks"
                 )
             elif status == "unchanged":
-                logger.debug(f"Catalog schema for {hostname}:{catalog_id} unchanged, skipping")
+                logger.debug(
+                    f"Catalog schema for {hostname}:{catalog_id} "
+                    f"(visibility class {schema_hash}) unchanged, skipping"
+                )
         except Exception as e:
             logger.warning(f"Failed to index catalog schema: {e}")
 
@@ -138,8 +157,11 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     conn_info.execution.execution_rid if conn_info.execution else None
                 )
 
-            # Index catalog schema for RAG in background
-            _index_schema_background(ml, resolved_hostname, catalog_id)
+            # Index catalog schema for RAG in background.
+            # Pass conn_info so the background thread can store the schema hash
+            # for visibility-class-aware RAG search.
+            active_conn_info = conn_manager.get_active_connection_info()
+            _index_schema_background(ml, resolved_hostname, catalog_id, active_conn_info)
 
             return json.dumps(result)
         except Exception as e:

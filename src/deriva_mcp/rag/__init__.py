@@ -497,22 +497,79 @@ class RAGManager:
             vocabulary_terms=vocabulary_terms,
         )
 
-    def remove_catalog_schema(self, hostname: str, catalog_id: str | int) -> dict[str, Any]:
+    def find_schema_source(
+        self,
+        hostname: str,
+        catalog_id: str | int,
+        schema_hash: str,
+    ) -> str | None:
+        """Find an existing schema index for a visibility class.
+
+        Args:
+            hostname: Catalog hostname.
+            catalog_id: Catalog ID.
+            schema_hash: Hash of the user's /schema response.
+
+        Returns:
+            The source name if an index exists, else None.
+        """
+        self._ensure_initialized()
+        from deriva_mcp.rag.schema import find_schema_source
+
+        return find_schema_source(
+            hostname, catalog_id, schema_hash, self._collection
+        )
+
+    def remove_catalog_schema(
+        self,
+        hostname: str,
+        catalog_id: str | int,
+        schema_hash: str | None = None,
+    ) -> dict[str, Any]:
         """Remove indexed schema chunks for a catalog.
 
         Args:
             hostname: Catalog hostname.
             catalog_id: Catalog ID.
+            schema_hash: If provided, remove only the index for this
+                visibility class.  If None, remove all indexes for
+                the catalog.
 
         Returns:
             Dict with removal status.
         """
         self._ensure_initialized()
-        from deriva_mcp.rag.schema import _remove_schema_chunks, schema_source_name
+        from deriva_mcp.rag.schema import (
+            _remove_schema_chunks,
+            schema_source_name,
+            schema_source_prefix,
+        )
 
-        source = schema_source_name(hostname, catalog_id)
-        deleted = _remove_schema_chunks(self._collection, source)
-        return {"source": source, "chunks_deleted": deleted}
+        if schema_hash:
+            source = schema_source_name(hostname, catalog_id, schema_hash)
+            deleted = _remove_schema_chunks(self._collection, source)
+            return {"source": source, "chunks_deleted": deleted}
+
+        # Remove all visibility classes for this catalog
+        prefix = schema_source_prefix(hostname, catalog_id)
+        total_deleted = 0
+        try:
+            results = self._collection.get(
+                where={"doc_type": "catalog-schema"},
+                include=["metadatas"],
+            )
+            if results and results["ids"]:
+                ids_to_delete = [
+                    rid for rid, meta in zip(results["ids"], results["metadatas"])
+                    if meta.get("source", "").startswith(prefix)
+                ]
+                if ids_to_delete:
+                    self._collection.delete(ids=ids_to_delete)
+                    total_deleted = len(ids_to_delete)
+        except Exception as e:
+            logger.warning(f"Failed to delete schema chunks for {prefix}: {e}")
+
+        return {"source": prefix + "*", "chunks_deleted": total_deleted}
 
     def shutdown(self) -> None:
         """Clean shutdown of the RAG manager."""

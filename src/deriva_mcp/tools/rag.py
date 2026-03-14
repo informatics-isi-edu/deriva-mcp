@@ -83,12 +83,18 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
         if include_schema:
             conn_info = conn_manager.get_active_connection_info()
             if conn_info:
-                from deriva_mcp.rag.schema import schema_source_name
+                # Resolve the user's visibility-class source name.
+                # The schema hash was stored on the connection info at connect time.
+                schema_hash = getattr(conn_info, "schema_hash", None)
+                if schema_hash:
+                    from deriva_mcp.rag.schema import schema_source_name
 
-                catalog_source = schema_source_name(conn_info.hostname, conn_info.catalog_id)
-                schema_results = manager.search(
-                    query=query, limit=limit, source=catalog_source
-                )
+                    catalog_source = schema_source_name(
+                        conn_info.hostname, conn_info.catalog_id, schema_hash
+                    )
+                    schema_results = manager.search(
+                        query=query, limit=limit, source=catalog_source
+                    )
 
         # Merge and re-rank by relevance
         all_results = doc_results + schema_results
@@ -323,6 +329,7 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
             return {"error": "No active catalog connection. Run connect_catalog first."}
 
         from deriva_mcp.rag import get_rag_manager
+        from deriva_mcp.rag.schema import compute_schema_hash
 
         manager = get_rag_manager()
         ml = conn_info.ml_instance
@@ -347,6 +354,10 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
                         ]
                     except Exception:
                         pass
+
+        # Update the connection's schema hash for visibility-class search
+        schema_hash = compute_schema_hash(schema_info, vocab_terms)
+        conn_info.schema_hash = schema_hash
 
         return manager.index_catalog_schema(
             schema_info, conn_info.hostname, conn_info.catalog_id,

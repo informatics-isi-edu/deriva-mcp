@@ -6,12 +6,28 @@ columns, foreign keys, features, and vocabulary terms.
 
 Schema chunks are stored in the same ChromaDB collection as documentation
 chunks, distinguished by ``doc_type="catalog-schema"`` and a source name
-of ``schema:{hostname}:{catalog_id}``.
+of ``schema:{hostname}:{catalog_id}:{schema_hash}``.
 
-Access control is inherited from ERMrest: if a user can connect to the
-catalog (and thus read /schema), they can see all schema chunks. The
-source-level filter in ``rag_search`` ensures users only see schema
-chunks for their active catalog connection.
+**Multi-user visibility isolation:**
+
+ERMrest returns an identity-dependent schema — each user sees only the
+tables, columns, keys, and policies they have permission to enumerate.
+Two users with different permissions get different ``/schema`` responses.
+
+We use the schema hash as a **visibility fingerprint**: users whose
+``/schema`` responses hash to the same value share an index.  With RBAC
+and a small number of distinct permission profiles, this typically
+produces only 2–3 indexes per catalog (e.g. one for regular users, one
+for admins) rather than one per user.
+
+At connect time:
+1. Fetch the user's ``/schema`` and compute its hash.
+2. If an index with that hash already exists, reuse it (no-op).
+3. Otherwise, build a new index from this user's schema view.
+
+At search time, ``rag_search`` resolves the current user's schema hash
+to the matching source key so results are scoped to their visibility
+class.
 """
 
 from __future__ import annotations
@@ -27,9 +43,23 @@ from deriva_mcp.rag.chunker import chunk_markdown
 logger = logging.getLogger("deriva-mcp")
 
 
-def schema_source_name(hostname: str, catalog_id: str | int) -> str:
-    """Build the RAG source name for a catalog schema."""
-    return f"schema:{hostname}:{catalog_id}"
+def schema_source_name(hostname: str, catalog_id: str | int, schema_hash: str | None = None) -> str:
+    """Build the RAG source name for a catalog schema.
+
+    When ``schema_hash`` is provided, the source name includes it to
+    isolate indexes by visibility class.  Without a hash, returns a
+    prefix suitable for searching across all visibility classes for a
+    catalog.
+    """
+    base = f"schema:{hostname}:{catalog_id}"
+    if schema_hash:
+        return f"{base}:{schema_hash}"
+    return base
+
+
+def schema_source_prefix(hostname: str, catalog_id: str | int) -> str:
+    """Return the source name prefix for a catalog (matches all visibility classes)."""
+    return f"schema:{hostname}:{catalog_id}:"
 
 
 def _schema_hash(schema_info: dict[str, Any]) -> str:
@@ -160,6 +190,43 @@ def schema_to_markdown(
     return "\n\n".join(parts)
 
 
+def find_schema_source(
+    hostname: str,
+    catalog_id: str | int,
+    schema_hash: str,
+    collection: Any,
+) -> str | None:
+    """Find the source name for an existing index matching this schema hash.
+
+    Returns the full source name if an index exists for this visibility
+    class, or ``None`` if one needs to be created.
+    """
+    source = schema_source_name(hostname, catalog_id, schema_hash)
+    try:
+        existing = collection.get(
+            where={"source": source},
+            include=[],
+            limit=1,
+        )
+        if existing and existing["ids"]:
+            return source
+    except Exception:
+        pass
+    return None
+
+
+def compute_schema_hash(
+    schema_info: dict[str, Any],
+    vocabulary_terms: dict[str, list[dict[str, Any]]] | None = None,
+) -> str:
+    """Compute the visibility-class hash for a schema.
+
+    Includes vocabulary terms so term changes trigger re-indexing.
+    """
+    hash_input = {**schema_info, "_vocab_terms": vocabulary_terms or {}}
+    return _schema_hash(hash_input)
+
+
 def index_catalog_schema(
     schema_info: dict[str, Any],
     hostname: str,
@@ -172,7 +239,9 @@ def index_catalog_schema(
     """Index a catalog schema into the RAG collection.
 
     Converts the schema to markdown, chunks it, and upserts into ChromaDB.
-    Uses the schema hash for change detection — returns early if unchanged.
+    The schema hash serves as both a change-detection key and a
+    visibility-class fingerprint — users whose ``/schema`` responses
+    produce the same hash share the same index.
 
     Args:
         schema_info: Output of ``ml.model.get_schema_description()``.
@@ -188,30 +257,18 @@ def index_catalog_schema(
     Returns:
         Dict with indexing statistics.
     """
-    source = schema_source_name(hostname, catalog_id)
-    # Include vocab terms in hash so term changes trigger re-indexing
-    hash_input = {**schema_info, "_vocab_terms": vocabulary_terms or {}}
-    current_hash = _schema_hash(hash_input)
+    current_hash = compute_schema_hash(schema_info, vocabulary_terms)
+    source = schema_source_name(hostname, catalog_id, current_hash)
 
-    # Check if already indexed with same hash
-    try:
-        existing = collection.get(
-            where={"source": source},
-            include=["metadatas"],
-            limit=1,
-        )
-        if existing and existing["metadatas"]:
-            stored_hash = existing["metadatas"][0].get("schema_hash", "")
-            if stored_hash == current_hash:
-                return {
-                    "source": source,
-                    "status": "unchanged",
-                    "schema_hash": current_hash,
-                }
-    except Exception:
-        pass  # Proceed with indexing
+    # Check if already indexed with this hash (same visibility class + same content)
+    if find_schema_source(hostname, catalog_id, current_hash, collection):
+        return {
+            "source": source,
+            "status": "unchanged",
+            "schema_hash": current_hash,
+        }
 
-    # Remove old chunks for this catalog
+    # Remove old chunks for this specific visibility class (if hash changed)
     _remove_schema_chunks(collection, source)
 
     # Convert to markdown and chunk

@@ -104,6 +104,7 @@ class ConnectionInfo:
     workflow_rid: str | None = None
     execution: Any = None  # MCP session execution from deriva_ml
     active_tool_execution: Any = None  # User-created execution via create_execution tool
+    schema_hash: str | None = None  # Visibility-class fingerprint for RAG index isolation
 
 
 class ConnectionManager:

@@ -158,6 +158,7 @@ def mock_conn_manager():
     mock_term.synonyms = ["Healthy", "NL"]
     conn_info.ml_instance.list_vocabulary_terms.return_value = [mock_term]
 
+    conn_info.schema_hash = "abc123"
     conn_manager.get_active_connection_info.return_value = conn_info
     return conn_manager
 
@@ -304,7 +305,7 @@ class TestRagSearch:
         # Second call should use schema source
         calls = mock_rag_manager.search.call_args_list
         assert len(calls) == 2
-        assert calls[1].kwargs.get("source") == "schema:test.example.org:1"
+        assert calls[1].kwargs.get("source") == "schema:test.example.org:1:abc123"
 
     def test_search_rag_not_initialized(self, rag_tools):
         """rag_search returns error when RAG manager is not initialized."""
