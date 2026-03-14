@@ -979,7 +979,6 @@ multirun_config(
                     "asset_columns": asset_cols,
                     "value_columns": value_cols,
                     "required_fields": required_fields,
-                    "optional": feature.optional,
                 },
                 indent=2,
             )

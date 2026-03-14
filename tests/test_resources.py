@@ -230,24 +230,23 @@ class TestConfigTemplates:
 
 
 class TestCatalogSchema:
-    """Tests for the catalog schema resource."""
+    """Tests for the catalog schema resource.
 
-    def _setup_schema(self, mock_ml, tables: dict[str, MagicMock] | None = None):
+    The resource now delegates to ml.model.get_schema_description() which returns
+    a dict. The resource adds hostname and catalog_id to the result.
+    """
+
+    def _setup_schema(self, mock_ml, schema_info: dict | None = None):
         """Helper to set up schema mocks for catalog schema tests."""
-        if tables is None:
-            tables = {"Subject": _make_table(name="Subject", schema_name="test_schema")}
-
-        mock_schema = MagicMock()
-        mock_schema.tables = tables
-
-        mock_ml.model.schemas = {"test_schema": mock_schema}
-        mock_ml.domain_schemas = {"test_schema"}
-        mock_ml.default_schema = "test_schema"
-        mock_ml.ml_schema = "deriva-ml"
+        if schema_info is None:
+            schema_info = {
+                "domain_schemas": ["test_schema"],
+                "tables": [{"name": "Subject", "schema": "test_schema", "is_vocabulary": False}],
+            }
+        mock_ml.model.get_schema_description.return_value = schema_info
 
     def test_success(self, captured_resources, mock_ml):
         self._setup_schema(mock_ml)
-        mock_ml.model.is_vocabulary.return_value = False
 
         result = captured_resources["deriva://catalog/schema"]()
         data = json.loads(result)
@@ -259,24 +258,21 @@ class TestCatalogSchema:
         assert data["tables"][0]["name"] == "Subject"
 
     def test_is_vocabulary_uses_model_method(self, captured_resources, mock_ml):
-        """Verify is_vocabulary is determined via ml.model.is_vocabulary(table),
-        not by accessing an attribute on the table object directly.
-        Regression test for serialization bug where table.is_vocabulary returned
-        a method reference instead of a boolean."""
-        table = _make_table(name="Diagnosis", schema_name="test_schema")
-        self._setup_schema(mock_ml, tables={"Diagnosis": table})
-        mock_ml.model.is_vocabulary.return_value = True
+        """Verify is_vocabulary is included in the schema description output."""
+        schema_info = {
+            "domain_schemas": ["test_schema"],
+            "tables": [{"name": "Diagnosis", "schema": "test_schema", "is_vocabulary": True}],
+        }
+        self._setup_schema(mock_ml, schema_info=schema_info)
 
         result = captured_resources["deriva://catalog/schema"]()
         data = json.loads(result)
 
         assert data["tables"][0]["is_vocabulary"] is True
-        mock_ml.model.is_vocabulary.assert_called_with(table)
 
     def test_is_vocabulary_false(self, captured_resources, mock_ml):
         """Verify non-vocabulary tables have is_vocabulary=False."""
         self._setup_schema(mock_ml)
-        mock_ml.model.is_vocabulary.return_value = False
 
         result = captured_resources["deriva://catalog/schema"]()
         data = json.loads(result)
@@ -284,16 +280,10 @@ class TestCatalogSchema:
         assert data["tables"][0]["is_vocabulary"] is False
 
     def test_result_is_json_serializable(self, captured_resources, mock_ml):
-        """Ensure the schema result is fully JSON-serializable.
-        Regression test: the old code used table.is_vocabulary (a method reference)
-        which caused 'Object of type method is not JSON serializable'."""
+        """Ensure the schema result is fully JSON-serializable."""
         self._setup_schema(mock_ml)
-        # Don't configure model.is_vocabulary — MagicMock returns a MagicMock by default.
-        # The resource code must call ml.model.is_vocabulary(table), not table.is_vocabulary.
-        mock_ml.model.is_vocabulary.return_value = False
 
         result = captured_resources["deriva://catalog/schema"]()
-        # This would raise json.JSONDecodeError if the result contains non-serializable objects
         data = json.loads(result)
         assert "error" not in data
 
@@ -749,7 +739,7 @@ class TestDatasetVersions:
     def test_success(self, captured_resources, mock_ml):
         ds = _make_dataset(dataset_rid="DS-400")
         history_entry = MagicMock()
-        history_entry.version = "1.0.0"
+        history_entry.dataset_version = "1.0.0"
         history_entry.description = "Initial version"
         history_entry.snapshot = "2024-01-01"
         ds.dataset_history.return_value = [history_entry]
@@ -838,9 +828,9 @@ class TestFeatureValues:
     """Tests for the feature values resource."""
 
     def test_success(self, captured_resources, mock_ml):
-        mock_ml.list_feature_values.return_value = [
-            {"Image": "IMG-1", "score": 0.95, "Execution": "EXE-1"},
-        ]
+        mock_value = MagicMock()
+        mock_value.model_dump.return_value = {"Image": "IMG-1", "score": 0.95, "Execution": "EXE-1"}
+        mock_ml.list_feature_values.return_value = [mock_value]
 
         result = captured_resources["deriva://feature/{table_name}/{feature_name}/values"]("Image", "Quality")
         data = json.loads(result)
@@ -902,11 +892,20 @@ class TestTableSchema:
         col.type.typename = "text"
         col.nullok = False
         col.comment = "The name"
+        col.annotations = {}
+        col.default = None
 
         table = _make_table(name="Subject", schema_name="test_schema", comment="Subject table", columns=[col])
+        table.foreign_keys = []
+        table.referenced_by = []
+        table.keys = []
+        table.annotations = {}
         mock_ml.model.name_to_table.return_value = table
         mock_ml.model.is_vocabulary.return_value = False
         mock_ml.model.is_asset.return_value = False
+        mock_ml.model.is_association.return_value = False
+        mock_ml.model.is_domain_schema.return_value = True
+        mock_ml.model.find_features.return_value = []
 
         result = captured_resources["deriva://table/{table_name}/schema"]("Subject")
         data = json.loads(result)
@@ -1319,45 +1318,50 @@ class TestAnnotationContextsDoc:
         assert "visible_columns_contexts" in data
 
 
-DOC_URIS_AND_FETCH_ARGS = [
-    ("deriva://docs/overview", "deriva-ml", "docs/user-guide/overview.md"),
-    ("deriva://docs/datasets", "deriva-ml", "docs/user-guide/datasets.md"),
-    ("deriva://docs/features", "deriva-ml", "docs/user-guide/features.md"),
-    ("deriva://docs/execution-configuration", "deriva-ml", "docs/user-guide/execution-configuration.md"),
-    ("deriva://docs/hydra-zen", "deriva-ml", "docs/user-guide/hydra-zen-configuration.md"),
-    ("deriva://docs/file-assets", "deriva-ml", "docs/user-guide/file-assets.md"),
-    ("deriva://docs/notebooks", "deriva-ml", "docs/user-guide/notebooks.md"),
-    ("deriva://docs/annotations", "deriva-ml", "docs/user-guide/annotations.md"),
-    ("deriva://docs/identifiers", "deriva-ml", "docs/user-guide/identifiers.md"),
-    ("deriva://docs/install", "deriva-ml", "docs/user-guide/install.md"),
-    ("deriva://docs/ermrest/data-api", "ermrest", "docs/api-doc/data/rest.md"),
-    ("deriva://docs/ermrest/naming", "ermrest", "docs/api-doc/data/naming.md"),
-    ("deriva://docs/ermrest/catalog", "ermrest", "docs/api-doc/rest-catalog.md"),
-    ("deriva://docs/chaise/config", "chaise", "docs/user-docs/chaise-config.md"),
-    ("deriva://docs/chaise/query-parameters", "chaise", "docs/user-docs/query-parameters.md"),
-    ("deriva://docs/deriva-py/install", "deriva-py", "docs/install.md"),
-    ("deriva://docs/deriva-py/tutorial", "deriva-py", "docs/project-tutorial.md"),
+DOC_URIS_AND_RAG_SOURCES = [
+    ("deriva://docs/overview", "deriva-ml-docs"),
+    ("deriva://docs/datasets", "deriva-ml-docs"),
+    ("deriva://docs/features", "deriva-ml-docs"),
+    ("deriva://docs/execution-configuration", "deriva-ml-docs"),
+    ("deriva://docs/hydra-zen", "deriva-ml-docs"),
+    ("deriva://docs/file-assets", "deriva-ml-docs"),
+    ("deriva://docs/notebooks", "deriva-ml-docs"),
+    ("deriva://docs/annotations", "deriva-ml-docs"),
+    ("deriva://docs/identifiers", "deriva-ml-docs"),
+    ("deriva://docs/install", "deriva-ml-docs"),
+    ("deriva://docs/ermrest/data-api", "ermrest-docs"),
+    ("deriva://docs/ermrest/naming", "ermrest-docs"),
+    ("deriva://docs/ermrest/catalog", "ermrest-docs"),
+    ("deriva://docs/chaise/config", "chaise-docs"),
+    ("deriva://docs/chaise/query-parameters", "chaise-docs"),
+    ("deriva://docs/deriva-py/install", "deriva-py-docs"),
+    ("deriva://docs/deriva-py/tutorial", "deriva-py-docs"),
 ]
 
 
 class TestDocResources:
-    """Tests for documentation resources that use fetch_doc."""
+    """Tests for documentation resources that use RAG index."""
 
-    @pytest.mark.parametrize("uri,repo,path", DOC_URIS_AND_FETCH_ARGS)
-    def test_calls_fetch_doc(self, captured_resources, uri, repo, path):
-        """Each doc resource calls fetch_doc with the right repo and path."""
-        with patch("deriva_mcp.resources.fetch_doc", return_value="# Mock Doc Content") as mock_fetch:
+    @pytest.mark.parametrize("uri,source", DOC_URIS_AND_RAG_SOURCES)
+    def test_calls_fetch_doc(self, captured_resources, uri, source):
+        """Each doc resource calls the RAG query with the right source."""
+        mock_manager = MagicMock()
+        mock_manager.search.return_value = [{"text": "# Mock Doc Content", "section_heading": "Test"}]
+        with patch("deriva_mcp.rag.get_rag_manager", return_value=mock_manager):
             result = captured_resources[uri]()
-            mock_fetch.assert_called_once_with(repo, path)
-            assert result == "# Mock Doc Content"
+            mock_manager.search.assert_called_once()
+            # Verify the source filter was passed correctly
+            call_kwargs = mock_manager.search.call_args
+            assert call_kwargs.kwargs.get("source") == source or call_kwargs[1].get("source") == source
 
-    @pytest.mark.parametrize("uri,repo,path", DOC_URIS_AND_FETCH_ARGS)
-    def test_no_connection_still_works(self, captured_resources_disconnected, uri, repo, path):
+    @pytest.mark.parametrize("uri,source", DOC_URIS_AND_RAG_SOURCES)
+    def test_no_connection_still_works(self, captured_resources_disconnected, uri, source):
         """Doc resources do not require a connection."""
-        with patch("deriva_mcp.resources.fetch_doc", return_value="# Doc") as mock_fetch:
+        mock_manager = MagicMock()
+        mock_manager.search.return_value = [{"text": "# Doc", "section_heading": "Test"}]
+        with patch("deriva_mcp.rag.get_rag_manager", return_value=mock_manager):
             result = captured_resources_disconnected[uri]()
-            mock_fetch.assert_called_once_with(repo, path)
-            assert result == "# Doc"
+            mock_manager.search.assert_called_once()
 
 
 # =============================================================================
@@ -1510,6 +1514,11 @@ class TestResourceRegistration:
         "deriva://storage/summary",
         "deriva://storage/cache",
         "deriva://storage/execution-dirs",
+        # New resources
+        "deriva://table/{table_name}/feature-values",
+        "deriva://table/{table_name}/feature-values/newest",
+        "deriva://dataset/{dataset_rid}/bag-preview",
+        "deriva://catalog/element-type-paths",
     ]
 
     @pytest.mark.parametrize("uri", EXPECTED_URIS)

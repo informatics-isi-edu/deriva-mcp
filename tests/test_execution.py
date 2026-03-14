@@ -86,9 +86,22 @@ def _clear_active_execution(mock_conn_manager):
 # =============================================================================
 
 
+try:
+    from deriva_ml.cache_tui import _human_readable_size  # noqa: F401
+    _HAS_CACHE_TUI = True
+except ImportError:
+    _HAS_CACHE_TUI = False
+
+_skip_no_cache_tui = pytest.mark.skipif(
+    not _HAS_CACHE_TUI,
+    reason="deriva_ml.cache_tui module not available in installed version",
+)
+
+
 @pytest.fixture
 def storage_tools_disconnected(disconnected_conn_manager):
     """Capture storage tools with no connection."""
+    pytest.importorskip("deriva_ml.cache_tui")
     from deriva_mcp.tools.execution import register_storage_tools
 
     mcp, tools = _create_tool_capture()
@@ -1147,7 +1160,8 @@ class TestDownloadExecutionDataset:
         mock_execution.download_dataset_bag.assert_called_once()
         # Verify DatasetSpec was constructed with materialize=False
         mock_ds_cls.assert_called_once_with(
-            rid="DS-1", version="2.0.0", materialize=False
+            rid="DS-1", version="2.0.0", materialize=False,
+            exclude_tables=None, timeout=None,
         )
 
     @pytest.mark.asyncio
@@ -1566,6 +1580,7 @@ class TestListParentExecutions:
 # =============================================================================
 
 
+@_skip_no_cache_tui
 class TestListCacheContents:
     """Tests for the list_cache_contents storage tool."""
 
@@ -1604,6 +1619,7 @@ class TestListCacheContents:
 # =============================================================================
 
 
+@_skip_no_cache_tui
 class TestDeleteCacheEntry:
     """Tests for the delete_cache_entry storage tool."""
 
@@ -1639,6 +1655,7 @@ class TestDeleteCacheEntry:
 # =============================================================================
 
 
+@_skip_no_cache_tui
 class TestClearCache:
     """Tests for the clear_cache storage tool."""
 
@@ -1688,6 +1705,7 @@ class TestClearCache:
 # =============================================================================
 
 
+@_skip_no_cache_tui
 class TestCleanExecutionDirs:
     """Tests for the clean_execution_dirs storage tool."""
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -955,6 +956,18 @@ class TestInspectNotebook:
 class TestRunNotebook:
     """Tests for the run_notebook tool."""
 
+    @pytest.fixture(autouse=True)
+    def _clean_env(self):
+        """Clean up environment variables set by run_notebook tool."""
+        yield
+        for var in [
+            "DERIVA_ML_SAVE_EXECUTION_RID",
+            "DERIVA_ML_WORKFLOW_URL",
+            "DERIVA_ML_WORKFLOW_CHECKSUM",
+            "DERIVA_ML_NOTEBOOK_PATH",
+        ]:
+            os.environ.pop(var, None)
+
     def test_run_notebook_file_not_found(self, devtools, tmp_path):
         """When notebook file does not exist, return an error."""
         nb_path = str(tmp_path / "nonexistent.ipynb")
@@ -1084,7 +1097,7 @@ class TestDevtoolRegistration:
     """Tests that all devtools are properly registered."""
 
     def test_all_tools_registered(self, devtools):
-        """All 6 devtools should be registered."""
+        """All 8 devtools should be registered."""
         expected = {
             "bump_version",
             "get_current_version",
@@ -1092,6 +1105,8 @@ class TestDevtoolRegistration:
             "list_jupyter_kernels",
             "inspect_notebook",
             "run_notebook",
+            "start_schema_workbench",
+            "stop_schema_workbench",
         }
         assert set(devtools.keys()) == expected
 

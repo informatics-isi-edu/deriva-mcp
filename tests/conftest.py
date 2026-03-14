@@ -323,6 +323,7 @@ def execution_tools_disconnected(disconnected_conn_manager):
 @pytest.fixture
 def storage_tools(mock_conn_manager):
     """Capture storage tools with a connected mock."""
+    pytest.importorskip("deriva_ml.cache_tui")
     from deriva_mcp.tools.execution import register_storage_tools
     mcp, tools = _create_tool_capture()
     register_storage_tools(mcp, mock_conn_manager)
@@ -424,6 +425,7 @@ class CatalogManager:
         self.catalog_id = None
         self.state = CatalogState.EMPTY
         self._dataset_description: DatasetDescription | None = None
+        self._features_schema_created = False
         self._create_catalog()
 
     def _create_catalog(self) -> None:
@@ -493,9 +495,10 @@ class CatalogManager:
         return DerivaML(
             self.hostname,
             self.catalog_id,
-            domain_schema=self.domain_schema,
+            domain_schemas=self.domain_schema,
             working_dir=working_dir,
             use_minid=False,
+            clean_execution_dir=False,
         )
 
     def ensure_populated(self, working_dir: Path | str) -> DerivaML:
@@ -526,12 +529,19 @@ class CatalogManager:
         if self.state >= CatalogState.WITH_FEATURES:
             return ml
 
+        if self._features_schema_created:
+            # Feature tables already exist from a prior run but data was reset.
+            # Just advance state without re-creating features.
+            self.state = CatalogState.WITH_FEATURES
+            return ml
+
         workflow = ml.create_workflow(name="Feature Creation", workflow_type="Test Workflow")
         execution = ml.create_execution(workflow=workflow, configuration=ExecutionConfiguration())
         with execution.execute() as exe:
             create_demo_features(exe)
 
         self.state = CatalogState.WITH_FEATURES
+        self._features_schema_created = True
         return ml
 
     def ensure_datasets(self, working_dir: Path | str) -> tuple[DerivaML, DatasetDescription]:
@@ -601,7 +611,7 @@ def mcp_connection_manager(catalog_manager: CatalogManager) -> ConnectionManager
     conn_manager.connect(
         hostname=catalog_manager.hostname,
         catalog_id=str(catalog_manager.catalog_id),
-        domain_schema=catalog_manager.domain_schema,
+        domain_schemas=catalog_manager.domain_schema,
     )
     yield conn_manager
     conn_manager.disconnect()

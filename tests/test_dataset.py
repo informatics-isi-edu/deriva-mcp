@@ -407,11 +407,12 @@ class TestAddDatasetMembers:
         assert data["dataset_rid"] == "DS-001"
         mock_dataset.add_dataset_members.assert_called_once_with(
             members=["IMG-1", "IMG-2", "IMG-3"],
+            description='',
         )
 
     @pytest.mark.asyncio
     async def test_add_members_empty_list(self, dataset_tools, mock_ml):
-        """Adding empty list succeeds with count 0."""
+        """Adding empty list returns an error because neither member_rids nor members_by_table is provided."""
         mock_dataset = _make_mock_dataset()
         mock_ml.lookup_dataset.return_value = mock_dataset
 
@@ -420,8 +421,7 @@ class TestAddDatasetMembers:
             member_rids=[],
         )
 
-        data = assert_success(result)
-        assert data["added_count"] == 0
+        assert_error(result, expected_message="member_rids or members_by_table")
 
     @pytest.mark.asyncio
     async def test_add_members_exception(self, dataset_tools, mock_ml):
@@ -1675,54 +1675,55 @@ class TestRestructureAssets:
 
         # Create mock bag
         mock_bag = MagicMock()
-        mock_dataset.to_bag.return_value = mock_bag
+        # file_map is a dict[Path, Path] in the current implementation
+        from pathlib import Path as P
+        mock_bag.restructure_assets.return_value = {
+            P("src1"): P("dst1"),
+            P("src2"): P("dst2"),
+        }
+        mock_ml.download_dataset_bag.return_value = mock_bag
 
-        # Create actual files in tmp_path for rglob to count
         result_path = tmp_path / "output"
         result_path.mkdir()
-        (result_path / "training").mkdir()
-        (result_path / "training" / "Normal").mkdir()
-        (result_path / "training" / "Normal" / "img1.jpg").touch()
-        (result_path / "training" / "Normal" / "img2.jpg").touch()
-        mock_bag.restructure_assets.return_value = result_path
 
-        result = await dataset_tools["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir=str(tmp_path / "output"),
-            group_by=["Diagnosis"],
-        )
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec") as mock_ds_cls:
+            mock_ds_cls.return_value = MagicMock()
+            result = await dataset_tools["restructure_assets"](
+                dataset_rid="DS-001",
+                asset_table="Image",
+                output_dir=str(result_path),
+                group_by=["Diagnosis"],
+            )
 
         data = assert_success(result)
         assert data["dataset_rid"] == "DS-001"
         assert data["asset_table"] == "Image"
         assert data["group_by"] == ["Diagnosis"]
         assert data["file_count"] == 2
-        mock_dataset.to_bag.assert_called_once_with(materialize=True)
+        mock_ml.download_dataset_bag.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_restructure_with_version(self, dataset_tools, mock_ml, tmp_path):
-        """When version is provided, set_version is called first."""
-        mock_dataset = _make_mock_dataset()
-        mock_versioned = _make_mock_dataset(current_version="2.0.0")
-        mock_dataset.set_version.return_value = mock_versioned
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
+        """When version is provided, DatasetSpec uses that version directly."""
         mock_bag = MagicMock()
-        mock_versioned.to_bag.return_value = mock_bag
+        mock_bag.restructure_assets.return_value = {}
+        mock_ml.download_dataset_bag.return_value = mock_bag
+
         result_path = tmp_path / "out"
         result_path.mkdir()
-        mock_bag.restructure_assets.return_value = result_path
 
-        result = await dataset_tools["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir=str(tmp_path / "out"),
-            version="2.0.0",
-        )
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec") as mock_ds_cls:
+            mock_ds_cls.return_value = MagicMock()
+            result = await dataset_tools["restructure_assets"](
+                dataset_rid="DS-001",
+                asset_table="Image",
+                output_dir=str(result_path),
+                version="2.0.0",
+            )
 
         data = assert_success(result)
-        mock_dataset.set_version.assert_called_once_with("2.0.0")
+        # When version is provided, DatasetSpec is called with it directly
+        mock_ds_cls.assert_called_once_with(rid="DS-001", version="2.0.0", materialize=True)
 
     @pytest.mark.asyncio
     async def test_restructure_default_group_by(self, dataset_tools, mock_ml, tmp_path):
@@ -1731,40 +1732,48 @@ class TestRestructureAssets:
         mock_ml.lookup_dataset.return_value = mock_dataset
 
         mock_bag = MagicMock()
-        mock_dataset.to_bag.return_value = mock_bag
+        mock_bag.restructure_assets.return_value = {}
+        mock_ml.download_dataset_bag.return_value = mock_bag
+
         result_path = tmp_path / "out"
         result_path.mkdir()
-        mock_bag.restructure_assets.return_value = result_path
 
-        await dataset_tools["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir=str(tmp_path / "out"),
-        )
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec") as mock_ds_cls:
+            mock_ds_cls.return_value = MagicMock()
+            await dataset_tools["restructure_assets"](
+                dataset_rid="DS-001",
+                asset_table="Image",
+                output_dir=str(result_path),
+            )
 
         call_kwargs = mock_bag.restructure_assets.call_args.kwargs
         assert call_kwargs["group_by"] == []
 
     @pytest.mark.asyncio
     async def test_restructure_no_materialize(self, dataset_tools, mock_ml, tmp_path):
-        """When materialize=False, pass it through to to_bag."""
+        """When materialize=False, pass it through to DatasetSpec."""
         mock_dataset = _make_mock_dataset()
         mock_ml.lookup_dataset.return_value = mock_dataset
 
         mock_bag = MagicMock()
-        mock_dataset.to_bag.return_value = mock_bag
+        mock_bag.restructure_assets.return_value = {}
+        mock_ml.download_dataset_bag.return_value = mock_bag
+
         result_path = tmp_path / "out"
         result_path.mkdir()
-        mock_bag.restructure_assets.return_value = result_path
 
-        await dataset_tools["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir=str(tmp_path / "out"),
-            materialize=False,
-        )
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec") as mock_ds_cls:
+            mock_ds_cls.return_value = MagicMock()
+            await dataset_tools["restructure_assets"](
+                dataset_rid="DS-001",
+                asset_table="Image",
+                output_dir=str(result_path),
+                materialize=False,
+            )
 
-        mock_dataset.to_bag.assert_called_once_with(materialize=False)
+        mock_ds_cls.assert_called_once()
+        call_kwargs = mock_ds_cls.call_args
+        assert call_kwargs.kwargs.get("materialize") is False or call_kwargs[1].get("materialize") is False
 
     @pytest.mark.asyncio
     async def test_restructure_exception(self, dataset_tools, mock_ml):
@@ -1823,17 +1832,24 @@ class TestSplitDataset:
 
         return _Ctx()
 
+    @staticmethod
+    def _make_split_result(data: dict) -> MagicMock:
+        """Create a mock split result object with model_dump() support."""
+        mock_result = MagicMock()
+        mock_result.model_dump.return_value = data
+        return mock_result
+
     @pytest.mark.asyncio
     async def test_split_success(self, dataset_tools, mock_ml):
         """Splitting a dataset returns status=success with split info."""
-        split_result = {
+        split_data = {
             "split": {"rid": "SPLIT-001", "version": "0.1.0"},
             "training": {"rid": "TRAIN-001", "version": "0.1.0", "member_count": 80},
             "testing": {"rid": "TEST-001", "version": "0.1.0", "member_count": 20},
             "source": {"rid": "DS-001"},
         }
 
-        mock_split = MagicMock(return_value=split_result)
+        mock_split = MagicMock(return_value=self._make_split_result(split_data))
         with self._patch_split_module(mock_split):
             result = await dataset_tools["split_dataset"](
                 source_dataset_rid="DS-001",
@@ -1852,13 +1868,16 @@ class TestSplitDataset:
                 source_dataset_rid="DS-001",
                 test_size=0.2,
                 train_size=None,
+                val_size=None,
                 seed=42,
                 shuffle=True,
                 stratify_by_column=None,
+                stratify_missing="error",
                 element_table=None,
                 include_tables=None,
                 training_types=None,
                 testing_types=None,
+                validation_types=None,
                 split_description="",
                 dry_run=False,
             )
@@ -1866,13 +1885,13 @@ class TestSplitDataset:
     @pytest.mark.asyncio
     async def test_split_with_all_params(self, dataset_tools, mock_ml):
         """All split parameters are passed through."""
-        split_result = {
+        split_data = {
             "split": {"rid": "SPLIT-002"},
             "training": {"rid": "TRAIN-002"},
             "testing": {"rid": "TEST-002"},
         }
 
-        mock_split = MagicMock(return_value=split_result)
+        mock_split = MagicMock(return_value=self._make_split_result(split_data))
         with self._patch_split_module(mock_split):
             await dataset_tools["split_dataset"](
                 source_dataset_rid="DS-001",
@@ -1894,13 +1913,16 @@ class TestSplitDataset:
                 source_dataset_rid="DS-001",
                 test_size=0.3,
                 train_size=0.7,
+                val_size=None,
                 seed=123,
                 shuffle=False,
                 stratify_by_column="Image_Classification_Image_Class",
+                stratify_missing="error",
                 element_table="Image",
                 include_tables=["Image", "Image_Classification"],
                 training_types=["Labeled"],
                 testing_types=["Labeled"],
+                validation_types=None,
                 split_description="Stratified split",
                 dry_run=True,
             )
@@ -1908,14 +1930,14 @@ class TestSplitDataset:
     @pytest.mark.asyncio
     async def test_split_dry_run(self, dataset_tools, mock_ml):
         """Dry run returns preview without modifying catalog."""
-        dry_result = {
+        dry_data = {
             "dry_run": True,
             "source_rid": "DS-001",
             "training_count": 80,
             "testing_count": 20,
         }
 
-        mock_split = MagicMock(return_value=dry_result)
+        mock_split = MagicMock(return_value=self._make_split_result(dry_data))
         with self._patch_split_module(mock_split):
             result = await dataset_tools["split_dataset"](
                 source_dataset_rid="DS-001",
@@ -2006,7 +2028,7 @@ class TestToolRegistration:
     """Verify that all expected dataset tools are registered."""
 
     def test_all_tools_registered(self, dataset_tools):
-        """All 21 dataset tools should be registered."""
+        """All 23 dataset tools should be registered."""
         expected_tools = [
             "create_dataset",
             "get_dataset_spec",
@@ -2029,13 +2051,15 @@ class TestToolRegistration:
             "delete_dataset_type_term",
             "restructure_assets",
             "split_dataset",
+            "estimate_bag_size",
+            "validate_dataset_bag",
         ]
         for tool_name in expected_tools:
             assert tool_name in dataset_tools, f"Tool '{tool_name}' not registered"
 
     def test_no_extra_tools(self, dataset_tools):
         """Only the expected tools should be registered."""
-        expected_count = 21
+        expected_count = 23
         assert len(dataset_tools) == expected_count, (
             f"Expected {expected_count} tools, got {len(dataset_tools)}: "
             f"{sorted(dataset_tools.keys())}"

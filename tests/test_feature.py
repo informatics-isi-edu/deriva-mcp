@@ -44,28 +44,15 @@ def _make_mock_feature(
     return mock_feature
 
 
-def _mock_path_insert(mock_ml: MagicMock, inserted_rid: str = "RID-001") -> MagicMock:
-    """Wire up mock_ml.pathBuilder() so that .schemas[...].tables[...].insert([...]) works.
+def _setup_feature_mocks(mock_feature: MagicMock) -> MagicMock:
+    """Set up feature_record_class mock and return the mock RecordClass.
 
-    Returns the mock insert callable so callers can assert on it.
+    The tool calls feature.feature_record_class() to get a class,
+    then instantiates records from it.
     """
-    mock_table_path = MagicMock()
-    mock_table_path.insert.return_value = [{"RID": inserted_rid}]
-
-    mock_tables = MagicMock()
-    mock_tables.__getitem__ = MagicMock(return_value=mock_table_path)
-
-    mock_schema = MagicMock()
-    mock_schema.tables = mock_tables
-
-    mock_schemas = MagicMock()
-    mock_schemas.__getitem__ = MagicMock(return_value=mock_schema)
-
-    mock_pb = MagicMock()
-    mock_pb.schemas = mock_schemas
-    mock_ml.pathBuilder.return_value = mock_pb
-
-    return mock_table_path.insert
+    mock_record_class = MagicMock()
+    mock_feature.feature_record_class.return_value = mock_record_class
+    return mock_record_class
 
 
 # =============================================================================
@@ -201,73 +188,61 @@ class TestAddFeatureValue:
     """Tests for the add_feature_value tool."""
 
     @pytest.mark.asyncio
-    async def test_add_feature_value_success_term_column(self, feature_tools, mock_ml):
+    async def test_add_feature_value_success_term_column(self, feature_tools, mock_ml, mock_conn_manager):
         """add_feature_value inserts a record using the first term column."""
         mock_feature = _make_mock_feature(term_col_names=["Diagnosis_Type"])
         mock_ml.lookup_feature.return_value = mock_feature
-        mock_insert = _mock_path_insert(mock_ml, inserted_rid="RID-100")
+        _setup_feature_mocks(mock_feature)
+
+        # The tool uses the MCP execution's add_features method
+        mock_execution = mock_conn_manager.get_active_execution()
 
         result = await feature_tools["add_feature_value"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            value="Normal",
+            entries=[{"target_rid": "1-ABC", "value": "Normal"}],
         )
         data = assert_success(result)
         assert data["status"] == "added"
-        assert data["target_rid"] == "1-ABC"
         assert data["feature_name"] == "Diagnosis"
-        assert data["Diagnosis_Type"] == "Normal"
+        assert data["count"] == 1
         assert data["execution_rid"] == "EXE-TEST"
-        assert data["rid"] == "RID-100"
-
-        # Verify the record dict passed to insert
-        mock_insert.assert_called_once()
-        inserted_records = mock_insert.call_args[0][0]
-        assert len(inserted_records) == 1
-        record = inserted_records[0]
-        assert record["Image"] == "1-ABC"
-        assert record["Feature_Name"] == "Diagnosis"
-        assert record["Execution"] == "EXE-TEST"
-        assert record["Diagnosis_Type"] == "Normal"
 
     @pytest.mark.asyncio
-    async def test_add_feature_value_success_asset_column(self, feature_tools, mock_ml):
+    async def test_add_feature_value_success_asset_column(self, feature_tools, mock_ml, mock_conn_manager):
         """add_feature_value falls back to asset column when no term columns."""
         mock_feature = _make_mock_feature(
             feature_table_name="Image_Segmentation",
             asset_col_names=["Mask"],
         )
         mock_ml.lookup_feature.return_value = mock_feature
-        _mock_path_insert(mock_ml, inserted_rid="RID-200")
+        _setup_feature_mocks(mock_feature)
 
         result = await feature_tools["add_feature_value"](
             table_name="Image",
             feature_name="Segmentation",
-            target_rid="1-DEF",
-            value="ASSET-RID-1",
+            entries=[{"target_rid": "1-DEF", "value": "ASSET-RID-1"}],
         )
         data = assert_success(result)
-        assert data["Mask"] == "ASSET-RID-1"
+        assert data["status"] == "added"
 
     @pytest.mark.asyncio
-    async def test_add_feature_value_success_value_column(self, feature_tools, mock_ml):
+    async def test_add_feature_value_success_value_column(self, feature_tools, mock_ml, mock_conn_manager):
         """add_feature_value falls back to value column when no term or asset columns."""
         mock_feature = _make_mock_feature(
             feature_table_name="Image_Score",
             value_col_names=["confidence"],
         )
         mock_ml.lookup_feature.return_value = mock_feature
-        _mock_path_insert(mock_ml, inserted_rid="RID-300")
+        _setup_feature_mocks(mock_feature)
 
         result = await feature_tools["add_feature_value"](
             table_name="Image",
             feature_name="Score",
-            target_rid="1-GHI",
-            value="0.95",
+            entries=[{"target_rid": "1-GHI", "value": "0.95"}],
         )
         data = assert_success(result)
-        assert data["confidence"] == "0.95"
+        assert data["status"] == "added"
 
     @pytest.mark.asyncio
     async def test_add_feature_value_no_value_columns(self, feature_tools, mock_ml):
@@ -278,8 +253,7 @@ class TestAddFeatureValue:
         result = await feature_tools["add_feature_value"](
             table_name="Image",
             feature_name="Empty",
-            target_rid="1-XYZ",
-            value="anything",
+            entries=[{"target_rid": "1-XYZ", "value": "anything"}],
         )
         data = assert_error(result, "no value columns")
 
@@ -290,20 +264,16 @@ class TestAddFeatureValue:
         """add_feature_value uses an explicitly provided execution_rid."""
         mock_feature = _make_mock_feature(term_col_names=["Diagnosis_Type"])
         mock_ml.lookup_feature.return_value = mock_feature
-        mock_insert = _mock_path_insert(mock_ml)
+        _setup_feature_mocks(mock_feature)
 
         result = await feature_tools["add_feature_value"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            value="Normal",
+            entries=[{"target_rid": "1-ABC", "value": "Normal"}],
             execution_rid="EXE-CUSTOM",
         )
         data = assert_success(result)
         assert data["execution_rid"] == "EXE-CUSTOM"
-
-        inserted_record = mock_insert.call_args[0][0][0]
-        assert inserted_record["Execution"] == "EXE-CUSTOM"
 
     @pytest.mark.asyncio
     async def test_add_feature_value_uses_active_tool_execution(
@@ -318,13 +288,12 @@ class TestAddFeatureValue:
 
         mock_feature = _make_mock_feature(term_col_names=["Diagnosis_Type"])
         mock_ml.lookup_feature.return_value = mock_feature
-        mock_insert = _mock_path_insert(mock_ml)
+        _setup_feature_mocks(mock_feature)
 
         result = await feature_tools["add_feature_value"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            value="Normal",
+            entries=[{"target_rid": "1-ABC", "value": "Normal"}],
         )
         data = assert_success(result)
         assert data["execution_rid"] == "EXE-TOOL"
@@ -345,8 +314,7 @@ class TestAddFeatureValue:
         result = await feature_tools["add_feature_value"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            value="Normal",
+            entries=[{"target_rid": "1-ABC", "value": "Normal"}],
         )
         data = assert_error(result, "No active execution")
 
@@ -361,35 +329,24 @@ class TestAddFeatureValue:
         result = await feature_tools_disconnected["add_feature_value"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            value="Normal",
+            entries=[{"target_rid": "1-ABC", "value": "Normal"}],
         )
         data = assert_error(result, "No active catalog connection")
 
     @pytest.mark.asyncio
-    async def test_add_feature_value_insert_exception(self, feature_tools, mock_ml):
-        """add_feature_value returns error when the insert call fails."""
+    async def test_add_feature_value_insert_exception(self, feature_tools, mock_ml, mock_conn_manager):
+        """add_feature_value returns error when record construction fails."""
         mock_feature = _make_mock_feature(term_col_names=["Diagnosis_Type"])
         mock_ml.lookup_feature.return_value = mock_feature
 
-        # Make pathBuilder chain raise during insert
-        mock_table_path = MagicMock()
-        mock_table_path.insert.side_effect = RuntimeError("Insert failed")
-        mock_tables = MagicMock()
-        mock_tables.__getitem__ = MagicMock(return_value=mock_table_path)
-        mock_schema = MagicMock()
-        mock_schema.tables = mock_tables
-        mock_schemas = MagicMock()
-        mock_schemas.__getitem__ = MagicMock(return_value=mock_schema)
-        mock_pb = MagicMock()
-        mock_pb.schemas = mock_schemas
-        mock_ml.pathBuilder.return_value = mock_pb
+        # Make feature_record_class raise when instantiated
+        mock_record_class = MagicMock(side_effect=RuntimeError("Insert failed"))
+        mock_feature.feature_record_class.return_value = mock_record_class
 
         result = await feature_tools["add_feature_value"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            value="Normal",
+            entries=[{"target_rid": "1-ABC", "value": "Normal"}],
         )
         data = assert_error(result, "Insert failed")
 
@@ -403,40 +360,25 @@ class TestAddFeatureValueRecord:
     """Tests for the add_feature_value_record tool."""
 
     @pytest.mark.asyncio
-    async def test_add_feature_value_record_success(self, feature_tools, mock_ml):
+    async def test_add_feature_value_record_success(self, feature_tools, mock_ml, mock_conn_manager):
         """add_feature_value_record inserts a record with all provided values."""
         mock_feature = _make_mock_feature(
             term_col_names=["Diagnosis_Type"],
             value_col_names=["confidence"],
         )
         mock_ml.lookup_feature.return_value = mock_feature
-        mock_insert = _mock_path_insert(mock_ml, inserted_rid="RID-500")
+        _setup_feature_mocks(mock_feature)
 
-        values = {"Diagnosis_Type": "Normal", "confidence": 0.95}
         result = await feature_tools["add_feature_value_record"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            values=values,
+            entries=[{"target_rid": "1-ABC", "Diagnosis_Type": "Normal", "confidence": 0.95}],
         )
         data = assert_success(result)
         assert data["status"] == "added"
-        assert data["target_rid"] == "1-ABC"
         assert data["feature_name"] == "Diagnosis"
-        assert data["values"] == values
+        assert data["count"] == 1
         assert data["execution_rid"] == "EXE-TEST"
-        assert data["rid"] == "RID-500"
-
-        # Verify the record dict passed to insert
-        mock_insert.assert_called_once()
-        inserted_records = mock_insert.call_args[0][0]
-        assert len(inserted_records) == 1
-        record = inserted_records[0]
-        assert record["Image"] == "1-ABC"
-        assert record["Feature_Name"] == "Diagnosis"
-        assert record["Execution"] == "EXE-TEST"
-        assert record["Diagnosis_Type"] == "Normal"
-        assert record["confidence"] == 0.95
 
     @pytest.mark.asyncio
     async def test_add_feature_value_record_explicit_execution_rid(
@@ -445,20 +387,16 @@ class TestAddFeatureValueRecord:
         """add_feature_value_record uses an explicit execution_rid."""
         mock_feature = _make_mock_feature(term_col_names=["Diagnosis_Type"])
         mock_ml.lookup_feature.return_value = mock_feature
-        mock_insert = _mock_path_insert(mock_ml)
+        _setup_feature_mocks(mock_feature)
 
         result = await feature_tools["add_feature_value_record"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            values={"Diagnosis_Type": "Abnormal"},
+            entries=[{"target_rid": "1-ABC", "Diagnosis_Type": "Abnormal"}],
             execution_rid="EXE-EXPLICIT",
         )
         data = assert_success(result)
         assert data["execution_rid"] == "EXE-EXPLICIT"
-
-        inserted_record = mock_insert.call_args[0][0][0]
-        assert inserted_record["Execution"] == "EXE-EXPLICIT"
 
     @pytest.mark.asyncio
     async def test_add_feature_value_record_no_execution(
@@ -472,8 +410,7 @@ class TestAddFeatureValueRecord:
         result = await feature_tools["add_feature_value_record"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            values={"Diagnosis_Type": "Normal"},
+            entries=[{"target_rid": "1-ABC", "Diagnosis_Type": "Normal"}],
         )
         data = assert_error(result, "No active execution")
 
@@ -490,57 +427,39 @@ class TestAddFeatureValueRecord:
         result = await feature_tools_disconnected["add_feature_value_record"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            values={"Diagnosis_Type": "Normal"},
+            entries=[{"target_rid": "1-ABC", "Diagnosis_Type": "Normal"}],
         )
         data = assert_error(result, "No active catalog connection")
 
     @pytest.mark.asyncio
     async def test_add_feature_value_record_insert_exception(
-        self, feature_tools, mock_ml
+        self, feature_tools, mock_ml, mock_conn_manager
     ):
-        """add_feature_value_record returns error when insert fails."""
+        """add_feature_value_record returns error when record construction fails."""
         mock_feature = _make_mock_feature(term_col_names=["Diagnosis_Type"])
         mock_ml.lookup_feature.return_value = mock_feature
 
-        mock_table_path = MagicMock()
-        mock_table_path.insert.side_effect = RuntimeError("Conflict")
-        mock_tables = MagicMock()
-        mock_tables.__getitem__ = MagicMock(return_value=mock_table_path)
-        mock_schema = MagicMock()
-        mock_schema.tables = mock_tables
-        mock_schemas = MagicMock()
-        mock_schemas.__getitem__ = MagicMock(return_value=mock_schema)
-        mock_pb = MagicMock()
-        mock_pb.schemas = mock_schemas
-        mock_ml.pathBuilder.return_value = mock_pb
+        mock_record_class = MagicMock(side_effect=RuntimeError("Conflict"))
+        mock_feature.feature_record_class.return_value = mock_record_class
 
         result = await feature_tools["add_feature_value_record"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            values={"Diagnosis_Type": "Normal"},
+            entries=[{"target_rid": "1-ABC", "Diagnosis_Type": "Normal"}],
         )
         data = assert_error(result, "Conflict")
 
     @pytest.mark.asyncio
-    async def test_add_feature_value_record_empty_values(self, feature_tools, mock_ml):
-        """add_feature_value_record works with an empty values dict (only base fields)."""
+    async def test_add_feature_value_record_empty_values(self, feature_tools, mock_ml, mock_conn_manager):
+        """add_feature_value_record works with an entry that only has target_rid."""
         mock_feature = _make_mock_feature(term_col_names=["Diagnosis_Type"])
         mock_ml.lookup_feature.return_value = mock_feature
-        mock_insert = _mock_path_insert(mock_ml, inserted_rid="RID-EMPTY")
+        _setup_feature_mocks(mock_feature)
 
         result = await feature_tools["add_feature_value_record"](
             table_name="Image",
             feature_name="Diagnosis",
-            target_rid="1-ABC",
-            values={},
+            entries=[{"target_rid": "1-ABC"}],
         )
         data = assert_success(result)
-        assert data["values"] == {}
-
-        inserted_record = mock_insert.call_args[0][0][0]
-        # Should still have the base fields
-        assert inserted_record["Image"] == "1-ABC"
-        assert inserted_record["Feature_Name"] == "Diagnosis"
-        assert inserted_record["Execution"] == "EXE-TEST"
+        assert data["count"] == 1

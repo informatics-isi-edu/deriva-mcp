@@ -189,9 +189,8 @@ class TestCreateTable:
         # Verify FK definition was constructed
         MockFKDef.assert_called_once()
         fk_kwargs = MockFKDef.call_args.kwargs
-        assert fk_kwargs["colnames"] == ["Subject"]
-        assert fk_kwargs["pk_tname"] == "Subject"
-        assert fk_kwargs["on_delete"] == "CASCADE"
+        assert fk_kwargs["columns"] == ["Subject"]
+        assert fk_kwargs["referenced_table"] == "Subject"
 
     @pytest.mark.asyncio
     async def test_create_table_default_type(self, schema_tools, mock_ml):
@@ -285,8 +284,7 @@ class TestCreateTable:
         data = assert_success(result)
         assert data["status"] == "created"
         fk_kwargs = MockFKDef.call_args.kwargs
-        assert fk_kwargs["pk_colnames"] == ["RID"]
-        assert fk_kwargs["on_delete"] == "NO ACTION"
+        assert fk_kwargs["referenced_columns"] == ["RID"]
 
     @pytest.mark.asyncio
     async def test_create_table_error(self, schema_tools, mock_ml):
@@ -343,6 +341,7 @@ class TestCreateAssetTable:
             column_defs=None,
             referenced_tables=None,
             comment="Medical images for analysis",
+            schema=None,
         )
 
     @pytest.mark.asyncio

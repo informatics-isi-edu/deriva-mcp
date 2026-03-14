@@ -114,19 +114,22 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
             fkey_defs = []
             if foreign_keys:
+                from deriva.core.typed.types import OnAction
+
                 for fk in foreign_keys:
+                    on_delete = OnAction(fk.get("on_delete", "NO ACTION"))
                     fkey_defs.append(ForeignKeyDefinition(
-                        colnames=[fk["column"]],
-                        pk_sname=ml.default_schema,
-                        pk_tname=fk["referenced_table"],
-                        pk_colnames=[fk.get("referenced_column", "RID")],
-                        on_delete=fk.get("on_delete", "NO ACTION"),
+                        columns=[fk["column"]],
+                        referenced_schema=ml.default_schema,
+                        referenced_table=fk["referenced_table"],
+                        referenced_columns=[fk.get("referenced_column", "RID")],
+                        on_delete=on_delete,
                     ))
 
             table_def = TableDefinition(
                 name=table_name,
-                column_defs=col_defs,
-                fkey_defs=fkey_defs,
+                columns=col_defs,
+                foreign_keys=fkey_defs,
                 comment=comment,
             )
             table = ml.create_table(table_def, schema=schema)
