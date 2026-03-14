@@ -4,6 +4,9 @@ Serves static files from an app's build directory and proxies API requests
 (/ermrest, /authn, /chaise) to a remote Deriva server, forwarding cookies
 to handle authentication. This avoids CORS issues during development.
 
+Also provides local API endpoints for app-specific functionality:
+- /api/storage — browse and delete cached datasets and execution directories
+
 Can be used standalone (python -m deriva_mcp.proxy) or started
 programmatically via start_proxy() for use as an MCP tool.
 
@@ -13,8 +16,10 @@ Requirements: Python 3.10+ (stdlib only, no dependencies).
 from __future__ import annotations
 
 import http.server
+import json
 import logging
 import mimetypes
+import shutil
 import socket
 import ssl
 import threading
@@ -26,6 +31,9 @@ logger = logging.getLogger(__name__)
 
 # Paths that get proxied to the Deriva backend
 PROXY_PREFIXES = ("/ermrest", "/authn", "/chaise")
+
+# Local API paths handled by the proxy itself
+API_PREFIXES = ("/api/",)
 
 
 class ProxyHandler(http.server.SimpleHTTPRequestHandler):
@@ -46,16 +54,20 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         return str(result)
 
     def do_GET(self) -> None:
-        if self._is_proxy_path():
+        if self._is_api_path():
+            self._handle_api("GET")
+        elif self._is_proxy_path():
             self._proxy_request("GET")
         else:
             self._serve_static()
 
     def do_POST(self) -> None:
-        if self._is_proxy_path():
+        if self._is_api_path():
+            self._handle_api("POST")
+        elif self._is_proxy_path():
             self._proxy_request("POST")
         else:
-            self.send_error(405, "POST only supported for proxied paths")
+            self.send_error(405, "POST only supported for proxied or API paths")
 
     def do_PUT(self) -> None:
         if self._is_proxy_path():
@@ -72,6 +84,145 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
     def _is_proxy_path(self) -> bool:
         path = urllib.parse.urlparse(self.path).path
         return any(path.startswith(p) for p in PROXY_PREFIXES)
+
+    def _is_api_path(self) -> bool:
+        path = urllib.parse.urlparse(self.path).path
+        return any(path.startswith(p) for p in API_PREFIXES)
+
+    def _handle_api(self, method: str) -> None:
+        """Route local API requests to the appropriate handler."""
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path.rstrip("/")
+
+        if path == "/api/storage" and method == "GET":
+            self._api_storage_list(parsed.query)
+        elif path == "/api/storage/delete" and method == "POST":
+            self._api_storage_delete()
+        else:
+            self._send_json(404, {"status": "error", "error": f"Unknown API endpoint: {path}"})
+
+    def _send_json(self, status: int, data: dict | list) -> None:
+        """Send a JSON response."""
+        body = json.dumps(data).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _api_storage_list(self, query_string: str) -> None:
+        """List storage entries from ~/.deriva-ml/."""
+        params = urllib.parse.parse_qs(query_string)
+        filter_type = params.get("filter", ["all"])[0]
+
+        try:
+            entries = _discover_storage_entries()
+        except Exception as e:
+            self._send_json(500, {"status": "error", "error": str(e)})
+            return
+
+        if filter_type == "cache":
+            entries = [e for e in entries if e["category"] == "dataset"]
+        elif filter_type == "executions":
+            entries = [e for e in entries if e["category"] == "execution"]
+
+        entries.sort(key=lambda e: e["size_bytes"], reverse=True)
+
+        total_bytes = sum(e["size_bytes"] for e in entries)
+        self._send_json(200, {
+            "status": "success",
+            "filter": filter_type,
+            "entries": entries,
+            "total_entries": len(entries),
+            "total_size_bytes": total_bytes,
+            "total_size": _human_size(total_bytes),
+        })
+
+    def _api_storage_delete(self) -> None:
+        """Delete storage entries by RID."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length == 0:
+            self._send_json(400, {"status": "error", "error": "Missing request body"})
+            return
+
+        try:
+            body = json.loads(self.rfile.read(content_length))
+        except json.JSONDecodeError:
+            self._send_json(400, {"status": "error", "error": "Invalid JSON"})
+            return
+
+        rids = body.get("rids", [])
+        confirm = body.get("confirm", False)
+
+        if not rids:
+            self._send_json(400, {"status": "error", "error": "No RIDs provided"})
+            return
+
+        try:
+            entries = _discover_storage_entries()
+        except Exception as e:
+            self._send_json(500, {"status": "error", "error": str(e)})
+            return
+
+        rid_set = set(rids)
+        matches = [e for e in entries if e.get("rid") in rid_set]
+
+        if not matches:
+            self._send_json(200, {
+                "status": "success",
+                "message": f"No entries found matching: {', '.join(rids)}",
+                "entries_found": 0,
+            })
+            return
+
+        total_bytes = sum(e["size_bytes"] for e in matches)
+
+        if not confirm:
+            self._send_json(200, {
+                "status": "dry_run",
+                "message": f"Would delete {len(matches)} entries ({_human_size(total_bytes)})",
+                "entries": matches,
+                "total_bytes": total_bytes,
+                "total_size": _human_size(total_bytes),
+            })
+            return
+
+        deleted = []
+        errors = []
+        bytes_freed = 0
+        for entry in matches:
+            entry_path = Path(entry["path"])
+            try:
+                shutil.rmtree(entry_path)
+                bytes_freed += entry["size_bytes"]
+                deleted.append(entry)
+            except Exception as e:
+                errors.append({"path": entry["path"], "error": str(e)})
+
+        # Clean up empty parent directories
+        deriva_root = Path.home() / ".deriva-ml"
+        for entry in deleted:
+            entry_path = Path(entry["path"])
+            if not entry_path.exists():
+                parent = entry_path.parent
+                while parent != deriva_root and parent.exists():
+                    try:
+                        if not any(parent.iterdir()):
+                            parent.rmdir()
+                            parent = parent.parent
+                        else:
+                            break
+                    except OSError:
+                        break
+
+        self._send_json(200, {
+            "status": "success",
+            "deleted": deleted,
+            "entries_deleted": len(deleted),
+            "bytes_freed": bytes_freed,
+            "size_freed": _human_size(bytes_freed),
+            "errors": errors,
+        })
 
     def _serve_static(self) -> None:
         """Serve static files, falling back to index.html for SPA routing."""
@@ -165,6 +316,29 @@ def _find_free_port(start: int = 8080, end: int = 8180) -> int:
             except OSError:
                 continue
     raise RuntimeError(f"No free port found in range {start}-{end}")
+
+
+# ---------------------------------------------------------------------------
+# Storage API helpers
+# ---------------------------------------------------------------------------
+
+def _human_size(size_bytes: int) -> str:
+    """Convert bytes to human-readable string."""
+    if size_bytes == 0:
+        return "0 B"
+    units = ["B", "KB", "MB", "GB", "TB"]
+    i = 0
+    size = float(size_bytes)
+    while size >= 1024 and i < len(units) - 1:
+        size /= 1024
+        i += 1
+    return f"{size:.1f} {units[i]}"
+
+
+def _discover_storage_entries() -> list[dict]:
+    """Import and call cache_tui.discover_entries(), returning dicts."""
+    from deriva_ml.cache_tui import discover_entries
+    return [entry.to_dict() for entry in discover_entries()]
 
 
 # ---------------------------------------------------------------------------

@@ -408,33 +408,68 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             })
 
     # =========================================================================
-    # Schema Workbench Tools
+    # App Launcher Tools
     # =========================================================================
 
     @mcp.tool()
-    def start_schema_workbench(
+    def list_apps() -> str:
+        """List available DerivaML web applications.
+
+        Returns the app catalog from the local deriva-ml-apps repository.
+        Each app entry includes its ID, name, description, and whether it
+        requires a catalog connection.
+
+        Returns:
+            JSON with list of available apps and their metadata.
+        """
+        catalog = _load_app_catalog()
+        if catalog is None:
+            return json.dumps({
+                "status": "error",
+                "error": (
+                    "Could not find app catalog. Clone the apps repo:\n"
+                    "  git clone https://github.com/informatics-isi-edu/deriva-ml-apps"
+                ),
+            })
+
+        # Check which apps are built
+        apps_repo = _find_apps_repo()
+        for app in catalog.get("apps", []):
+            app["built"] = False
+            if apps_repo:
+                dist_path = apps_repo / app["dist_path"]
+                app["built"] = (dist_path / "index.html").exists()
+
+        return json.dumps({
+            "status": "success",
+            "apps": catalog["apps"],
+        })
+
+    @mcp.tool()
+    def start_app(
+        app_id: str,
         app_path: str | None = None,
         port: int = 0,
     ) -> str:
-        """Start a local Schema Workbench for the connected Deriva catalog.
+        """Start a DerivaML web application locally.
 
-        Launches a reverse proxy that serves the Schema Workbench application and
-        proxies API requests to the connected Deriva server. The browser opens
-        automatically.
+        Launches a reverse proxy that serves the application and proxies API
+        requests to the connected Deriva server (if connected). The browser
+        opens automatically.
 
-        The Schema Workbench provides an interactive visualization of the catalog
-        schema: tables, foreign keys, annotations, and sample data.
+        Use `list_apps()` to see available applications.
 
         **Prerequisites:**
-        - Must be connected to a catalog (run connect_catalog first)
-        - The deriva-ml-apps repo must be cloned and the schema-workbench built:
+        - The deriva-ml-apps repo must be cloned and the app built:
           ```
           git clone https://github.com/informatics-isi-edu/deriva-ml-apps
-          cd deriva-ml-apps/schema-workbench && pnpm install && pnpm build
+          cd deriva-ml-apps/<app-name> && pnpm install && pnpm build
           ```
+        - Apps that require a catalog connection need `connect_catalog` first.
 
         Args:
-            app_path: Path to the schema-workbench build directory (containing index.html).
+            app_id: Application identifier (e.g., "schema-workbench", "storage-manager").
+            app_path: Optional explicit path to the app's build directory.
                 If not provided, searches common locations automatically.
             port: Local port to serve on. 0 = auto-select a free port.
 
@@ -443,38 +478,48 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         """
         from deriva_mcp.proxy import is_proxy_running, start_proxy, stop_proxy
 
-        # Get connected catalog info
-        conn_info = conn_manager.get_active_connection_info()
-        if not conn_info:
-            return json.dumps({
-                "status": "error",
-                "error": "No active catalog connection. Run connect_catalog first.",
-            })
+        # Look up app metadata from catalog
+        app_meta = _get_app_metadata(app_id)
 
-        hostname = conn_info.hostname
-        catalog_id = conn_info.catalog_id
+        # Check catalog connection for apps that need it
+        requires_catalog = app_meta.get("requires_catalog", False) if app_meta else True
+        hostname = None
+        catalog_id = None
+
+        if requires_catalog:
+            conn_info = conn_manager.get_active_connection_info()
+            if not conn_info:
+                return json.dumps({
+                    "status": "error",
+                    "error": "This app requires a catalog connection. Run connect_catalog first.",
+                })
+            hostname = conn_info.hostname
+            catalog_id = conn_info.catalog_id
 
         # Stop existing proxy if running
         if is_proxy_running():
             stop_proxy()
 
         # Find the built app
-        static_dir = _find_schema_workbench(app_path)
+        static_dir = _find_app(app_id, app_path)
         if static_dir is None:
+            app_name = app_meta["name"] if app_meta else app_id
             return json.dumps({
                 "status": "error",
                 "error": (
-                    "Could not find built Schema Workbench. Either:\n"
-                    "  1. Provide app_path pointing to the built dist/ directory\n"
-                    "  2. Clone and build the app:\n"
-                    "     git clone https://github.com/informatics-isi-edu/deriva-ml-apps\n"
-                    "     cd deriva-ml-apps/schema-workbench && pnpm install && pnpm build"
+                    f"Could not find built {app_name}. Either:\n"
+                    f"  1. Provide app_path pointing to the built dist/ directory\n"
+                    f"  2. Clone and build the app:\n"
+                    f"     git clone https://github.com/informatics-isi-edu/deriva-ml-apps\n"
+                    f"     cd deriva-ml-apps/{app_id} && pnpm install && pnpm build"
                 ),
             })
 
+        # Start proxy — use a dummy backend for apps that don't need a catalog
+        backend = hostname if hostname else "localhost"
         try:
             url, actual_port = start_proxy(
-                backend=hostname,
+                backend=backend,
                 static_dir=static_dir,
                 port=port,
             )
@@ -484,8 +529,11 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                 "error": f"Failed to start proxy: {e}",
             })
 
-        # Build the app URL with catalog info in hash
-        app_url = f"{url}/#host=localhost&catalog={catalog_id}"
+        # Build URL with catalog info if connected
+        if hostname and catalog_id:
+            app_url = f"{url}/#host=localhost&catalog={catalog_id}"
+        else:
+            app_url = url
 
         # Try to open browser
         try:
@@ -494,19 +542,22 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         except Exception:
             pass
 
-        return json.dumps({
+        result = {
             "status": "success",
+            "app_id": app_id,
             "url": app_url,
             "port": actual_port,
-            "backend": f"https://{hostname}",
-            "catalog_id": catalog_id,
             "static_dir": str(static_dir),
-            "message": f"Schema Workbench running at {app_url}",
-        })
+            "message": f"{app_meta['name'] if app_meta else app_id} running at {app_url}",
+        }
+        if hostname:
+            result["backend"] = f"https://{hostname}"
+            result["catalog_id"] = catalog_id
+        return json.dumps(result)
 
     @mcp.tool()
-    def stop_schema_workbench() -> str:
-        """Stop the running Schema Workbench proxy server.
+    def stop_app() -> str:
+        """Stop the running web application proxy server.
 
         Returns:
             JSON with status.
@@ -516,14 +567,45 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         if not is_proxy_running():
             return json.dumps({
                 "status": "success",
-                "message": "No proxy was running.",
+                "message": "No app was running.",
             })
 
         stop_proxy()
         return json.dumps({
             "status": "success",
-            "message": "Schema Workbench proxy stopped.",
+            "message": "App proxy stopped.",
         })
+
+    # Backward-compatible aliases
+    @mcp.tool()
+    def start_schema_workbench(
+        app_path: str | None = None,
+        port: int = 0,
+    ) -> str:
+        """Start the Schema Workbench for the connected Deriva catalog.
+
+        This is a convenience alias for `start_app("schema-workbench")`.
+        See `start_app` for full documentation.
+
+        Args:
+            app_path: Path to the schema-workbench build directory.
+            port: Local port to serve on. 0 = auto-select.
+
+        Returns:
+            JSON with the URL to open and proxy status.
+        """
+        return start_app("schema-workbench", app_path=app_path, port=port)
+
+    @mcp.tool()
+    def stop_schema_workbench() -> str:
+        """Stop the running Schema Workbench proxy server.
+
+        This is a convenience alias for `stop_app()`.
+
+        Returns:
+            JSON with status.
+        """
+        return stop_app()
 
     # =========================================================================
     # Notebook Execution Tools
@@ -817,34 +899,89 @@ def _find_kernel_for_venv() -> str | None:
     return None
 
 
-def _find_schema_workbench(app_path: str | None = None) -> Path | None:
-    """Find the built Schema Workbench directory containing index.html.
+def _find_apps_repo() -> Path | None:
+    """Find the local deriva-ml-apps repository.
+
+    Searches in order:
+    1. Sibling directory relative to this package's repo
+    2. Common checkout locations under $HOME
+    """
+    # This file lives at: repo/src/deriva_mcp/tools/devtools.py
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
+
+    candidates = [
+        repo_root.parent / "deriva-ml-apps",
+        Path.home() / "GitHub" / "deriva-ml-apps",
+        Path.home() / "src" / "deriva-ml-apps",
+        Path.home() / "repos" / "deriva-ml-apps",
+    ]
+
+    for candidate in candidates:
+        if candidate.is_dir() and (candidate / "apps.json").exists():
+            return candidate
+
+    return None
+
+
+def _load_app_catalog() -> dict | None:
+    """Load the app catalog (apps.json) from the local apps repo."""
+    apps_repo = _find_apps_repo()
+    if apps_repo is None:
+        return None
+
+    catalog_file = apps_repo / "apps.json"
+    if not catalog_file.exists():
+        return None
+
+    try:
+        return json.loads(catalog_file.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _get_app_metadata(app_id: str) -> dict | None:
+    """Look up metadata for a specific app by its ID."""
+    catalog = _load_app_catalog()
+    if catalog is None:
+        return None
+
+    for app in catalog.get("apps", []):
+        if app.get("id") == app_id:
+            return app
+
+    return None
+
+
+def _find_app(app_id: str, app_path: str | None = None) -> Path | None:
+    """Find the built app directory containing index.html.
 
     Searches in order:
     1. Explicit path provided by the user
-    2. Common sibling repo locations relative to this repo
-    3. Home directory GitHub checkout
+    2. dist_path from the app catalog relative to the apps repo
+    3. Fallback to common naming conventions
     """
     if app_path:
         p = Path(app_path).resolve()
         if (p / "index.html").exists():
             return p
-        # Maybe they pointed at the app root, not dist/
         if (p / "dist" / "index.html").exists():
             return p / "dist"
         return None
 
-    # Derive candidate paths relative to this package's repo root
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent  # tools -> deriva_mcp -> src -> repo
-    candidates = [
-        repo_root.parent / "deriva-ml-apps" / "schema-workbench" / "dist",
-        repo_root.parent / "deriva-ml-apps" / "schema-workbench",
-        Path.home() / "GitHub" / "deriva-ml-apps" / "schema-workbench" / "dist",
-        Path.home() / "GitHub" / "deriva-ml-apps" / "schema-workbench",
-    ]
+    apps_repo = _find_apps_repo()
+    if apps_repo is None:
+        return None
 
-    for candidate in candidates:
-        if candidate.is_dir() and (candidate / "index.html").exists():
-            return candidate
+    # Try the dist_path from the catalog first
+    app_meta = _get_app_metadata(app_id)
+    if app_meta and "dist_path" in app_meta:
+        dist = apps_repo / app_meta["dist_path"]
+        if dist.is_dir() and (dist / "index.html").exists():
+            return dist
+
+    # Fallback: look for <app_id>/dist or <app_id> directly
+    for subdir in [apps_repo / app_id / "dist", apps_repo / app_id]:
+        if subdir.is_dir() and (subdir / "index.html").exists():
+            return subdir
 
     return None
