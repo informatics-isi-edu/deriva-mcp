@@ -450,14 +450,15 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     @mcp.tool()
     def start_app(
         app_id: str,
+        hostname: str | None = None,
+        catalog_id: str | None = None,
         app_path: str | None = None,
         port: int = 0,
     ) -> str:
         """Start a DerivaML web application locally.
 
         Launches a reverse proxy that serves the application and proxies API
-        requests to the connected Deriva server (if connected). The browser
-        opens automatically.
+        requests to the Deriva server. The browser opens automatically.
 
         Use `list_apps()` to see available applications.
 
@@ -467,10 +468,15 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
           git clone https://github.com/informatics-isi-edu/deriva-ml-apps
           cd deriva-ml-apps/<app-name> && pnpm install && pnpm build
           ```
-        - Apps that require a catalog connection need `connect_catalog` first.
+        - Apps that require a catalog need either hostname/catalog_id params
+          or an active `connect_catalog` connection.
 
         Args:
             app_id: Application identifier (e.g., "schema-workbench", "storage-manager").
+            hostname: Deriva server hostname (e.g., "dev.eye-ai.org", "localhost").
+                If not provided, uses the active catalog connection.
+            catalog_id: Catalog ID or number. If not provided, uses the active
+                catalog connection.
             app_path: Optional explicit path to the app's build directory.
                 If not provided, searches common locations automatically.
             port: Local port to serve on. 0 = auto-select a free port.
@@ -483,20 +489,24 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         # Look up app metadata from catalog
         app_meta = _get_app_metadata(app_id)
 
-        # Check catalog connection for apps that need it
+        # Resolve hostname and catalog_id: explicit params > active connection
         requires_catalog = app_meta.get("requires_catalog", False) if app_meta else False
-        hostname = None
-        catalog_id = None
 
-        if requires_catalog:
+        if hostname is None or catalog_id is None:
             conn_info = conn_manager.get_active_connection_info()
-            if not conn_info:
-                return json.dumps({
-                    "status": "error",
-                    "error": "This app requires a catalog connection. Run connect_catalog first.",
-                })
-            hostname = conn_info.hostname
-            catalog_id = conn_info.catalog_id
+            if conn_info:
+                hostname = hostname or conn_info.hostname
+                catalog_id = catalog_id or conn_info.catalog_id
+
+        if requires_catalog and (not hostname or not catalog_id):
+            return json.dumps({
+                "status": "error",
+                "error": (
+                    "This app requires a catalog. Either:\n"
+                    "  1. Pass hostname and catalog_id parameters, or\n"
+                    "  2. Run connect_catalog first."
+                ),
+            })
 
         # Stop existing proxy if running
         stopped_previous = False
@@ -585,22 +595,26 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     # Backward-compatible aliases
     @mcp.tool()
     def start_schema_workbench(
+        hostname: str | None = None,
+        catalog_id: str | None = None,
         app_path: str | None = None,
         port: int = 0,
     ) -> str:
-        """Start the Schema Workbench for the connected Deriva catalog.
+        """Start the Schema Workbench for a Deriva catalog.
 
         This is a convenience alias for `start_app("schema-workbench")`.
         See `start_app` for full documentation.
 
         Args:
+            hostname: Deriva server hostname. Uses active connection if omitted.
+            catalog_id: Catalog ID. Uses active connection if omitted.
             app_path: Path to the schema-workbench build directory.
             port: Local port to serve on. 0 = auto-select.
 
         Returns:
             JSON with the URL to open and proxy status.
         """
-        return start_app("schema-workbench", app_path=app_path, port=port)
+        return start_app("schema-workbench", hostname=hostname, catalog_id=catalog_id, app_path=app_path, port=port)
 
     @mcp.tool()
     def stop_schema_workbench() -> str:
