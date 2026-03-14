@@ -40,6 +40,7 @@ src/deriva_mcp/
 ├── connection.py      # ConnectionManager for catalog connections
 ├── resources.py       # MCP resources (config templates, catalog info, docs)
 ├── github_docs.py     # Fetches documentation from GitHub with caching
+├── proxy.py           # Reverse proxy for serving web apps locally
 └── tools/             # MCP tools organized by domain
     ├── __init__.py    # Exports all register_*_tools functions
     ├── catalog.py     # Connection and catalog management tools
@@ -49,7 +50,8 @@ src/deriva_mcp/
     ├── feature.py     # Feature definition and value tools
     ├── schema.py      # Table and asset creation tools
     ├── execution.py   # ML execution lifecycle tools
-    └── data.py        # Data query and manipulation tools
+    ├── data.py        # Data query and manipulation tools
+    └── devtools.py    # Version management, app launcher, notebook execution
 ```
 
 ### Key Components
@@ -88,6 +90,11 @@ def register_*_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 | schema.py | Schema management | create_table, create_asset_table |
 | execution.py | ML execution lifecycle | create_execution, start_execution, upload_execution_outputs |
 | data.py | Data queries | query_table, insert_records |
+| devtools.py | Dev utilities | bump_version, start_app, list_apps, stop_app, run_notebook |
+
+**proxy.py**: Reverse proxy that serves web app static files and proxies `/ermrest`, `/authn`, `/chaise` to a remote Deriva server. Also provides `/api/storage` endpoints for local filesystem operations (listing and deleting cached datasets/executions in `~/.deriva-ml/`). Uses only Python stdlib — no external dependencies.
+
+**devtools.py**: Development utility tools including semantic version management (`bump_version`), generalized app launcher (`list_apps`, `start_app`, `stop_app`), and notebook execution (`inspect_notebook`, `run_notebook`). The app launcher discovers apps from an `apps.json` catalog in the `deriva-ml-apps` repo.
 
 ### Resource Categories
 
@@ -101,190 +108,7 @@ def register_*_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
 ## Installation
 
-> **Full installation guide:** See [README.md](README.md) for complete installation options including GitHub MCP integration.
-
-Choose **one** of the following options to run the MCP server.
-
-### Claude Desktop vs Claude Code
-
-| Feature | Claude Desktop | Claude Code |
-|---------|---------------|-------------|
-| **What it is** | GUI app for chatting with Claude | CLI tool for coding with Claude in your terminal |
-| **Config location** | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) | `.mcp.json` in project root, or `~/.claude/settings.json` globally |
-| **Use case** | General conversations, document analysis | Software development, code editing |
-| **MCP scope** | Global (all conversations) | Per-project or global |
-
-### Option 1: Docker (Recommended)
-
-Uses the published Docker image. No local setup required.
-
-<!-- copy-button -->
-**For Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "deriva": {
-      "type": "stdio",
-      "command": "/bin/sh",
-      "args": [
-        "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
-      ],
-      "env": {}
-    }
-  }
-}
-```
-
-<!-- copy-button -->
-**For Claude Code** (`~/.mcp.json` or `.mcp.json` in project root):
-```json
-{
-  "mcpServers": {
-    "deriva": {
-      "type": "stdio",
-      "command": "/bin/sh",
-      "args": [
-        "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
-      ],
-      "env": {}
-    }
-  }
-}
-```
-
-**Docker arguments:**
-- `--add-host localhost:host-gateway` - Allows connecting to localhost Deriva server
-- `-e HOME=$HOME` - Passes your home directory path into the container so mounted paths are found correctly
-
-**For localhost with self-signed certificates**, the image defaults to using `~/.deriva/allCAbundle-with-local.pem` as the CA bundle. See [Connecting to Localhost from Docker](#connecting-to-localhost-from-docker) for how to create this file.
-
-**Volume mounts:**
-- `$HOME/.deriva:$HOME/.deriva:ro` - Deriva credentials (read-only)
-- `$HOME/.bdbag:$HOME/.bdbag` - bdbag keychain for dataset download authentication (writable)
-- `$HOME/.deriva-ml:$HOME/.deriva-ml` - Working directory for execution outputs (writable)
-
-**Note:** If using the workspace volume, create the directory first:
-```bash
-mkdir -p ~/.deriva-ml
-```
-If the directory doesn't exist, Docker creates it as root, causing permission issues.
-
-### Connecting to Localhost from Docker
-
-When connecting to a Deriva server running on localhost, the Docker container needs additional configuration depending on how Deriva is running.
-
-#### Deriva Running Directly on Host
-
-If Deriva runs directly on the host (not in Docker), use `host-gateway`:
-
-```json
-{
-  "mcpServers": {
-    "deriva": {
-      "type": "stdio",
-      "command": "/bin/sh",
-      "args": [
-        "-c",
-        "docker run -i --rm --add-host localhost:host-gateway -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
-      ],
-      "env": {}
-    }
-  }
-}
-```
-
-#### Deriva Running in Docker (deriva-localhost)
-
-If Deriva runs in Docker (e.g., deriva-localhost), join the same network and map localhost to the webserver.
-
-First, find the webserver IP:
-```bash
-docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' deriva-webserver
-```
-
-Then use it in the `--add-host` argument (replace `<WEBSERVER_IP>` with the actual IP):
-
-```json
-{
-  "mcpServers": {
-    "deriva": {
-      "type": "stdio",
-      "command": "/bin/sh",
-      "args": [
-        "-c",
-        "docker run -i --rm --network deriva-localhost_internal_network --add-host localhost:<WEBSERVER_IP> -e HOME=$HOME -v $HOME/.deriva:$HOME/.deriva:ro -v $HOME/.bdbag:$HOME/.bdbag -v $HOME/.deriva-ml:$HOME/.deriva-ml ghcr.io/informatics-isi-edu/deriva-mcp:latest"
-      ],
-      "env": {}
-    }
-  }
-}
-```
-
-The entrypoint script automatically adjusts `/etc/hosts` so that `--add-host` takes effect for localhost resolution. It also sets `REQUESTS_CA_BUNDLE` to `$HOME/.deriva/allCAbundle-with-local.pem` by default.
-
-**Creating the CA bundle (macOS):**
-```bash
-# Export local CA from System Keychain
-security find-certificate -a -c "DERIVA Dev Local CA" -p /Library/Keychains/System.keychain > /tmp/deriva-local-ca.pem
-
-# Combine with existing bundle
-cat ~/.deriva/allCAbundle.pem /tmp/deriva-local-ca.pem > ~/.deriva/allCAbundle-with-local.pem
-```
-
-To use a different CA bundle, override with `-e REQUESTS_CA_BUNDLE=/path/to/bundle.pem`.
-
-### Option 2: From Source (Development)
-
-Run directly using `uv`. Use this when developing or modifying the MCP server.
-
-<!-- copy-button -->
-**For Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-```json
-{
-  "mcpServers": {
-    "deriva": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["--directory", "/path/to/deriva-mcp", "run", "deriva-mcp"],
-      "env": {}
-    }
-  }
-}
-```
-
-<!-- copy-button -->
-**For Claude Code** (`~/.mcp.json` or `.mcp.json` in project root):
-```json
-{
-  "mcpServers": {
-    "deriva": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "deriva-mcp"],
-      "cwd": "/path/to/deriva-mcp",
-      "env": {}
-    }
-  }
-}
-```
-
-### Docker Build (for development)
-
-Build and test locally:
-
-```bash
-# Build the image
-docker build -t deriva-mcp .
-
-# Test the image
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' | docker run -i --rm deriva-mcp
-```
-
-The Dockerfile uses a multi-stage build:
-1. **Builder stage**: Installs uv and dependencies into /opt/venv
-2. **Runtime stage**: Copies venv, creates non-root user, sets entrypoint
+See [README.md](README.md) for complete installation options (Docker, source, Claude Desktop vs Claude Code configs, localhost setup).
 
 ## Adding New Tools
 
@@ -353,3 +177,20 @@ ml = conn_manager.get_active_connection()
 if ml is None:
     return "Error: No active catalog connection"
 ```
+
+## Testing
+
+```bash
+uv run pytest                    # Run all tests
+uv run pytest tests/test_devtools.py  # Test devtools registration
+```
+
+Tests use a mock `ConnectionManager` — no live catalog needed. When adding new tools to a module, update the corresponding test file's tool registration assertions.
+
+## Gotchas
+
+- **Version from git tags** — version is derived dynamically via `setuptools_scm`. No hardcoded version. Working tree must be clean before `bump-version`.
+- **Proxy SSL verification disabled** — `proxy.py` disables TLS cert verification for backend connections (common for self-signed dev certs). Never use in production.
+- **Proxy is single-instance** — only one app can run at a time. `start_app()` auto-stops any previously running app.
+- **App discovery** — `start_app()` looks for `deriva-ml-apps` repo as a sibling directory, or set `DERIVA_ML_APPS_PATH` env var.
+- **`deriva-ml` import is lazy** — `proxy.py` imports `deriva_ml.cache_tui` only when the storage API is hit. If `deriva-ml` isn't installed, storage endpoints return a descriptive error.
