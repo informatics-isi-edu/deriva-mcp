@@ -161,6 +161,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             execution = ml.create_execution(config, dry_run=dry_run)
             _set_active_tool_execution(execution)
 
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "created",
                 "execution_rid": execution.execution_rid,
@@ -216,6 +220,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
             execution.execution_stop()
 
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "completed",
                 "execution_rid": execution.execution_rid,
@@ -256,6 +264,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
             status_enum = status_map.get(status.lower(), Status.running)
             execution.update_status(status_enum, message)
+
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
 
             return json.dumps({
                 "status": "updated",
@@ -352,7 +364,19 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             })
         except Exception as e:
             logger.error(f"Failed to restore execution: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_record(execution_rid, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def asset_file_path(
@@ -579,6 +603,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 dataset_types=dataset_types or [],
             )
 
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "created",
                 "dataset_rid": dataset.dataset_rid,
@@ -656,7 +684,19 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             })
         except Exception as e:
             logger.error(f"Failed to download dataset: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_record(dataset_rid, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def get_execution_working_dir() -> str:

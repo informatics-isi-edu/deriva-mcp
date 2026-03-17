@@ -446,6 +446,12 @@ multirun_config(
             # Add connection metadata
             schema_info["hostname"] = ml.host_name
             schema_info["catalog_id"] = str(ml.catalog_id)
+            # Layer 4: Enrich with related docs
+            from deriva_mcp.rag.helpers import rag_enrich_resource
+            conn_info = conn_manager.get_active_connection_info()
+            related = rag_enrich_resource("catalog schema tables columns", conn_info)
+            if related:
+                schema_info["_related_docs"] = related
             return json.dumps(schema_info, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -473,6 +479,12 @@ multirun_config(
                         if ml.model.is_vocabulary(table):
                             terms = ml.list_vocabulary_terms(table)
                             vocabularies[table.name] = [{"name": t.name, "description": t.description} for t in terms]
+            # Layer 4: Enrich with related docs
+            from deriva_mcp.rag.helpers import rag_enrich_resource
+            conn_info = conn_manager.get_active_connection_info()
+            related = rag_enrich_resource("controlled vocabularies terms", conn_info)
+            if related:
+                vocabularies["_related_docs"] = related
             return json.dumps(vocabularies, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -500,6 +512,12 @@ multirun_config(
                         "version": str(ds.current_version),
                     }
                 )
+            # Layer 4: Enrich with related docs
+            from deriva_mcp.rag.helpers import rag_enrich_resource
+            conn_info = conn_manager.get_active_connection_info()
+            related = rag_enrich_resource("creating managing datasets", conn_info)
+            if related:
+                return json.dumps({"items": datasets, "_related_docs": related}, indent=2)
             return json.dumps(datasets, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -548,6 +566,12 @@ multirun_config(
                         "description": wf.description,
                     }
                 )
+            # Layer 4: Enrich with related docs
+            from deriva_mcp.rag.helpers import rag_enrich_resource
+            conn_info = conn_manager.get_active_connection_info()
+            related = rag_enrich_resource("workflows executions", conn_info)
+            if related:
+                return json.dumps({"items": workflows, "_related_docs": related}, indent=2)
             return json.dumps(workflows, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -585,6 +609,12 @@ multirun_config(
         try:
             terms = ml.list_vocabulary_terms("Feature_Name")
             features = [{"name": t.name, "description": t.description} for t in terms]
+            # Layer 4: Enrich with related docs
+            from deriva_mcp.rag.helpers import rag_enrich_resource
+            conn_info = conn_manager.get_active_connection_info()
+            related = rag_enrich_resource("defining using features", conn_info)
+            if related:
+                return json.dumps({"items": features, "_related_docs": related}, indent=2)
             return json.dumps(features, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -673,40 +703,54 @@ multirun_config(
             children = ds.list_dataset_children()
             parents = ds.list_dataset_parents()
 
-            return json.dumps(
-                {
-                    "rid": ds.dataset_rid,
-                    "description": ds.description,
-                    "types": ds.dataset_types,
-                    "current_version": str(ds.current_version),
-                    "member_counts": {k: len(v) for k, v in members.items()},
-                    "children": [
-                        {
-                            "rid": c.dataset_rid,
-                            "description": c.description,
-                            "types": c.dataset_types,
-                        }
-                        for c in children
-                    ],
-                    "parents": [
-                        {
-                            "rid": p.dataset_rid,
-                            "description": p.description,
-                            "types": p.dataset_types,
-                        }
-                        for p in parents
-                    ],
-                    "version_history": [
-                        {
-                            "version": str(h.dataset_version) if h.dataset_version else None,
-                            "description": h.description,
-                            "snapshot": h.snapshot,
-                        }
-                        for h in history
-                    ],
-                },
-                indent=2,
-            )
+            result = {
+                "rid": ds.dataset_rid,
+                "description": ds.description,
+                "types": ds.dataset_types,
+                "current_version": str(ds.current_version),
+                "member_counts": {k: len(v) for k, v in members.items()},
+                "children": [
+                    {
+                        "rid": c.dataset_rid,
+                        "description": c.description,
+                        "types": c.dataset_types,
+                    }
+                    for c in children
+                ],
+                "parents": [
+                    {
+                        "rid": p.dataset_rid,
+                        "description": p.description,
+                        "types": p.dataset_types,
+                    }
+                    for p in parents
+                ],
+                "version_history": [
+                    {
+                        "version": str(h.dataset_version) if h.dataset_version else None,
+                        "description": h.description,
+                        "snapshot": h.snapshot,
+                    }
+                    for h in history
+                ],
+            }
+            # Layer 4: Enrich with related docs
+            from deriva_mcp.rag.helpers import rag_enrich_resource
+            conn_info = conn_manager.get_active_connection_info()
+            related = rag_enrich_resource("dataset members versions", conn_info)
+            if related:
+                result["_related_docs"] = related
+            # Layer 5: Add related data from per-user index
+            from deriva_mcp.rag.helpers import rag_suggest_record
+            if conn_info and ds.description:
+                related_data = rag_suggest_record(
+                    f"dataset {ds.description}", conn_info, limit=3
+                )
+                # Exclude self from results
+                related_data = [r for r in related_data if r.get("rid") != dataset_rid]
+                if related_data:
+                    result["_related_data"] = related_data
+            return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -896,20 +940,24 @@ multirun_config(
 
         try:
             features = list(ml.find_features(table_name))
-            return json.dumps(
-                [
-                    {
-                        "name": f.feature_name,
-                        "target_table": f.target_table.name,
-                        "feature_table": f.feature_table.name,
-                        "asset_columns": [c.name for c in f.asset_columns],
-                        "term_columns": [c.name for c in f.term_columns],
-                        "value_columns": [c.name for c in f.value_columns],
-                    }
-                    for f in features
-                ],
-                indent=2,
-            )
+            features_list = [
+                {
+                    "name": f.feature_name,
+                    "target_table": f.target_table.name,
+                    "feature_table": f.feature_table.name,
+                    "asset_columns": [c.name for c in f.asset_columns],
+                    "term_columns": [c.name for c in f.term_columns],
+                    "value_columns": [c.name for c in f.value_columns],
+                }
+                for f in features
+            ]
+            # Layer 4: Enrich with related docs
+            from deriva_mcp.rag.helpers import rag_enrich_resource
+            conn_info = conn_manager.get_active_connection_info()
+            related = rag_enrich_resource(f"features {table_name}", conn_info)
+            if related:
+                return json.dumps({"items": features_list, "_related_docs": related}, indent=2)
+            return json.dumps(features_list, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1212,6 +1260,18 @@ multirun_config(
             if features:
                 result["features"] = features
 
+            # Layer 4: Enrich with related docs (contextual query based on table type)
+            from deriva_mcp.rag.helpers import rag_enrich_resource
+            conn_info = conn_manager.get_active_connection_info()
+            if result.get("is_vocabulary"):
+                enrich_query = f"vocabulary table {table_name} terms synonyms"
+            elif result.get("is_asset"):
+                enrich_query = f"asset table {table_name} files upload"
+            else:
+                enrich_query = f"table {table_name} columns foreign keys"
+            related = rag_enrich_resource(enrich_query, conn_info)
+            if related:
+                result["_related_docs"] = related
             return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1649,17 +1709,25 @@ multirun_config(
             nested = exe.list_nested_executions()
             parents = exe.list_parent_executions()
 
-            return json.dumps(
-                {
-                    "rid": exe.execution_rid,
-                    "workflow_rid": exe.workflow_rid,
-                    "status": exe.status.value if hasattr(exe.status, "value") else str(exe.status),
-                    "description": exe.description,
-                    "nested_executions": [n["Nested_Execution"] for n in nested],
-                    "parent_executions": [p["Execution"] for p in parents],
-                },
-                indent=2,
-            )
+            result = {
+                "rid": exe.execution_rid,
+                "workflow_rid": exe.workflow_rid,
+                "status": exe.status.value if hasattr(exe.status, "value") else str(exe.status),
+                "description": exe.description,
+                "nested_executions": [n["Nested_Execution"] for n in nested],
+                "parent_executions": [p["Execution"] for p in parents],
+            }
+            # Layer 5: Add related data from per-user index
+            from deriva_mcp.rag.helpers import rag_suggest_record
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info and exe.description:
+                related_data = rag_suggest_record(
+                    f"execution {exe.description}", conn_info, limit=3
+                )
+                related_data = [r for r in related_data if r.get("rid") != execution_rid]
+                if related_data:
+                    result["_related_data"] = related_data
+            return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 

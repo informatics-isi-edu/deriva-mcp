@@ -100,6 +100,17 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         """
         try:
             ml = conn_manager.get_active_or_raise()
+
+            # Layer 3: Check for semantic near-duplicates
+            from deriva_mcp.rag.helpers import rag_suggest_entity, DUPLICATE_RELEVANCE_THRESHOLD
+            conn_info = conn_manager.get_active_connection_info()
+            similar = rag_suggest_entity(feature_name, conn_info, limit=3)
+            dup_warnings = [
+                s for s in similar
+                if s["relevance"] > DUPLICATE_RELEVANCE_THRESHOLD
+                and s["name"].lower() != feature_name.lower()
+            ]
+
             ml.create_feature(
                 target_table=table_name,
                 feature_name=feature_name,
@@ -108,13 +119,21 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 metadata=metadata or [],
                 comment=comment,
             )
-            return json.dumps(
-                {
-                    "status": "created",
-                    "feature_name": feature_name,
-                    "target_table": table_name,
-                }
-            )
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
+            result = {
+                "status": "created",
+                "feature_name": feature_name,
+                "target_table": table_name,
+            }
+            if dup_warnings:
+                result["similar_existing"] = dup_warnings
+                result["warning"] = (
+                    f"Created '{feature_name}', but similar entities exist: "
+                    f"{', '.join(w['name'] for w in dup_warnings)}. "
+                    f"Verify this isn't a duplicate."
+                )
+            return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to create feature: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -137,6 +156,8 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             success = ml.delete_feature(table_name, feature_name)
             if success:
+                from deriva_mcp.rag.helpers import trigger_schema_reindex
+                trigger_schema_reindex(conn_manager.get_active_connection_info())
                 return json.dumps(
                     {
                         "status": "deleted",
@@ -516,4 +537,16 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps(result, indent=2)
         except Exception as e:
             logger.error(f"Failed to fetch table features: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_entity(table_name, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
+
+            return json.dumps(result)

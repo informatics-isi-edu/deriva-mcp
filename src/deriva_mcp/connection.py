@@ -105,6 +105,10 @@ class ConnectionInfo:
     execution: Any = None  # MCP session execution from deriva_ml
     active_tool_execution: Any = None  # User-created execution via create_execution tool
     schema_hash: str | None = None  # Visibility-class fingerprint for RAG index isolation
+    schema_dirty: bool = False       # Vocab changes → lazy reindex
+    data_dirty: bool = False         # Data mutations → lazy reindex
+    _schema_reindex_at: float = 0.0  # Debounce timestamp
+    _data_reindex_at: float = 0.0    # Debounce timestamp
 
 
 class ConnectionManager:

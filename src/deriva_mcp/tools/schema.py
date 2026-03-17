@@ -85,6 +85,16 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
             ml = conn_manager.get_active_or_raise()
 
+            # Layer 3: Check for semantic near-duplicates
+            from deriva_mcp.rag.helpers import rag_suggest_entity, DUPLICATE_RELEVANCE_THRESHOLD
+            conn_info = conn_manager.get_active_connection_info()
+            similar = rag_suggest_entity(table_name, conn_info, limit=3)
+            dup_warnings = [
+                s for s in similar
+                if s["relevance"] > DUPLICATE_RELEVANCE_THRESHOLD
+                and s["name"].lower() != table_name.lower()
+            ]
+
             type_map = {
                 "text": BuiltinTypes.text,
                 "int2": BuiltinTypes.int2,
@@ -133,12 +143,23 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 comment=comment,
             )
             table = ml.create_table(table_def, schema=schema)
-            return json.dumps({
+            # Layer 1: Trigger schema reindex after structural change
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
+            result = {
                 "status": "created",
                 "table_name": table.name,
                 "schema": table.schema.name,
                 "columns": [c.name for c in table.columns],
-            })
+            }
+            if dup_warnings:
+                result["similar_existing"] = dup_warnings
+                result["warning"] = (
+                    f"Created '{table_name}', but similar entities exist: "
+                    f"{', '.join(w['name'] for w in dup_warnings)}. "
+                    f"Verify this isn't a duplicate."
+                )
+            return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to create table: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -175,6 +196,16 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
 
             ml = conn_manager.get_active_or_raise()
 
+            # Layer 3: Check for semantic near-duplicates
+            from deriva_mcp.rag.helpers import rag_suggest_entity, DUPLICATE_RELEVANCE_THRESHOLD
+            conn_info = conn_manager.get_active_connection_info()
+            similar = rag_suggest_entity(asset_name, conn_info, limit=3)
+            dup_warnings = [
+                s for s in similar
+                if s["relevance"] > DUPLICATE_RELEVANCE_THRESHOLD
+                and s["name"].lower() != asset_name.lower()
+            ]
+
             col_defs = []
             if columns:
                 type_map = {
@@ -208,12 +239,23 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 comment=comment,
                 schema=schema,
             )
-            return json.dumps({
+            # Layer 1: Trigger schema reindex after structural change
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
+            result = {
                 "status": "created",
                 "table_name": table.name,
                 "schema": table.schema.name,
                 "columns": [c.name for c in table.columns],
-            })
+            }
+            if dup_warnings:
+                result["similar_existing"] = dup_warnings
+                result["warning"] = (
+                    f"Created '{asset_name}', but similar entities exist: "
+                    f"{', '.join(w['name'] for w in dup_warnings)}. "
+                    f"Verify this isn't a duplicate."
+                )
+            return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to create asset table: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -517,7 +559,9 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 default=default,
                 comment=comment,
             )
-
+            # Layer 1: Trigger schema reindex after structural change
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
             return json.dumps({
                 "status": "created",
                 "table_name": table_name,
@@ -526,7 +570,19 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
             })
         except Exception as e:
             logger.error(f"Failed to add column: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_entity(table_name, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
+
+            return json.dumps(result)
 
     # -------------------------------------------------------------------------
     # Column Manipulation Tools

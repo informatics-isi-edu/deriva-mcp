@@ -37,6 +37,7 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
         source: str | None = None,
         doc_type: str | None = None,
         include_schema: bool = True,
+        include_data: bool = True,
     ) -> dict:
         """Search Deriva documentation using semantic similarity.
 
@@ -44,7 +45,9 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
         (deriva-ml, ermrest, chaise, deriva-py) using vector embeddings.
 
         When connected to a catalog, also searches the catalog's indexed schema
-        (tables, columns, foreign keys, features) unless include_schema=False.
+        (tables, columns, foreign keys, features) unless include_schema=False,
+        and the user's per-user data index (datasets and executions) unless
+        include_data=False.
 
         Args:
             query: Natural language search query (e.g., "how to create a dataset")
@@ -54,6 +57,9 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
                      "sdk-reference", "catalog-schema")
             include_schema: If True (default), include catalog schema results when
                           connected. Set to False to search only documentation.
+            include_data: If True (default), include per-user data index results
+                        (datasets, executions) when connected. Set to False to
+                        exclude user data from search results.
 
         Returns:
             Dict with search results including text snippets, relevance scores,
@@ -96,8 +102,20 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
                         query=query, limit=limit, source=catalog_source
                     )
 
+        # Also search per-user data index if connected
+        data_results = []
+        if include_data:
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                from deriva_mcp.rag.data import data_source_name
+
+                data_source = data_source_name(
+                    conn_info.hostname, conn_info.catalog_id, conn_info.user_id
+                )
+                data_results = manager.search(query=query, limit=limit, source=data_source)
+
         # Merge and re-rank by relevance
-        all_results = doc_results + schema_results
+        all_results = doc_results + schema_results + data_results
         all_results.sort(key=lambda r: r.get("relevance", 0), reverse=True)
         all_results = all_results[:limit]
 

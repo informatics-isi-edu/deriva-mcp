@@ -47,6 +47,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 synonyms=synonyms or [],
                 exists_ok=False,
             )
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "created",
                 "name": term.name,
@@ -67,7 +71,19 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 except Exception:
                     pass
             logger.error(f"Failed to add term: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_entity(vocabulary_name, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def create_vocabulary(
@@ -90,17 +106,38 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
+
+            # Layer 3: Check for semantic near-duplicates
+            from deriva_mcp.rag.helpers import rag_suggest_entity, DUPLICATE_RELEVANCE_THRESHOLD
+            conn_info = conn_manager.get_active_connection_info()
+            similar = rag_suggest_entity(vocabulary_name, conn_info, limit=3)
+            dup_warnings = [
+                s for s in similar
+                if s["relevance"] > DUPLICATE_RELEVANCE_THRESHOLD
+                and s["name"].lower() != vocabulary_name.lower()
+            ]
+
             table = ml.create_vocabulary(
                 vocab_name=vocabulary_name,
                 comment=comment,
                 schema=schema,
             )
-            return json.dumps({
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
+            result = {
                 "status": "created",
                 "name": table.name,
                 "schema": table.schema.name,
                 "comment": comment,
-            })
+            }
+            if dup_warnings:
+                result["similar_existing"] = dup_warnings
+                result["warning"] = (
+                    f"Created '{vocabulary_name}', but similar entities exist: "
+                    f"{', '.join(w['name'] for w in dup_warnings)}. "
+                    f"Verify this isn't a duplicate."
+                )
+            return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to create vocabulary: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -129,6 +166,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             current = list(term.synonyms)
             if synonym not in current:
                 term.synonyms = tuple(current + [synonym])
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "added",
                 "name": term.name,
@@ -161,6 +202,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             current = list(term.synonyms)
             if synonym in current:
                 term.synonyms = tuple(s for s in current if s != synonym)
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "removed",
                 "name": term.name,
@@ -190,6 +235,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             ml = conn_manager.get_active_or_raise()
             term = ml.lookup_term(vocabulary_name, term_name)
             term.description = description
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "updated",
                 "name": term.name,
@@ -221,6 +270,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         try:
             ml = conn_manager.get_active_or_raise()
             ml.delete_term(vocabulary_name, term_name)
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "deleted",
                 "vocabulary": vocabulary_name,
@@ -228,4 +281,16 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             })
         except Exception as e:
             logger.error(f"Failed to delete term: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_entity(vocabulary_name, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
+
+            return json.dumps(result)

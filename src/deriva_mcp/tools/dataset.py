@@ -115,6 +115,10 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 dataset_types=dataset_types or [],
             )
 
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "created",
                 "dataset_rid": dataset.dataset_rid,
@@ -293,6 +297,10 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     "message": "Provide either member_rids or members_by_table.",
                 })
 
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "success",
                 "added_count": total,
@@ -300,7 +308,19 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to add dataset members: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_record(dataset_rid, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def delete_dataset_members(
@@ -329,6 +349,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.delete_dataset_members(members=member_rids)
+
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "success",
                 "removed_count": len(member_rids),
@@ -336,7 +361,19 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to delete dataset members: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_record(dataset_rid, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def increment_dataset_version(
@@ -442,6 +479,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             ml.delete_dataset(dataset, recurse=recurse)
+
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "deleted",
                 "dataset_rid": dataset_rid,
@@ -480,6 +522,10 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Update the local object
             dataset.description = description
 
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "updated",
                 "dataset_rid": dataset_rid,
@@ -487,7 +533,19 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to set dataset description: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_record(dataset_rid, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def add_dataset_type(dataset_rid: str, dataset_type: str) -> str:
@@ -510,6 +568,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.add_dataset_type(dataset_type)
+
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "added",
                 "dataset_rid": dataset_rid,
@@ -517,7 +580,19 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to add dataset type: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_record(dataset_rid, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def remove_dataset_type(dataset_rid: str, dataset_type: str) -> str:
@@ -540,6 +615,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.remove_dataset_type(dataset_type)
+
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "removed",
                 "dataset_rid": dataset_rid,
@@ -795,7 +875,19 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to download dataset: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_record(dataset_rid, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def estimate_bag_size(
@@ -1012,7 +1104,19 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to denormalize dataset: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_record(dataset_rid, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
+
+            return json.dumps(result)
 
 
     # ========================================================================
@@ -1411,4 +1515,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "success", **result.model_dump()})
         except Exception as e:
             logger.error(f"Failed to split dataset: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_record(source_dataset_rid, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
+
+            return json.dumps(result)
