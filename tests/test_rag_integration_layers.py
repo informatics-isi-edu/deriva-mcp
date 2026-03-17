@@ -122,3 +122,118 @@ class TestLayer2DataTools:
         result = json.loads(asyncio.run(tools["query_table"]("SomeTable")))
         assert result["status"] == "error"
         assert "suggestions" not in result
+
+
+class TestLayer3DuplicateDetection:
+    """Layer 3: Duplicate detection on creation tools."""
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager")
+    def test_create_table_warns_on_similar(self, mock_get_rag):
+        mock_manager = MagicMock()
+        mock_manager.search.return_value = [
+            {"text": "## isa.Diagnosis_Type (vocabulary)", "relevance": 0.88,
+             "source": "schema:test:1:abc", "section_heading": "isa.Diagnosis_Type",
+             "doc_type": "catalog-schema"}
+        ]
+        mock_get_rag.return_value = mock_manager
+
+        conn_manager = MagicMock()
+        mock_ml = MagicMock()
+        mock_schema = MagicMock()
+        mock_schema.name = "isa"
+        mock_table = MagicMock()
+        mock_table.name = "Diagnosis"
+        mock_table.schema = mock_schema
+        mock_table.columns = []
+        mock_ml.create_table.return_value = mock_table
+        conn_manager.get_active_or_raise.return_value = mock_ml
+        mock_conn_info = MagicMock()
+        mock_conn_info.schema_hash = "abc123"
+        mock_conn_info.schema_dirty = False
+        mock_conn_info._schema_reindex_at = 0.0
+        mock_conn_info.hostname = "test"
+        mock_conn_info.catalog_id = "1"
+        conn_manager.get_active_connection_info.return_value = mock_conn_info
+
+        from deriva_mcp.tools.schema import register_schema_tools
+        mcp, tools = _create_tool_capture()
+        register_schema_tools(mcp, conn_manager)
+
+        import asyncio
+        result = json.loads(asyncio.run(tools["create_table"]("Diagnosis")))
+        assert result["status"] == "created"
+        assert "similar_existing" in result
+        assert "warning" in result
+
+
+class TestLayer3CreateVocabulary:
+    @patch("deriva_mcp.rag.helpers.get_rag_manager")
+    def test_create_vocabulary_warns_on_similar(self, mock_get_rag):
+        mock_manager = MagicMock()
+        mock_manager.search.return_value = [
+            {"text": "## isa.Diagnosis_Type (vocabulary)", "relevance": 0.88,
+             "source": "schema:test:1:abc", "section_heading": "isa.Diagnosis_Type",
+             "doc_type": "catalog-schema"}
+        ]
+        mock_get_rag.return_value = mock_manager
+
+        conn_manager = MagicMock()
+        mock_ml = MagicMock()
+        mock_vocab_schema = MagicMock()
+        mock_vocab_schema.name = "isa"
+        mock_vocab_table = MagicMock()
+        mock_vocab_table.name = "Diagnosis"
+        mock_vocab_table.schema = mock_vocab_schema
+        mock_ml.create_vocabulary.return_value = mock_vocab_table
+        conn_manager.get_active_or_raise.return_value = mock_ml
+        mock_conn_info = MagicMock()
+        mock_conn_info.schema_hash = "abc123"
+        mock_conn_info.schema_dirty = False
+        mock_conn_info._schema_reindex_at = 0.0
+        mock_conn_info.hostname = "test"
+        mock_conn_info.catalog_id = "1"
+        conn_manager.get_active_connection_info.return_value = mock_conn_info
+
+        from deriva_mcp.tools.vocabulary import register_vocabulary_tools
+        mcp, tools = _create_tool_capture()
+        register_vocabulary_tools(mcp, conn_manager)
+
+        import asyncio
+        result = json.loads(asyncio.run(tools["create_vocabulary"]("Diagnosis")))
+        assert result["status"] == "created"
+        assert "similar_existing" in result
+        assert "warning" in result
+
+
+class TestLayer3CreateFeature:
+    @patch("deriva_mcp.rag.helpers.get_rag_manager")
+    def test_create_feature_warns_on_similar(self, mock_get_rag):
+        mock_manager = MagicMock()
+        mock_manager.search.return_value = [
+            {"text": "## isa.Image_Quality (feature)", "relevance": 0.85,
+             "source": "schema:test:1:abc", "section_heading": "isa.Image_Quality",
+             "doc_type": "catalog-schema"}
+        ]
+        mock_get_rag.return_value = mock_manager
+
+        conn_manager = MagicMock()
+        mock_ml = MagicMock()
+        mock_ml.create_feature.return_value = MagicMock()
+        conn_manager.get_active_or_raise.return_value = mock_ml
+        mock_conn_info = MagicMock()
+        mock_conn_info.schema_hash = "abc123"
+        mock_conn_info.schema_dirty = False
+        mock_conn_info._schema_reindex_at = 0.0
+        mock_conn_info.hostname = "test"
+        mock_conn_info.catalog_id = "1"
+        conn_manager.get_active_connection_info.return_value = mock_conn_info
+
+        from deriva_mcp.tools.feature import register_feature_tools
+        mcp, tools = _create_tool_capture()
+        register_feature_tools(mcp, conn_manager)
+
+        import asyncio
+        result = json.loads(asyncio.run(tools["create_feature"]("Image_Score", "Image")))
+        assert result["status"] == "created"
+        assert "similar_existing" in result
+        assert "warning" in result
