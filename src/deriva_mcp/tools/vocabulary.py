@@ -47,6 +47,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 synonyms=synonyms or [],
                 exists_ok=False,
             )
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "created",
                 "name": term.name,
@@ -95,6 +99,8 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 comment=comment,
                 schema=schema,
             )
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
             return json.dumps({
                 "status": "created",
                 "name": table.name,
@@ -129,6 +135,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             current = list(term.synonyms)
             if synonym not in current:
                 term.synonyms = tuple(current + [synonym])
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "added",
                 "name": term.name,
@@ -161,6 +171,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             current = list(term.synonyms)
             if synonym in current:
                 term.synonyms = tuple(s for s in current if s != synonym)
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "removed",
                 "name": term.name,
@@ -190,6 +204,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             ml = conn_manager.get_active_or_raise()
             term = ml.lookup_term(vocabulary_name, term_name)
             term.description = description
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "updated",
                 "name": term.name,
@@ -221,6 +239,10 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         try:
             ml = conn_manager.get_active_or_raise()
             ml.delete_term(vocabulary_name, term_name)
+            # Layer 1: Mark schema dirty for lazy reindex
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.schema_dirty = True
             return json.dumps({
                 "status": "deleted",
                 "vocabulary": vocabulary_name,
