@@ -21,6 +21,11 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from deriva_mcp.connection import ConnectionInfo
 
+# Import get_rag_manager at module level so tests can patch it via
+# `patch("deriva_mcp.rag.helpers.get_rag_manager")`.
+# The actual chromadb initialization is deferred until first use.
+from deriva_mcp.rag import get_rag_manager
+
 logger = logging.getLogger("deriva-mcp")
 
 # ---------------------------------------------------------------------------
@@ -57,7 +62,6 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
     if conn_info is None:
         return
 
-    from deriva_mcp.rag import get_rag_manager
     manager = get_rag_manager()
     if manager is None:
         return
@@ -119,7 +123,6 @@ def rag_suggest_entity(
     """
     if conn_info is None:
         return []
-    from deriva_mcp.rag import get_rag_manager
     manager = get_rag_manager()
     if manager is None:
         return []
@@ -161,7 +164,6 @@ def rag_enrich_resource(
     """
     if conn_info is None:
         return []
-    from deriva_mcp.rag import get_rag_manager
     manager = get_rag_manager()
     if manager is None:
         return []
@@ -190,7 +192,6 @@ def trigger_data_reindex(conn_info: ConnectionInfo | None) -> None:
     """Fire-and-forget background data reindex. Debounces to at most once per DEBOUNCE_SECONDS."""
     if conn_info is None:
         return
-    from deriva_mcp.rag import get_rag_manager
     manager = get_rag_manager()
     if manager is None:
         return
@@ -221,7 +222,6 @@ def rag_suggest_record(
     """
     if conn_info is None:
         return []
-    from deriva_mcp.rag import get_rag_manager
     manager = get_rag_manager()
     if manager is None:
         return []
