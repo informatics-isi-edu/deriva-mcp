@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 
-from tests.conftest import _create_tool_capture
+from tests.conftest import _create_tool_capture, _create_resource_capture
 
 
 class TestLayer2DataTools:
@@ -237,3 +237,82 @@ class TestLayer3CreateFeature:
         assert result["status"] == "created"
         assert "similar_existing" in result
         assert "warning" in result
+
+
+class TestLayer4ResourceEnrichment:
+    """Layer 4: _related_docs appears in resource responses."""
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager")
+    def test_catalog_schema_includes_related_docs(self, mock_get_rag):
+        mock_manager = MagicMock()
+        mock_manager.search.return_value = [
+            {"text": "Creating Tables Guide", "relevance": 0.92,
+             "github_url": "https://example.com/tables-guide",
+             "source": "docs", "section_heading": "Creating Tables",
+             "doc_type": "documentation"},
+        ]
+        mock_get_rag.return_value = mock_manager
+
+        conn_manager = MagicMock()
+        mock_ml = MagicMock()
+        mock_ml.model.get_schema_description.return_value = {"schemas": {}}
+        mock_ml.host_name = "test.example.org"
+        mock_ml.catalog_id = "1"
+        conn_manager.get_active_or_raise.return_value = mock_ml
+        mock_conn_info = MagicMock()
+        mock_conn_info.schema_hash = "abc123"
+        mock_conn_info.domain_schemas = ["isa"]
+        conn_manager.get_active_connection_info.return_value = mock_conn_info
+
+        from deriva_mcp.resources import register_resources
+        mcp, resources = _create_resource_capture()
+        register_resources(mcp, conn_manager)
+
+        result = json.loads(resources["deriva://catalog/schema"]())
+        assert "_related_docs" in result
+        assert len(result["_related_docs"]) >= 1
+        assert result["_related_docs"][0]["title"] == "Creating Tables"
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager")
+    def test_catalog_datasets_includes_related_docs(self, mock_get_rag):
+        mock_manager = MagicMock()
+        mock_manager.search.return_value = [
+            {"text": "Managing Datasets", "relevance": 0.85,
+             "github_url": "https://example.com/datasets-guide",
+             "source": "docs", "section_heading": "Managing Datasets",
+             "doc_type": "documentation"},
+        ]
+        mock_get_rag.return_value = mock_manager
+
+        conn_manager = MagicMock()
+        mock_ml = MagicMock()
+        mock_ml.find_datasets.return_value = []
+        conn_manager.get_active_or_raise.return_value = mock_ml
+        mock_conn_info = MagicMock()
+        mock_conn_info.schema_hash = "abc123"
+        conn_manager.get_active_connection_info.return_value = mock_conn_info
+
+        from deriva_mcp.resources import register_resources
+        mcp, resources = _create_resource_capture()
+        register_resources(mcp, conn_manager)
+
+        result = json.loads(resources["deriva://catalog/datasets"]())
+        assert "_related_docs" in result
+        assert len(result["_related_docs"]) >= 1
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager")
+    def test_related_docs_absent_when_rag_not_initialized(self, mock_get_rag):
+        mock_get_rag.return_value = None  # RAG not initialized
+
+        conn_manager = MagicMock()
+        mock_ml = MagicMock()
+        mock_ml.model.get_schema_description.return_value = {"schemas": {}}
+        conn_manager.get_active_or_raise.return_value = mock_ml
+        conn_manager.get_active_connection_info.return_value = None
+
+        from deriva_mcp.resources import register_resources
+        mcp, resources = _create_resource_capture()
+        register_resources(mcp, conn_manager)
+
+        result = json.loads(resources["deriva://catalog/schema"]())
+        assert "_related_docs" not in result
