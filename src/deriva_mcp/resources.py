@@ -740,6 +740,16 @@ multirun_config(
             related = rag_enrich_resource("dataset members versions", conn_info)
             if related:
                 result["_related_docs"] = related
+            # Layer 5: Add related data from per-user index
+            from deriva_mcp.rag.helpers import rag_suggest_record
+            if conn_info and ds.description:
+                related_data = rag_suggest_record(
+                    f"dataset {ds.description}", conn_info, limit=3
+                )
+                # Exclude self from results
+                related_data = [r for r in related_data if r.get("rid") != dataset_rid]
+                if related_data:
+                    result["_related_data"] = related_data
             return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1693,17 +1703,25 @@ multirun_config(
             nested = exe.list_nested_executions()
             parents = exe.list_parent_executions()
 
-            return json.dumps(
-                {
-                    "rid": exe.execution_rid,
-                    "workflow_rid": exe.workflow_rid,
-                    "status": exe.status.value if hasattr(exe.status, "value") else str(exe.status),
-                    "description": exe.description,
-                    "nested_executions": [n["Nested_Execution"] for n in nested],
-                    "parent_executions": [p["Execution"] for p in parents],
-                },
-                indent=2,
-            )
+            result = {
+                "rid": exe.execution_rid,
+                "workflow_rid": exe.workflow_rid,
+                "status": exe.status.value if hasattr(exe.status, "value") else str(exe.status),
+                "description": exe.description,
+                "nested_executions": [n["Nested_Execution"] for n in nested],
+                "parent_executions": [p["Execution"] for p in parents],
+            }
+            # Layer 5: Add related data from per-user index
+            from deriva_mcp.rag.helpers import rag_suggest_record
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info and exe.description:
+                related_data = rag_suggest_record(
+                    f"execution {exe.description}", conn_info, limit=3
+                )
+                related_data = [r for r in related_data if r.get("rid") != execution_rid]
+                if related_data:
+                    result["_related_data"] = related_data
+            return json.dumps(result, indent=2)
         except Exception as e:
             return json.dumps({"error": str(e)})
 

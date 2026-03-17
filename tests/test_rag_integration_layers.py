@@ -316,3 +316,90 @@ class TestLayer4ResourceEnrichment:
 
         result = json.loads(resources["deriva://catalog/schema"]())
         assert "_related_docs" not in result
+
+
+class TestLayer5RelatedData:
+    """Layer 5: _related_data appears in dataset/execution resource responses."""
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager")
+    def test_dataset_details_includes_related_data(self, mock_get_rag):
+        mock_manager = MagicMock()
+        mock_manager.search.return_value = [
+            {"text": "## Dataset: Validation Set (RID: 2-XYZ)", "relevance": 0.85,
+             "source": "data:test:1:user1", "section_heading": "## Dataset: Validation Set (RID: 2-XYZ)",
+             "doc_type": "catalog-data"},
+        ]
+        mock_get_rag.return_value = mock_manager
+
+        conn_manager = MagicMock()
+        mock_ml = MagicMock()
+        mock_ds = MagicMock()
+        mock_ds.dataset_rid = "1-ABC"
+        mock_ds.description = "Training dataset for lung segmentation"
+        mock_ds.dataset_types = ["Training"]
+        mock_ds.current_version = "1.0"
+        mock_ds.list_dataset_members.return_value = {}
+        mock_ds.dataset_history.return_value = []
+        mock_ds.list_dataset_children.return_value = []
+        mock_ds.list_dataset_parents.return_value = []
+        mock_ml.lookup_dataset.return_value = mock_ds
+        conn_manager.get_active_or_raise.return_value = mock_ml
+        mock_conn_info = MagicMock()
+        mock_conn_info.user_id = "user1"
+        mock_conn_info.hostname = "test"
+        mock_conn_info.catalog_id = "1"
+        mock_conn_info.data_dirty = False
+        mock_conn_info._data_reindex_at = 0.0
+        conn_manager.get_active_connection_info.return_value = mock_conn_info
+
+        from deriva_mcp.resources import register_resources
+        from tests.conftest import _create_resource_capture
+        mcp, resources = _create_resource_capture()
+        register_resources(mcp, conn_manager)
+
+        # The resource URI for dataset details is parameterized by RID
+        # Resources are synchronous functions called directly with the parameter
+        result = json.loads(resources["deriva://dataset/{dataset_rid}"]("1-ABC"))
+        assert "_related_data" in result
+        assert len(result["_related_data"]) >= 1
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager")
+    def test_related_data_excludes_self(self, mock_get_rag):
+        """Self-references (same RID) must be filtered out."""
+        mock_manager = MagicMock()
+        mock_manager.search.return_value = [
+            {"text": "## Dataset: Same (RID: 1-ABC)", "relevance": 0.99,
+             "source": "data:test:1:user1", "section_heading": "## Dataset: Same (RID: 1-ABC)",
+             "doc_type": "catalog-data"},
+        ]
+        mock_get_rag.return_value = mock_manager
+
+        conn_manager = MagicMock()
+        mock_ml = MagicMock()
+        mock_ds = MagicMock()
+        mock_ds.dataset_rid = "1-ABC"
+        mock_ds.description = "Training dataset"
+        mock_ds.dataset_types = ["Training"]
+        mock_ds.current_version = "1.0"
+        mock_ds.list_dataset_members.return_value = {}
+        mock_ds.dataset_history.return_value = []
+        mock_ds.list_dataset_children.return_value = []
+        mock_ds.list_dataset_parents.return_value = []
+        mock_ml.lookup_dataset.return_value = mock_ds
+        conn_manager.get_active_or_raise.return_value = mock_ml
+        mock_conn_info = MagicMock()
+        mock_conn_info.user_id = "user1"
+        mock_conn_info.hostname = "test"
+        mock_conn_info.catalog_id = "1"
+        mock_conn_info.data_dirty = False
+        mock_conn_info._data_reindex_at = 0.0
+        conn_manager.get_active_connection_info.return_value = mock_conn_info
+
+        from deriva_mcp.resources import register_resources
+        from tests.conftest import _create_resource_capture
+        mcp, resources = _create_resource_capture()
+        register_resources(mcp, conn_manager)
+
+        result = json.loads(resources["deriva://dataset/{dataset_rid}"]("1-ABC"))
+        related = result.get("_related_data", [])
+        assert all(r.get("rid") != "1-ABC" for r in related)
