@@ -322,7 +322,7 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
             # Layer 5: Mark data dirty when inserting into indexed tables
             from deriva_mcp.rag.data import DEFAULT_INDEXED_TABLES
-            if table_name in DEFAULT_INDEXED_TABLES or table_name in ("Dataset", "Execution"):
+            if table_name in DEFAULT_INDEXED_TABLES:
                 conn_info = conn_manager.get_active_connection_info()
                 if conn_info:
                     conn_info.data_dirty = True

@@ -178,9 +178,10 @@ def rag_enrich_resource(
         if relevance < ENRICHMENT_RELEVANCE_THRESHOLD:
             continue
         url = r.get("github_url", "")
-        if url in seen_urls:
+        if url and url in seen_urls:
             continue
-        seen_urls.add(url)
+        if url:
+            seen_urls.add(url)
         enriched.append({"title": r.get("section_heading", "") or r.get("path", ""),
                          "source": r.get("source", ""), "url": url, "relevance": relevance})
         if len(enriched) >= limit:
@@ -237,16 +238,18 @@ def rag_suggest_record(
     suggestions = []
     for r in results:
         heading = r.get("section_heading", "")
-        name = heading
+        # Strip markdown heading prefix if present
+        clean_heading = re.sub(r"^#+\s*", "", heading)
+        name = clean_heading
         rid = ""
-        if "(RID:" in heading:
-            parts = heading.split("(RID:")
+        if "(RID:" in clean_heading:
+            parts = clean_heading.split("(RID:")
             name = parts[0].strip().split(":", 1)[-1].strip() if ":" in parts[0] else parts[0].strip()
             rid = parts[1].replace(")", "").strip()
         table = ""
-        if heading.startswith("## Dataset:"):
+        if clean_heading.startswith("Dataset:"):
             table = "Dataset"
-        elif heading.startswith("## Execution:"):
+        elif clean_heading.startswith("Execution:"):
             table = "Execution"
         suggestions.append({"name": name, "table": table, "rid": rid,
                            "relevance": r.get("relevance", 0), "description": r.get("text", "")[:200]})

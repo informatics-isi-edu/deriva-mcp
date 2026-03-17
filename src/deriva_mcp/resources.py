@@ -1260,10 +1260,16 @@ multirun_config(
             if features:
                 result["features"] = features
 
-            # Layer 4: Enrich with related docs
+            # Layer 4: Enrich with related docs (contextual query based on table type)
             from deriva_mcp.rag.helpers import rag_enrich_resource
             conn_info = conn_manager.get_active_connection_info()
-            related = rag_enrich_resource(f"table {table_name}", conn_info)
+            if result.get("is_vocabulary"):
+                enrich_query = f"vocabulary table {table_name} terms synonyms"
+            elif result.get("is_asset"):
+                enrich_query = f"asset table {table_name} files upload"
+            else:
+                enrich_query = f"table {table_name} columns foreign keys"
+            related = rag_enrich_resource(enrich_query, conn_info)
             if related:
                 result["_related_docs"] = related
             return json.dumps(result, indent=2)
