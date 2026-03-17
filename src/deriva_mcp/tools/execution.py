@@ -161,6 +161,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             execution = ml.create_execution(config, dry_run=dry_run)
             _set_active_tool_execution(execution)
 
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "created",
                 "execution_rid": execution.execution_rid,
@@ -216,6 +220,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
             execution.execution_stop()
 
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
+
             return json.dumps({
                 "status": "completed",
                 "execution_rid": execution.execution_rid,
@@ -256,6 +264,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
             status_enum = status_map.get(status.lower(), Status.running)
             execution.update_status(status_enum, message)
+
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
 
             return json.dumps({
                 "status": "updated",
@@ -590,6 +602,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 description=description,
                 dataset_types=dataset_types or [],
             )
+
+            conn_info = conn_manager.get_active_connection_info()
+            if conn_info:
+                conn_info.data_dirty = True
 
             return json.dumps({
                 "status": "created",
