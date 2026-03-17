@@ -108,6 +108,8 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 metadata=metadata or [],
                 comment=comment,
             )
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
             return json.dumps(
                 {
                     "status": "created",
@@ -137,6 +139,8 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             success = ml.delete_feature(table_name, feature_name)
             if success:
+                from deriva_mcp.rag.helpers import trigger_schema_reindex
+                trigger_schema_reindex(conn_manager.get_active_connection_info())
                 return json.dumps(
                     {
                         "status": "deleted",
