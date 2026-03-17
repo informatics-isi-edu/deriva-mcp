@@ -106,6 +106,17 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
         """
         try:
             ml = conn_manager.get_active_or_raise()
+
+            # Layer 3: Check for semantic near-duplicates
+            from deriva_mcp.rag.helpers import rag_suggest_entity, DUPLICATE_RELEVANCE_THRESHOLD
+            conn_info = conn_manager.get_active_connection_info()
+            similar = rag_suggest_entity(vocabulary_name, conn_info, limit=3)
+            dup_warnings = [
+                s for s in similar
+                if s["relevance"] > DUPLICATE_RELEVANCE_THRESHOLD
+                and s["name"].lower() != vocabulary_name.lower()
+            ]
+
             table = ml.create_vocabulary(
                 vocab_name=vocabulary_name,
                 comment=comment,
@@ -113,12 +124,20 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             )
             from deriva_mcp.rag.helpers import trigger_schema_reindex
             trigger_schema_reindex(conn_manager.get_active_connection_info())
-            return json.dumps({
+            result = {
                 "status": "created",
                 "name": table.name,
                 "schema": table.schema.name,
                 "comment": comment,
-            })
+            }
+            if dup_warnings:
+                result["similar_existing"] = dup_warnings
+                result["warning"] = (
+                    f"Created '{vocabulary_name}', but similar entities exist: "
+                    f"{', '.join(w['name'] for w in dup_warnings)}. "
+                    f"Verify this isn't a duplicate."
+                )
+            return json.dumps(result)
         except Exception as e:
             logger.error(f"Failed to create vocabulary: {e}")
             return json.dumps({"status": "error", "message": str(e)})
