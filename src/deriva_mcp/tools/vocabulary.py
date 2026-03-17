@@ -71,7 +71,19 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
                 except Exception:
                     pass
             logger.error(f"Failed to add term: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_entity(vocabulary_name, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def create_vocabulary(
@@ -250,4 +262,16 @@ def register_vocabulary_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> 
             })
         except Exception as e:
             logger.error(f"Failed to delete term: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Layer 2: Suggest alternatives on entity-not-found errors
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_entity(vocabulary_name, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
+
+            return json.dumps(result)
