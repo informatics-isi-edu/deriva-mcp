@@ -204,3 +204,53 @@ class TestRagSuggestRecord:
         conn_info = MagicMock()
         conn_info.user_id = None
         assert rag_suggest_record("training", conn_info) == []
+
+
+class TestGracefulDegradation:
+    """Verify all helpers are no-ops when RAG is unavailable."""
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager", return_value=None)
+    def test_suggest_entity_noop(self, _):
+        from deriva_mcp.rag.helpers import rag_suggest_entity
+        assert rag_suggest_entity("test", MagicMock()) == []
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager", return_value=None)
+    def test_suggest_record_noop(self, _):
+        from deriva_mcp.rag.helpers import rag_suggest_record
+        assert rag_suggest_record("test", MagicMock()) == []
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager", return_value=None)
+    def test_enrich_resource_noop(self, _):
+        from deriva_mcp.rag.helpers import rag_enrich_resource
+        assert rag_enrich_resource("test", MagicMock()) == []
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager", return_value=None)
+    def test_trigger_schema_reindex_noop(self, _):
+        from deriva_mcp.rag.helpers import trigger_schema_reindex
+        trigger_schema_reindex(MagicMock())
+
+    @patch("deriva_mcp.rag.helpers.get_rag_manager", return_value=None)
+    def test_trigger_data_reindex_noop(self, _):
+        from deriva_mcp.rag.helpers import trigger_data_reindex
+        trigger_data_reindex(MagicMock())
+
+
+class TestDebounce:
+    """Verify debounce prevents rapid reindex."""
+
+    @patch("deriva_mcp.rag.helpers.threading.Thread")
+    @patch("deriva_mcp.rag.helpers.get_rag_manager")
+    def test_rapid_calls_debounced(self, mock_get_rag, mock_thread_cls):
+        from deriva_mcp.rag.helpers import trigger_schema_reindex
+        mock_get_rag.return_value = MagicMock()
+
+        conn_info = MagicMock()
+        conn_info._schema_reindex_at = 0.0
+
+        # First call should trigger
+        trigger_schema_reindex(conn_info)
+        assert mock_thread_cls.call_count == 1
+
+        # Rapid second call should be debounced
+        trigger_schema_reindex(conn_info)
+        assert mock_thread_cls.call_count == 1  # Still 1
