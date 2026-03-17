@@ -133,6 +133,9 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 comment=comment,
             )
             table = ml.create_table(table_def, schema=schema)
+            # Layer 1: Trigger schema reindex after structural change
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
             return json.dumps({
                 "status": "created",
                 "table_name": table.name,
@@ -208,6 +211,9 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 comment=comment,
                 schema=schema,
             )
+            # Layer 1: Trigger schema reindex after structural change
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
             return json.dumps({
                 "status": "created",
                 "table_name": table.name,
@@ -517,7 +523,9 @@ def register_schema_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None
                 default=default,
                 comment=comment,
             )
-
+            # Layer 1: Trigger schema reindex after structural change
+            from deriva_mcp.rag.helpers import trigger_schema_reindex
+            trigger_schema_reindex(conn_manager.get_active_connection_info())
             return json.dumps({
                 "status": "created",
                 "table_name": table_name,
