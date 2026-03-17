@@ -159,6 +159,7 @@ def mock_conn_manager():
     conn_info.ml_instance.list_vocabulary_terms.return_value = [mock_term]
 
     conn_info.schema_hash = "abc123"
+    conn_info.user_id = "test_user"
     conn_manager.get_active_connection_info.return_value = conn_info
     return conn_manager
 
@@ -195,13 +196,14 @@ class TestRagSearch:
         """rag_search delegates to manager.search and returns merged results."""
         doc_results = _make_search_results(2)
         schema_results = _make_schema_search_results(1)
-        mock_rag_manager.search.side_effect = [doc_results, schema_results]
+        data_results = []
+        mock_rag_manager.search.side_effect = [doc_results, schema_results, data_results]
 
         with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
             result = rag_tools["rag_search"](query="how to create a dataset")
 
         assert result["query"] == "how to create a dataset"
-        assert result["result_count"] == 3  # 2 doc + 1 schema
+        assert result["result_count"] == 3  # 2 doc + 1 schema + 0 data
         assert len(result["results"]) == 3
 
     def test_search_with_source_filter(self, rag_tools, mock_rag_manager):
@@ -247,9 +249,10 @@ class TestRagSearch:
         """rag_search merges doc and schema results when connected."""
         doc_results = _make_search_results(2)
         schema_results = _make_schema_search_results(1)
+        data_results = []
 
-        # First call = doc search, second call = schema search
-        mock_rag_manager.search.side_effect = [doc_results, schema_results]
+        # First call = doc search, second call = schema search, third call = data search
+        mock_rag_manager.search.side_effect = [doc_results, schema_results, data_results]
 
         with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
             result = rag_tools["rag_search"](query="image table")
@@ -263,7 +266,8 @@ class TestRagSearch:
         """rag_search truncates merged results to the limit."""
         doc_results = _make_search_results(3)
         schema_results = _make_schema_search_results(3)
-        mock_rag_manager.search.side_effect = [doc_results, schema_results]
+        data_results = []
+        mock_rag_manager.search.side_effect = [doc_results, schema_results, data_results]
 
         with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
             result = rag_tools["rag_search"](query="tables", limit=2)
@@ -283,7 +287,7 @@ class TestRagSearch:
 
     def test_search_include_schema_false(self, rag_tools, mock_rag_manager):
         """rag_search skips schema search when include_schema=False."""
-        mock_rag_manager.search.return_value = _make_search_results(1)
+        mock_rag_manager.search.side_effect = [_make_search_results(1), []]
 
         with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
             result = rag_tools["rag_search"](
@@ -291,20 +295,20 @@ class TestRagSearch:
                 include_schema=False,
             )
 
-        # Only one call (doc search)
-        mock_rag_manager.search.assert_called_once_with(query="dataset", limit=10)
+        # Two calls: doc search + data search (schema skipped)
+        assert mock_rag_manager.search.call_count == 2
         assert result["result_count"] == 1
 
     def test_search_schema_source_name_correct(self, rag_tools, mock_rag_manager):
         """rag_search uses correct schema source name from connection info."""
-        mock_rag_manager.search.side_effect = [[], []]
+        mock_rag_manager.search.side_effect = [[], [], []]
 
         with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
             rag_tools["rag_search"](query="image columns")
 
-        # Second call should use schema source
+        # Second call should use schema source, third call uses data source
         calls = mock_rag_manager.search.call_args_list
-        assert len(calls) == 2
+        assert len(calls) == 3
         assert calls[1].kwargs.get("source") == "schema:test.example.org:1:abc123"
 
     def test_search_rag_not_initialized(self, rag_tools):
