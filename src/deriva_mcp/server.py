@@ -143,6 +143,11 @@ Always call `connect_catalog` before using other tools. This establishes the con
 - `deriva://table/{table}/feature-values/first` - One per record (earliest)
 - `deriva://table/{table}/feature-values/majority_vote` - One per record (consensus)
 
+**Before running an experiment (pre-flight checklist):**
+1. `validate_rids` - Verify all dataset and asset RIDs exist and versions are valid
+2. `bag_info` - Check dataset sizes and local cache status
+3. `cache_dataset` - Download datasets/assets into local cache ahead of time (no execution needed)
+
 **Running workflows:**
 1. `create_execution` - Start a tracked execution
 2. `start_execution` / `stop_execution` - Manage execution lifecycle

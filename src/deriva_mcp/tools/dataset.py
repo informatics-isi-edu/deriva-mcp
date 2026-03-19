@@ -931,6 +931,161 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
+    async def bag_info(
+        dataset_rid: str,
+        version: str,
+        exclude_tables: list[str] | None = None,
+    ) -> str:
+        """Get comprehensive info about a dataset bag: size, contents, and cache status.
+
+        Combines the size estimate (row counts, asset sizes per table) with
+        local cache status. Use this to decide whether to prefetch a bag
+        before running an experiment.
+
+        Cache status values:
+        - "not_cached": No local copy exists
+        - "cached_metadata_only": Table data downloaded, assets not fetched
+        - "cached_materialized": Fully downloaded and validated
+        - "cached_incomplete": Was cached but some assets are missing
+
+        Args:
+            dataset_rid: RID of the dataset to inspect.
+            version: Semantic version to inspect (e.g., "1.0.0").
+            exclude_tables: Optional list of table names to exclude from FK
+                path traversal.
+
+        Returns:
+            JSON with size info (tables, total_rows, total_asset_bytes,
+            total_asset_size) plus cache_status and cache_path.
+        """
+        try:
+            from deriva_ml.dataset.aux_classes import DatasetSpec
+
+            ml = conn_manager.get_active_or_raise()
+            spec = DatasetSpec(
+                rid=dataset_rid,
+                version=version,
+                exclude_tables=set(exclude_tables) if exclude_tables else None,
+            )
+            info = ml.bag_info(spec)
+            return json.dumps({"status": "success"} | info)
+        except Exception as e:
+            logger.error(f"Failed to get bag info: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
+    async def cache_dataset(
+        dataset_rid: str | None = None,
+        asset_rid: str | None = None,
+        version: str | None = None,
+        materialize: bool = True,
+        exclude_tables: list[str] | None = None,
+    ) -> str:
+        """Download a dataset bag or asset into the local cache without creating an execution.
+
+        Use this to warm the cache before running experiments. No execution or
+        provenance records are created — this is purely a local download
+        operation. After prefetching, subsequent download_dataset or
+        download_execution_dataset calls will use the cached copy.
+
+        Provide either dataset_rid (for bags) or asset_rid (for individual
+        assets), not both.
+
+        Args:
+            dataset_rid: RID of a dataset to prefetch (mutually exclusive with asset_rid).
+            asset_rid: RID of an asset to prefetch (mutually exclusive with dataset_rid).
+            version: Dataset version to prefetch (required when using dataset_rid).
+            materialize: If True (default), download all asset files in the bag.
+                If False, download only table metadata (faster, smaller).
+                Ignored for asset prefetch.
+            exclude_tables: Optional list of table names to exclude from FK
+                path traversal during bag export. Only applies to dataset prefetch.
+
+        Returns:
+            JSON with prefetch results. For datasets: bag_info including
+            cache_status and size. For assets: file path and metadata.
+        """
+        try:
+            ml = conn_manager.get_active_or_raise()
+
+            if dataset_rid and asset_rid:
+                return json.dumps({
+                    "status": "error",
+                    "message": "Provide either dataset_rid or asset_rid, not both.",
+                })
+
+            if dataset_rid:
+                if not version:
+                    dataset = ml.lookup_dataset(dataset_rid)
+                    version = str(dataset.current_version)
+
+                from deriva_ml.dataset.aux_classes import DatasetSpec
+                spec = DatasetSpec(
+                    rid=dataset_rid,
+                    version=version,
+                    materialize=materialize,
+                    exclude_tables=set(exclude_tables) if exclude_tables else None,
+                )
+                result = ml.prefetch_dataset(spec, materialize=materialize)
+                return json.dumps({"status": "success", "type": "dataset"} | result)
+
+            elif asset_rid:
+                # Download asset to cache without provenance
+                from pathlib import Path
+                cache_dir = ml.cache_dir / "assets"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+
+                # Resolve the asset to get its metadata
+                asset_table = ml.resolve_rid(asset_rid).table
+                asset_record = ml.retrieve_rid(asset_rid)
+                asset_url = asset_record.get("URL")
+                filename = asset_record.get("Filename", "unknown")
+                md5 = asset_record.get("MD5")
+
+                # Check cache first
+                if md5:
+                    cache_key = f"{asset_rid}_{md5}"
+                    cached_file = cache_dir / cache_key / filename
+                    if cached_file.exists():
+                        return json.dumps({
+                            "status": "success",
+                            "type": "asset",
+                            "cache_status": "cached",
+                            "file_path": str(cached_file),
+                            "asset_table": asset_table.name if hasattr(asset_table, "name") else str(asset_table),
+                            "filename": filename,
+                        })
+
+                # Download the asset
+                asset_dest = cache_dir / f"{asset_rid}_{md5 or 'nomd5'}"
+                asset_dest.mkdir(parents=True, exist_ok=True)
+                dest_file = asset_dest / filename
+
+                from deriva.core import get_credential
+                hostname = ml.catalog.deriva_server.server
+                credentials = get_credential(hostname)
+                from bdbag.fetch.fetcher import fetch_single_file
+                fetch_single_file(asset_url, output_path=dest_file)
+
+                return json.dumps({
+                    "status": "success",
+                    "type": "asset",
+                    "cache_status": "cached",
+                    "file_path": str(dest_file),
+                    "asset_table": asset_table.name if hasattr(asset_table, "name") else str(asset_table),
+                    "filename": filename,
+                })
+
+            else:
+                return json.dumps({
+                    "status": "error",
+                    "message": "Provide either dataset_rid or asset_rid.",
+                })
+        except Exception as e:
+            logger.error(f"Failed to cache dataset: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
+    @mcp.tool()
     async def validate_dataset_bag(
         dataset_rid: str,
         version: str | None = None,
