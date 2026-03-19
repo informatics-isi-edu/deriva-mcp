@@ -148,25 +148,34 @@ def _table_to_markdown(
 
             # Term columns (vocabulary-based values)
             for col in f.get("term_columns", []):
-                col_line = f"  - Term: **{col['name']}**"
+                req = "required" if col.get("required") else "optional"
+                col_line = f"  - Term: **{col['name']}** [{req}]"
                 if col.get("vocabulary"):
                     col_line += f" (vocabulary: {col['vocabulary']})"
+                if col.get("default"):
+                    col_line += f" [default: {col['default']}]"
                 if col.get("comment"):
                     col_line += f" — {col['comment']}"
                 feat_lines.append(col_line)
 
             # Asset columns
             for col in f.get("asset_columns", []):
-                col_line = f"  - Asset: **{col['name']}**"
+                req = "required" if col.get("required") else "optional"
+                col_line = f"  - Asset: **{col['name']}** [{req}]"
+                if col.get("asset_table"):
+                    col_line += f" (table: {col['asset_table']})"
                 if col.get("comment"):
                     col_line += f" — {col['comment']}"
                 feat_lines.append(col_line)
 
             # Value/metadata columns
             for col in f.get("value_columns", []):
-                col_line = f"  - Value: **{col['name']}**"
+                req = "required" if col.get("required") else "optional"
+                col_line = f"  - Value: **{col['name']}** [{req}]"
                 if col.get("type"):
                     col_line += f" ({col['type']})"
+                if col.get("default"):
+                    col_line += f" [default: {col['default']}]"
                 if col.get("comment"):
                     col_line += f" — {col['comment']}"
                 feat_lines.append(col_line)

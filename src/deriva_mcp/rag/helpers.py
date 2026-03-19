@@ -112,10 +112,13 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
                                     "value_columns": [],
                                 }
                                 for col in feat.term_columns:
-                                    col_info: dict[str, str] = {"name": col.name}
+                                    col_info: dict[str, Any] = {"name": col.name}
+                                    col_info["required"] = not getattr(col, "nullok", True)
                                     if hasattr(col, "comment") and col.comment:
                                         col_info["comment"] = col.comment
-                                    # Include the vocabulary terms for this column
+                                    if hasattr(col, "default") and col.default is not None:
+                                        col_info["default"] = str(col.default)
+                                    # Include the vocabulary table for this column
                                     if hasattr(col, "references") and col.references:
                                         for ref in col.references:
                                             vocab_table = ref.pk_table.name if hasattr(ref, "pk_table") else ""
@@ -124,13 +127,25 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
                                     detail["term_columns"].append(col_info)
                                 for col in feat.asset_columns:
                                     col_info = {"name": col.name}
+                                    col_info["required"] = not getattr(col, "nullok", True)
                                     if hasattr(col, "comment") and col.comment:
                                         col_info["comment"] = col.comment
+                                    if hasattr(col, "default") and col.default is not None:
+                                        col_info["default"] = str(col.default)
+                                    # Include the asset table reference
+                                    if hasattr(col, "references") and col.references:
+                                        for ref in col.references:
+                                            asset_table = ref.pk_table.name if hasattr(ref, "pk_table") else ""
+                                            if asset_table:
+                                                col_info["asset_table"] = asset_table
                                     detail["asset_columns"].append(col_info)
                                 for col in feat.value_columns:
                                     col_info = {"name": col.name}
+                                    col_info["required"] = not getattr(col, "nullok", True)
                                     if hasattr(col, "comment") and col.comment:
                                         col_info["comment"] = col.comment
+                                    if hasattr(col, "default") and col.default is not None:
+                                        col_info["default"] = str(col.default)
                                     if hasattr(col, "type") and col.type:
                                         col_info["type"] = str(col.type.typename) if hasattr(col.type, "typename") else str(col.type)
                                     detail["value_columns"].append(col_info)
