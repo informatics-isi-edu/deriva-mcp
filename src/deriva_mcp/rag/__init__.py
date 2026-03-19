@@ -466,6 +466,7 @@ class RAGManager:
         hostname: str,
         catalog_id: str | int,
         vocabulary_terms: dict[str, list[dict[str, str]]] | None = None,
+        feature_details: dict[str, list[dict[str, Any]]] | None = None,
     ) -> dict[str, Any]:
         """Index a catalog's schema for RAG search.
 
@@ -480,6 +481,11 @@ class RAGManager:
             vocabulary_terms: Optional mapping of vocabulary table names to their
                 term lists. Included in the index so RAG can answer questions
                 about available vocabulary values.
+            feature_details: Optional mapping of table names to enriched feature
+                definitions (columns, descriptions, vocabulary references).
+                Included so RAG can answer "what features exist on Image?" and
+                "what columns does the Diagnosis feature have?" Feature visibility
+                is per-user — only features the connected user can see are indexed.
 
         Returns:
             Dict with indexing statistics.
@@ -495,6 +501,7 @@ class RAGManager:
             chunk_size_target=self._config.chunk_size_target,
             overlap_sentences=self._config.chunk_overlap_sentences,
             vocabulary_terms=vocabulary_terms,
+            feature_details=feature_details,
         )
 
     def find_schema_source(

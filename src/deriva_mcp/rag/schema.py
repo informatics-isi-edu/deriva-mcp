@@ -74,6 +74,7 @@ def _table_to_markdown(
     table_name: str,
     table_info: dict[str, Any],
     vocabulary_terms: list[dict[str, Any]] | None = None,
+    feature_details: list[dict[str, Any]] | None = None,
 ) -> str:
     """Render a single table as a markdown document.
 
@@ -85,6 +86,10 @@ def _table_to_markdown(
             ``Description``, and optionally ``Synonyms`` (list of strings).
             Included for vocabulary tables so RAG can answer
             "what values are available?" questions.
+        feature_details: Optional list of enriched feature dicts with
+            ``name``, ``comment``, ``term_columns``, ``asset_columns``,
+            ``value_columns``. Included so RAG can answer "what columns
+            does this feature have?" questions.
     """
     parts: list[str] = []
 
@@ -126,14 +131,56 @@ def _table_to_markdown(
             fk_lines.append(f"- {cols} → {ref} ({ref_cols})")
         parts.append("\n".join(fk_lines))
 
-    # Features
-    features = table_info.get("features", [])
-    if features:
+    # Features — use enriched details when available, fall back to basic schema info
+    if feature_details:
         parts.append("### Features")
         feat_lines = []
-        for f in features:
-            feat_lines.append(f"- **{f['name']}** (table: {f['feature_table']})")
+        for f in feature_details:
+            name = f.get("name", "")
+            comment = f.get("comment", "")
+            feat_table = f.get("feature_table", "")
+            header = f"- **{name}**"
+            if feat_table:
+                header += f" (table: {feat_table})"
+            if comment:
+                header += f" — {comment}"
+            feat_lines.append(header)
+
+            # Term columns (vocabulary-based values)
+            for col in f.get("term_columns", []):
+                col_line = f"  - Term: **{col['name']}**"
+                if col.get("vocabulary"):
+                    col_line += f" (vocabulary: {col['vocabulary']})"
+                if col.get("comment"):
+                    col_line += f" — {col['comment']}"
+                feat_lines.append(col_line)
+
+            # Asset columns
+            for col in f.get("asset_columns", []):
+                col_line = f"  - Asset: **{col['name']}**"
+                if col.get("comment"):
+                    col_line += f" — {col['comment']}"
+                feat_lines.append(col_line)
+
+            # Value/metadata columns
+            for col in f.get("value_columns", []):
+                col_line = f"  - Value: **{col['name']}**"
+                if col.get("type"):
+                    col_line += f" ({col['type']})"
+                if col.get("comment"):
+                    col_line += f" — {col['comment']}"
+                feat_lines.append(col_line)
+
         parts.append("\n".join(feat_lines))
+    else:
+        # Fall back to basic feature info from schema
+        features = table_info.get("features", [])
+        if features:
+            parts.append("### Features")
+            feat_lines = []
+            for f in features:
+                feat_lines.append(f"- **{f['name']}** (table: {f['feature_table']})")
+            parts.append("\n".join(feat_lines))
 
     # Vocabulary terms (for vocabulary tables)
     if vocabulary_terms:
@@ -157,6 +204,7 @@ def _table_to_markdown(
 def schema_to_markdown(
     schema_info: dict[str, Any],
     vocabulary_terms: dict[str, list[dict[str, Any]]] | None = None,
+    feature_details: dict[str, list[dict[str, Any]]] | None = None,
 ) -> str:
     """Convert a full catalog schema description to a markdown document.
 
@@ -167,11 +215,15 @@ def schema_to_markdown(
             ``Synonyms`` keys). Vocabulary terms are included in the
             markdown so RAG can answer questions like "what diagnosis
             types exist?"
+        feature_details: Optional mapping of ``table_name`` to enriched
+            feature definitions with columns, descriptions, and vocabulary
+            references.
 
     Returns:
         A single markdown string covering all tables.
     """
     vocab_terms = vocabulary_terms or {}
+    feat_details = feature_details or {}
     parts: list[str] = []
 
     domain_schemas = schema_info.get("domain_schemas", [])
@@ -185,7 +237,8 @@ def schema_to_markdown(
         tables = schema_data.get("tables", {})
         for table_name, table_info in sorted(tables.items()):
             terms = vocab_terms.get(table_name)
-            parts.append(_table_to_markdown(schema_name, table_name, table_info, terms))
+            features = feat_details.get(table_name)
+            parts.append(_table_to_markdown(schema_name, table_name, table_info, terms, features))
 
     return "\n\n".join(parts)
 
@@ -235,6 +288,7 @@ def index_catalog_schema(
     chunk_size_target: int = 800,
     overlap_sentences: int = 1,
     vocabulary_terms: dict[str, list[dict[str, Any]]] | None = None,
+    feature_details: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """Index a catalog schema into the RAG collection.
 
@@ -253,6 +307,8 @@ def index_catalog_schema(
         vocabulary_terms: Optional mapping of vocabulary table names to their
             term lists (each term has ``Name``, ``Description``, and
             optionally ``Synonyms``).
+        feature_details: Optional mapping of table names to enriched feature
+            definitions with columns, descriptions, and vocabulary references.
 
     Returns:
         Dict with indexing statistics.
@@ -272,7 +328,7 @@ def index_catalog_schema(
     _remove_schema_chunks(collection, source)
 
     # Convert to markdown and chunk
-    markdown = schema_to_markdown(schema_info, vocabulary_terms=vocabulary_terms)
+    markdown = schema_to_markdown(schema_info, vocabulary_terms=vocabulary_terms, feature_details=feature_details)
     chunks = chunk_markdown(
         markdown,
         chunk_size_target=chunk_size_target,
