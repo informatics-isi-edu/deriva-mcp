@@ -1210,7 +1210,7 @@ class TestDownloadDataset:
         assert data["bag_path"] == "/tmp/bags/DS-001"
         mock_spec_cls.assert_called_once_with(
             rid="DS-001", version="1.0.0", materialize=True,
-            exclude_tables=None, timeout=None,
+            exclude_tables=None, timeout=None, fetch_concurrency=8,
         )
         mock_ml.download_dataset_bag.assert_called_once_with(mock_spec_instance)
 
@@ -1241,7 +1241,7 @@ class TestDownloadDataset:
         assert data["status"] == "downloaded"
         mock_spec_cls.assert_called_once_with(
             rid="DS-001", version="1.0.0", materialize=False,
-            exclude_tables=None, timeout=None,
+            exclude_tables=None, timeout=None, fetch_concurrency=8,
         )
 
     @pytest.mark.asyncio
@@ -2059,7 +2059,7 @@ class TestToolRegistration:
 
     def test_no_extra_tools(self, dataset_tools):
         """Only the expected tools should be registered."""
-        expected_count = 23
+        expected_count = 25
         assert len(dataset_tools) == expected_count, (
             f"Expected {expected_count} tools, got {len(dataset_tools)}: "
             f"{sorted(dataset_tools.keys())}"

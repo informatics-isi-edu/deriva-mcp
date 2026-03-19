@@ -1517,6 +1517,8 @@ class TestResourceRegistration:
         # New resources
         "deriva://table/{table_name}/feature-values",
         "deriva://table/{table_name}/feature-values/newest",
+        "deriva://table/{table_name}/feature-values/first",
+        "deriva://table/{table_name}/feature-values/majority_vote",
         "deriva://dataset/{dataset_rid}/bag-preview",
         "deriva://catalog/element-type-paths",
     ]
