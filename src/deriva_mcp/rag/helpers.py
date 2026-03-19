@@ -114,6 +114,8 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
                                 for col in feat.term_columns:
                                     col_info: dict[str, Any] = {"name": col.name}
                                     col_info["required"] = not getattr(col, "nullok", True)
+                                    if hasattr(col, "type") and col.type:
+                                        col_info["type"] = str(col.type.typename) if hasattr(col.type, "typename") else str(col.type)
                                     if hasattr(col, "comment") and col.comment:
                                         col_info["comment"] = col.comment
                                     if hasattr(col, "default") and col.default is not None:
@@ -128,6 +130,8 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
                                 for col in feat.asset_columns:
                                     col_info = {"name": col.name}
                                     col_info["required"] = not getattr(col, "nullok", True)
+                                    if hasattr(col, "type") and col.type:
+                                        col_info["type"] = str(col.type.typename) if hasattr(col.type, "typename") else str(col.type)
                                     if hasattr(col, "comment") and col.comment:
                                         col_info["comment"] = col.comment
                                     if hasattr(col, "default") and col.default is not None:
