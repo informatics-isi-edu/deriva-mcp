@@ -1218,6 +1218,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         enforce_vocabulary: bool = True,
         version: str | None = None,
         materialize: bool = True,
+        value_selector: str | None = None,
     ) -> str:
         """Restructure dataset assets into a directory hierarchy for ML workflows.
 
@@ -1282,6 +1283,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             version: Specific dataset version to download (default: current).
             materialize: If True (default), download all asset files. If False,
                 only download metadata (assets won't be available for restructuring).
+            value_selector: How to resolve conflicts when an asset has multiple
+                values for a feature. Supported: "newest", "first", "latest",
+                "majority_vote". If not provided, raises an error when multiple
+                different values exist (with enforce_vocabulary=True) or uses
+                the first value found (with enforce_vocabulary=False).
 
         Returns:
             JSON with status, output_dir path, and count of restructured assets.
@@ -1351,6 +1357,40 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
             bag = ml.download_dataset_bag(spec)
 
+            # Resolve value_selector string to callable
+            selector_fn = None
+            if value_selector:
+                from deriva_ml.feature import FeatureRecord
+
+                if value_selector == "newest":
+                    selector_fn = FeatureRecord.select_newest
+                elif value_selector == "first":
+                    selector_fn = FeatureRecord.select_first
+                elif value_selector == "latest":
+                    selector_fn = FeatureRecord.select_latest
+                elif value_selector == "majority_vote":
+                    # For restructure, majority_vote needs column info from the feature
+                    # Auto-detection will happen inside _load_feature_values_cache
+                    # We need to look up the feature to get the record class
+                    if group_by:
+                        feature_name = group_by[0].split(".")[0] if "." in group_by[0] else group_by[0]
+                        try:
+                            feat = bag.lookup_feature(asset_table, feature_name)
+                            RecordClass = feat.feature_record_class()
+                            selector_fn = RecordClass.select_majority_vote()
+                        except Exception:
+                            selector_fn = FeatureRecord.select_majority_vote(None)
+                    else:
+                        return json.dumps({
+                            "status": "error",
+                            "message": "value_selector='majority_vote' requires group_by to be specified.",
+                        })
+                else:
+                    return json.dumps({
+                        "status": "error",
+                        "message": f"Unknown value_selector '{value_selector}'. Supported: 'newest', 'first', 'latest', 'majority_vote'.",
+                    })
+
             # Restructure the assets
             file_map = bag.restructure_assets(
                 asset_table=asset_table,
@@ -1358,6 +1398,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 group_by=group_by or [],
                 use_symlinks=use_symlinks,
                 enforce_vocabulary=enforce_vocabulary,
+                value_selector=selector_fn,
             )
 
             # file_map is a dict[Path, Path] mapping source -> dest
