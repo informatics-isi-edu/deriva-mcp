@@ -793,6 +793,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         materialize: bool = True,
         exclude_tables: list[str] | None = None,
         timeout: list[int] | None = None,
+        fetch_concurrency: int = 8,
     ) -> str:
         """Download a dataset version as a BDBag for local processing.
 
@@ -849,6 +850,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 materialize=materialize,
                 exclude_tables=set(exclude_tables) if exclude_tables else None,
                 timeout=tuple(timeout) if timeout else None,
+                fetch_concurrency=fetch_concurrency,
             )
             bag = ml.download_dataset_bag(spec)
 
@@ -939,7 +941,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         """Get comprehensive info about a dataset bag: size, contents, and cache status.
 
         Combines the size estimate (row counts, asset sizes per table) with
-        local cache status. Use this to decide whether to prefetch a bag
+        local cache status. Use this to decide whether to cache a bag
         before running an experiment.
 
         Cache status values:
@@ -985,24 +987,24 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
         Use this to warm the cache before running experiments. No execution or
         provenance records are created — this is purely a local download
-        operation. After prefetching, subsequent download_dataset or
+        operation. After caching, subsequent download_dataset or
         download_execution_dataset calls will use the cached copy.
 
         Provide either dataset_rid (for bags) or asset_rid (for individual
         assets), not both.
 
         Args:
-            dataset_rid: RID of a dataset to prefetch (mutually exclusive with asset_rid).
-            asset_rid: RID of an asset to prefetch (mutually exclusive with dataset_rid).
-            version: Dataset version to prefetch (required when using dataset_rid).
+            dataset_rid: RID of a dataset to cache (mutually exclusive with asset_rid).
+            asset_rid: RID of an asset to cache (mutually exclusive with dataset_rid).
+            version: Dataset version to cache (required when using dataset_rid).
             materialize: If True (default), download all asset files in the bag.
                 If False, download only table metadata (faster, smaller).
-                Ignored for asset prefetch.
+                Ignored for asset cache.
             exclude_tables: Optional list of table names to exclude from FK
-                path traversal during bag export. Only applies to dataset prefetch.
+                path traversal during bag export. Only applies to dataset cache.
 
         Returns:
-            JSON with prefetch results. For datasets: bag_info including
+            JSON with cache results. For datasets: bag_info including
             cache_status and size. For assets: file path and metadata.
         """
         try:
@@ -1026,7 +1028,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     materialize=materialize,
                     exclude_tables=set(exclude_tables) if exclude_tables else None,
                 )
-                result = ml.prefetch_dataset(spec, materialize=materialize)
+                result = ml.cache_dataset(spec, materialize=materialize)
                 return json.dumps({"status": "success", "type": "dataset"} | result)
 
             elif asset_rid:
