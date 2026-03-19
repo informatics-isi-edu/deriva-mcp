@@ -440,7 +440,8 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             table_name: Table to fetch features for (e.g., "Image", "Subject").
             feature_name: If provided, only fetch this specific feature.
                 If not provided, fetches all features on the table.
-            selector: Built-in selector name. Currently supported: "newest".
+            selector: Built-in selector name. Supported: "newest", "first",
+                "latest", "majority_vote" (requires feature_name).
                 Picks one value per target object using the most recent RCT.
             workflow: Workflow RID or Workflow_Type name. Filters values to those
                 produced by executions of the matching workflow, then picks the
@@ -485,11 +486,26 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             selector_fn = None
             if selector == "newest":
                 selector_fn = FeatureRecord.select_newest
+            elif selector == "first":
+                selector_fn = FeatureRecord.select_first
+            elif selector == "latest":
+                selector_fn = FeatureRecord.select_latest
+            elif selector == "majority_vote":
+                if not feature_name:
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "message": "selector='majority_vote' requires feature_name to be specified.",
+                        }
+                    )
+                feat = ml.lookup_feature(table_name, feature_name)
+                RecordClass = feat.feature_record_class()
+                selector_fn = RecordClass.select_majority_vote()
             elif selector is not None:
                 return json.dumps(
                     {
                         "status": "error",
-                        "message": f"Unknown selector '{selector}'. Supported: 'newest'.",
+                        "message": f"Unknown selector '{selector}'. Supported: 'newest', 'first', 'latest', 'majority_vote'.",
                     }
                 )
 
