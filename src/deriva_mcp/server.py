@@ -120,11 +120,33 @@ Always call `connect_catalog` before using other tools. This establishes the con
 3. `list_dataset_members` - View dataset contents
 4. `split_dataset` - Create train/test splits with optional stratification
 5. `download_dataset` - Download dataset assets locally
-6. `restructure_assets` - Organize downloaded assets into ML-ready directories
+6. `restructure_assets` - Organize downloaded assets into ML-ready directories (supports `value_selector` for multi-annotator data)
 
 **Adding features:**
 1. `create_feature` - Define a new feature linking a target table to vocabulary terms
 2. `add_feature_value` or `add_feature_value_record` - Assign feature values to records
+3. `fetch_table_features` - Query feature values with deduplication selectors
+
+**Feature value selection** (for resolving multiple values per record):
+- `selector="newest"` - Most recent annotation (default choice)
+- `selector="first"` - Earliest annotation (preserve originals)
+- `selector="latest"` - Alias for newest
+- `selector="majority_vote"` - Consensus label (requires `feature_name`)
+- `workflow="Training"` - Filter by workflow type name or RID
+- `execution="3-XYZ"` - Filter by specific execution RID
+- Only one selection method at a time (mutually exclusive)
+
+**Feature value resources** (pre-deduplicated, no tool call needed):
+- `deriva://catalog/features` - All feature definitions
+- `deriva://table/{table}/feature-values` - All values (raw, no dedup)
+- `deriva://table/{table}/feature-values/newest` - One per record (most recent)
+- `deriva://table/{table}/feature-values/first` - One per record (earliest)
+- `deriva://table/{table}/feature-values/majority_vote` - One per record (consensus)
+
+**Before running an experiment (pre-flight checklist):**
+1. `validate_rids` - Verify all dataset and asset RIDs exist and versions are valid
+2. `bag_info` - Check dataset sizes and local cache status
+3. `cache_dataset` - Download datasets/assets into local cache ahead of time (no execution needed)
 
 **Running workflows:**
 1. `create_execution` - Start a tracked execution

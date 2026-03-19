@@ -1105,6 +1105,90 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
+        "deriva://table/{table_name}/feature-values/first",
+        name="Table Feature Values (First)",
+        description="Feature values for a table, deduplicated to earliest (first) annotation per target object",
+        mime_type="application/json",
+    )
+    def get_table_feature_values_first(table_name: str) -> str:
+        """Return feature values deduplicated to the earliest per target object.
+
+        When an object has multiple values for the same feature, this selects
+        the value with the earliest creation time (by RCT). Useful for preserving
+        original annotations and ignoring later revisions.
+        """
+        ml = conn_manager.get_active_or_raise()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            from deriva_ml.feature import FeatureRecord
+
+            features = ml.fetch_table_features(table_name, selector=FeatureRecord.select_first)
+            result = {fname: [r.model_dump(mode="json") for r in records] for fname, records in features.items()}
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva://table/{table_name}/feature-values/majority_vote",
+        name="Table Feature Values (Majority Vote)",
+        description="Feature values for a table, deduplicated to consensus (majority vote) label per target object",
+        mime_type="application/json",
+    )
+    def get_table_feature_values_majority_vote(table_name: str) -> str:
+        """Return feature values deduplicated by majority vote per target object.
+
+        For each feature, counts values per target object and selects the most
+        common one. Ties are broken by most recent RCT. For features with multiple
+        term columns, auto-detection may fail — use the fetch_table_features tool
+        with selector="majority_vote" and feature_name for explicit control.
+        """
+        ml = conn_manager.get_active_or_raise()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            from collections import defaultdict
+
+            from deriva_ml.feature import FeatureRecord
+
+            features = ml.fetch_table_features(table_name)
+            result = {}
+            for fname, records in features.items():
+                if not records:
+                    result[fname] = []
+                    continue
+                RecordClass = type(records[0])
+                try:
+                    selector = RecordClass.select_majority_vote()
+                except Exception:
+                    # Auto-detection failed (multi-term feature) — fall back to newest
+                    selector = FeatureRecord.select_newest
+
+                feat = ml.lookup_feature(table_name, fname)
+                target_col = feat.target_table.name
+                grouped: dict[str, list] = defaultdict(list)
+                for r in records:
+                    target_rid = getattr(r, target_col, None)
+                    if target_rid is not None:
+                        grouped[target_rid].append(r)
+
+                selected = []
+                for group in grouped.values():
+                    if len(group) == 1:
+                        selected.append(group[0])
+                    else:
+                        try:
+                            selected.append(selector(group))
+                        except Exception:
+                            selected.append(FeatureRecord.select_newest(group))
+                result[fname] = [r.model_dump(mode="json") for r in selected]
+            return json.dumps(result, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
         "deriva://vocabulary/{vocab_name}",
         name="Vocabulary Terms",
         description="Terms in a specific vocabulary table",

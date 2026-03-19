@@ -92,11 +92,78 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
                             ]
                         except Exception:
                             pass
+            # Gather feature details for each table that has features
+            feature_details: dict[str, list[dict[str, Any]]] = {}
+            for schema_data in schemas.values():
+                tables = schema_data.get("tables", {})
+                for table_name, table_info in tables.items():
+                    features = table_info.get("features", [])
+                    if features:
+                        try:
+                            detailed = []
+                            for f_info in features:
+                                feat = ml.lookup_feature(table_name, f_info["name"])
+                                detail: dict[str, Any] = {
+                                    "name": f_info["name"],
+                                    "feature_table": f_info.get("feature_table", ""),
+                                    "comment": getattr(feat, "comment", "") or "",
+                                    "term_columns": [],
+                                    "asset_columns": [],
+                                    "value_columns": [],
+                                }
+                                for col in feat.term_columns:
+                                    col_info: dict[str, Any] = {"name": col.name}
+                                    col_info["required"] = not getattr(col, "nullok", True)
+                                    if hasattr(col, "type") and col.type:
+                                        col_info["type"] = str(col.type.typename) if hasattr(col.type, "typename") else str(col.type)
+                                    if hasattr(col, "comment") and col.comment:
+                                        col_info["comment"] = col.comment
+                                    if hasattr(col, "default") and col.default is not None:
+                                        col_info["default"] = str(col.default)
+                                    # Include the vocabulary table for this column
+                                    if hasattr(col, "references") and col.references:
+                                        for ref in col.references:
+                                            vocab_table = ref.pk_table.name if hasattr(ref, "pk_table") else ""
+                                            if vocab_table:
+                                                col_info["vocabulary"] = vocab_table
+                                    detail["term_columns"].append(col_info)
+                                for col in feat.asset_columns:
+                                    col_info = {"name": col.name}
+                                    col_info["required"] = not getattr(col, "nullok", True)
+                                    if hasattr(col, "type") and col.type:
+                                        col_info["type"] = str(col.type.typename) if hasattr(col.type, "typename") else str(col.type)
+                                    if hasattr(col, "comment") and col.comment:
+                                        col_info["comment"] = col.comment
+                                    if hasattr(col, "default") and col.default is not None:
+                                        col_info["default"] = str(col.default)
+                                    # Include the asset table reference
+                                    if hasattr(col, "references") and col.references:
+                                        for ref in col.references:
+                                            asset_table = ref.pk_table.name if hasattr(ref, "pk_table") else ""
+                                            if asset_table:
+                                                col_info["asset_table"] = asset_table
+                                    detail["asset_columns"].append(col_info)
+                                for col in feat.value_columns:
+                                    col_info = {"name": col.name}
+                                    col_info["required"] = not getattr(col, "nullok", True)
+                                    if hasattr(col, "comment") and col.comment:
+                                        col_info["comment"] = col.comment
+                                    if hasattr(col, "default") and col.default is not None:
+                                        col_info["default"] = str(col.default)
+                                    if hasattr(col, "type") and col.type:
+                                        col_info["type"] = str(col.type.typename) if hasattr(col.type, "typename") else str(col.type)
+                                    detail["value_columns"].append(col_info)
+                                detailed.append(detail)
+                            feature_details[table_name] = detailed
+                        except Exception as e:
+                            logger.debug(f"Could not gather feature details for {table_name}: {e}")
+
             schema_hash = compute_schema_hash(schema_info, vocab_terms)
             conn_info.schema_hash = schema_hash
             result = manager.index_catalog_schema(
                 schema_info, conn_info.hostname, conn_info.catalog_id,
                 vocabulary_terms=vocab_terms,
+                feature_details=feature_details,
             )
             status = result.get("status", "unknown")
             if status == "indexed":

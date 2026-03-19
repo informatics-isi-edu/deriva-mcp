@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -297,7 +297,22 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             )
         except Exception as e:
             logger.error(f"Failed to add feature values: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result: dict[str, Any] = {"status": "error", "message": error_msg}
+
+            # Suggest alternatives when feature or table not found
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                # Try suggesting the feature name first, then the table name
+                suggestions = rag_suggest_entity(feature_name, conn_info)
+                if not suggestions:
+                    suggestions = rag_suggest_entity(table_name, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def add_feature_value_record(
@@ -403,7 +418,21 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             )
         except Exception as e:
             logger.error(f"Failed to add feature value records: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            error_msg = str(e)
+            result: dict[str, Any] = {"status": "error", "message": error_msg}
+
+            # Suggest alternatives when feature or table not found
+            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
+            if _is_not_found_error(error_msg):
+                conn_info = conn_manager.get_active_connection_info()
+                suggestions = rag_suggest_entity(feature_name, conn_info)
+                if not suggestions:
+                    suggestions = rag_suggest_entity(table_name, conn_info)
+                if suggestions:
+                    result["suggestions"] = suggestions
+                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def fetch_table_features(
@@ -440,7 +469,8 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             table_name: Table to fetch features for (e.g., "Image", "Subject").
             feature_name: If provided, only fetch this specific feature.
                 If not provided, fetches all features on the table.
-            selector: Built-in selector name. Currently supported: "newest".
+            selector: Built-in selector name. Supported: "newest", "first",
+                "latest", "majority_vote" (requires feature_name).
                 Picks one value per target object using the most recent RCT.
             workflow: Workflow RID or Workflow_Type name. Filters values to those
                 produced by executions of the matching workflow, then picks the
@@ -485,11 +515,26 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             selector_fn = None
             if selector == "newest":
                 selector_fn = FeatureRecord.select_newest
+            elif selector == "first":
+                selector_fn = FeatureRecord.select_first
+            elif selector == "latest":
+                selector_fn = FeatureRecord.select_latest
+            elif selector == "majority_vote":
+                if not feature_name:
+                    return json.dumps(
+                        {
+                            "status": "error",
+                            "message": "selector='majority_vote' requires feature_name to be specified.",
+                        }
+                    )
+                feat = ml.lookup_feature(table_name, feature_name)
+                RecordClass = feat.feature_record_class()
+                selector_fn = RecordClass.select_majority_vote()
             elif selector is not None:
                 return json.dumps(
                     {
                         "status": "error",
-                        "message": f"Unknown selector '{selector}'. Supported: 'newest'.",
+                        "message": f"Unknown selector '{selector}'. Supported: 'newest', 'first', 'latest', 'majority_vote'.",
                     }
                 )
 
@@ -544,7 +589,12 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
             if _is_not_found_error(error_msg):
                 conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_entity(table_name, conn_info)
+                # Try feature_name first (more specific), then table_name
+                suggestions = None
+                if feature_name:
+                    suggestions = rag_suggest_entity(feature_name, conn_info)
+                if not suggestions:
+                    suggestions = rag_suggest_entity(table_name, conn_info)
                 if suggestions:
                     result["suggestions"] = suggestions
                     result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
