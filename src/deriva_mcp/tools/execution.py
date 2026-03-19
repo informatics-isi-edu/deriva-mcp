@@ -385,6 +385,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         asset_types: list[str] | None = None,
         copy_file: bool = False,
         rename_file: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         """Register a file for upload as an execution output asset.
 
@@ -403,6 +404,8 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             asset_types: Asset_Type vocabulary terms (defaults to [asset_name]).
             copy_file: True to copy file, False to symlink (default, saves disk space).
             rename_file: Optionally rename the file during staging.
+            metadata: Optional dict of metadata column values for the asset table.
+                Keys must be valid metadata column names on the asset table.
 
         Returns:
             JSON with file_path (use this path for writing), file_name, asset_types.
@@ -429,6 +432,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 asset_types=asset_types,
                 copy_file=copy_file,
                 rename_file=rename_file,
+                metadata=metadata,
             )
 
             return json.dumps({
@@ -625,6 +629,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         materialize: bool = True,
         exclude_tables: list[str] | None = None,
         timeout: list[int] | None = None,
+        fetch_concurrency: int = 8,
     ) -> str:
         """Download a dataset version as a BDBag for use in this execution.
 
@@ -670,6 +675,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
                 materialize=materialize,
                 exclude_tables=set(exclude_tables) if exclude_tables else None,
                 timeout=tuple(timeout) if timeout else None,
+                fetch_concurrency=fetch_concurrency,
             )
             bag = execution.download_dataset_bag(spec)
 
