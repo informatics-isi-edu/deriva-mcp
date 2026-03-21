@@ -1,17 +1,22 @@
 """MCP Tools for DerivaML development utilities.
 
 This module provides tools for development workflow operations like
-version management and Jupyter kernel installation.
+version management, Jupyter kernel installation, and app server management.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
+import socket
 import subprocess
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 from mcp.server.fastmcp import FastMCP
 
@@ -457,17 +462,14 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     ) -> str:
         """Start a DerivaML web application locally.
 
-        Launches a reverse proxy that serves the application and proxies API
-        requests to the Deriva server. The browser opens automatically.
+        Launches the deriva-ml-apps server which serves the application and
+        proxies API requests to the Deriva server. The browser opens automatically.
 
         Use `list_apps()` to see available applications.
 
         **Prerequisites:**
-        - The deriva-ml-apps repo must be cloned and the app built:
-          ```
-          git clone https://github.com/informatics-isi-edu/deriva-ml-apps
-          cd deriva-ml-apps/<app-name> && pnpm install && pnpm build
-          ```
+        - The deriva-ml-apps package must be installed (`uv pip install deriva-ml-apps`)
+          or the repo must be cloned with apps built.
         - Apps that require a catalog need either hostname/catalog_id params
           or an active `connect_catalog` connection.
 
@@ -484,8 +486,6 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         Returns:
             JSON with the URL to open and proxy status.
         """
-        from deriva_mcp.proxy import is_proxy_running, start_proxy, stop_proxy
-
         # Look up app metadata from catalog
         app_meta = _get_app_metadata(app_id)
 
@@ -508,46 +508,48 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                 ),
             })
 
-        # Stop existing proxy if running
-        stopped_previous = False
-        if is_proxy_running():
-            stop_proxy()
-            stopped_previous = True
+        # Stop existing server if running
+        stopped_previous = _stop_app_server()
 
-        # Find the built app
+        # Find the apps repo and verify the app exists
+        apps_repo = _find_apps_repo()
+        if apps_repo is None:
+            return json.dumps({
+                "status": "error",
+                "error": (
+                    "Could not find deriva-ml-apps. Either:\n"
+                    "  1. Install: uv pip install deriva-ml-apps\n"
+                    "  2. Clone: git clone https://github.com/informatics-isi-edu/deriva-ml-apps"
+                ),
+            })
+
+        # Verify the specific app is built
         static_dir = _find_app(app_id, app_path)
         if static_dir is None:
             app_name = app_meta["name"] if app_meta else app_id
             return json.dumps({
                 "status": "error",
                 "error": (
-                    f"Could not find built {app_name}. Either:\n"
-                    f"  1. Provide app_path pointing to the built dist/ directory\n"
-                    f"  2. Clone and build the app:\n"
-                    f"     git clone https://github.com/informatics-isi-edu/deriva-ml-apps\n"
-                    f"     cd deriva-ml-apps/{app_id} && pnpm install && pnpm build"
+                    f"Could not find built {app_name}. Build it:\n"
+                    f"  cd deriva-ml-apps/{app_id} && pnpm install && pnpm build"
                 ),
             })
 
-        # Start proxy — use a dummy backend for apps that don't need a catalog
+        # Start the app server as a subprocess
         backend = hostname if hostname else "localhost"
         try:
-            url, actual_port = start_proxy(
-                backend=backend,
-                static_dir=static_dir,
-                port=port,
-            )
+            url, actual_port = _start_app_server(apps_repo, backend, port)
         except Exception as e:
             return json.dumps({
                 "status": "error",
-                "error": f"Failed to start proxy: {e}",
+                "error": f"Failed to start app server: {e}",
             })
 
-        # Build URL with catalog info if connected
+        # Build URL with app path and catalog info
         if hostname and catalog_id:
-            app_url = f"{url}/#host=localhost&catalog={catalog_id}"
+            app_url = f"{url}/apps/{app_id}/#host=localhost&catalog={catalog_id}"
         else:
-            app_url = url
+            app_url = f"{url}/apps/{app_id}/"
 
         # Try to open browser
         try:
@@ -561,14 +563,14 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             "app_id": app_id,
             "url": app_url,
             "port": actual_port,
-            "static_dir": str(static_dir),
+            "homepage": url,
             "message": f"{app_meta['name'] if app_meta else app_id} running at {app_url}",
         }
         if hostname:
             result["backend"] = f"https://{hostname}"
             result["catalog_id"] = catalog_id
         if stopped_previous:
-            result["note"] = "Stopped a previously running app to start this one."
+            result["note"] = "Stopped a previously running app server to start this one."
         return json.dumps(result)
 
     @mcp.tool()
@@ -578,18 +580,14 @@ def register_devtools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         Returns:
             JSON with status.
         """
-        from deriva_mcp.proxy import is_proxy_running, stop_proxy
-
-        if not is_proxy_running():
+        if _stop_app_server():
             return json.dumps({
                 "status": "success",
-                "message": "No app was running.",
+                "message": "App server stopped.",
             })
-
-        stop_proxy()
         return json.dumps({
             "status": "success",
-            "message": "App proxy stopped.",
+            "message": "No app server was running.",
         })
 
     # Backward-compatible aliases
@@ -917,6 +915,116 @@ def _find_kernel_for_venv() -> str | None:
     except Exception:
         pass
     return None
+
+
+# ---------------------------------------------------------------------------
+# App server subprocess management
+# ---------------------------------------------------------------------------
+
+_app_server_process: subprocess.Popen | None = None
+_app_server_port: int | None = None
+
+
+def _find_free_port() -> int:
+    """Find a free TCP port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+def _start_app_server(apps_repo: Path, backend: str, port: int = 0) -> tuple[str, int]:
+    """Start the deriva-ml-apps server as a subprocess.
+
+    Args:
+        apps_repo: Path to the deriva-ml-apps repository.
+        backend: Deriva server hostname.
+        port: Port to bind to. 0 = auto-select.
+
+    Returns:
+        Tuple of (base_url, port).
+    """
+    global _app_server_process, _app_server_port
+
+    if port == 0:
+        port = _find_free_port()
+
+    # Find the app-launcher dist as the shell (homepage)
+    shell_dist = apps_repo / "app-launcher" / "dist"
+    if not (shell_dist / "index.html").exists():
+        raise RuntimeError(
+            f"App launcher not built at {shell_dist}. "
+            f"Build it: cd {apps_repo}/app-launcher && pnpm install && pnpm build"
+        )
+
+    # Try to use the installed CLI first, fall back to running the module directly
+    uv_path = shutil.which("uv")
+    if uv_path and (apps_repo / "pyproject.toml").exists():
+        cmd = [
+            uv_path, "run", "--directory", str(apps_repo),
+            "deriva-ml-apps", "serve",
+            "--backend", backend,
+            "--port", str(port),
+            "--no-open",
+        ]
+    else:
+        # Fall back to running the module directly
+        python = shutil.which("python3") or "python3"
+        cmd = [
+            python, "-m", "deriva_apps.cli", "serve",
+            "--backend", backend,
+            "--port", str(port),
+            "--no-open",
+        ]
+
+    _app_server_process = subprocess.Popen(
+        cmd,
+        cwd=str(apps_repo),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    _app_server_port = port
+
+    # Wait briefly for server to start
+    url = f"http://127.0.0.1:{port}"
+    for _ in range(20):
+        time.sleep(0.25)
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                break
+        except OSError:
+            if _app_server_process.poll() is not None:
+                raise RuntimeError(
+                    f"App server process exited with code {_app_server_process.returncode}"
+                )
+
+    logger.info(f"App server started: {url} → {backend} (pid {_app_server_process.pid})")
+    return url, port
+
+
+def _stop_app_server() -> bool:
+    """Stop the running app server subprocess.
+
+    Returns:
+        True if a server was stopped, False if none was running.
+    """
+    global _app_server_process, _app_server_port
+
+    if _app_server_process is None:
+        return False
+
+    try:
+        _app_server_process.terminate()
+        _app_server_process.wait(timeout=5)
+    except Exception:
+        try:
+            _app_server_process.kill()
+        except Exception:
+            pass
+
+    logger.info(f"App server stopped (pid {_app_server_process.pid})")
+    _app_server_process = None
+    _app_server_port = None
+    return True
 
 
 def _find_apps_repo() -> Path | None:
