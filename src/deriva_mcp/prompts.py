@@ -879,6 +879,8 @@ denormalize_dataset(dataset_rid="2-B4C8")
 
 This joins the dataset's member tables, resolving foreign keys into human-readable values. The result is a flat table suitable for loading into a DataFrame.
 
+Tables don't need to be explicit dataset members — denormalize follows multi-hop FK chains automatically (e.g., `Image → Observation → Subject`). If the schema has multiple FK paths between two requested tables, a `DerivaMLException` is raised listing all paths and suggesting intermediate tables to add to `include_tables` for disambiguation.
+
 ### Query a Single Table
 
 For simpler needs, `query_table` on the relevant table is sufficient:
