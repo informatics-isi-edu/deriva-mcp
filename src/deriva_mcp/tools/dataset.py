@@ -1200,10 +1200,17 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
         **How it works:**
 
-        Tables are joined based on their foreign key relationships. For example, if
-        Image has a foreign key to Subject, and Diagnosis has a foreign key to Image,
-        then denormalizing ["Subject", "Image", "Diagnosis"] produces rows where each
-        image appears with its subject's metadata and any associated diagnoses.
+        Tables are joined based on their foreign key relationships. The join follows
+        multi-hop FK chains automatically — tables in ``include_tables`` don't need to
+        be explicit dataset members, they just need to be FK-reachable from a member
+        table. For example, if Image has a FK to Observation, and Observation has a FK
+        to Subject, then denormalizing ["Image", "Subject"] joins through Observation
+        transparently.
+
+        If the schema has multiple FK paths between two requested tables (e.g.,
+        Image→Subject directly AND Image→Observation→Subject), a ``DerivaMLException``
+        is raised listing all paths and suggesting intermediate tables to add to
+        ``include_tables`` for disambiguation.
 
         **Common use cases:**
 
@@ -1220,7 +1227,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         Args:
             dataset_rid: RID of the dataset to denormalize.
             include_tables: List of table names to include in the join.
-                Tables are joined based on their foreign key relationships.
+                Tables are joined via FK relationships, including multi-hop chains.
                 Order doesn't matter - the join order is determined automatically.
             version: Semantic version to query (e.g., "1.0.0"). If not specified,
                 uses the current version.
