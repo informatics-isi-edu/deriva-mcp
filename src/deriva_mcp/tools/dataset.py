@@ -1281,6 +1281,13 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Get column names from first row
             columns = list(rows[0].keys()) if rows else []
 
+            def _json_default(obj):
+                """Handle datetime/date serialization for denormalized data."""
+                from datetime import date, datetime
+                if isinstance(obj, (datetime, date)):
+                    return obj.isoformat()
+                raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
             return json.dumps({
                 "dataset_rid": dataset_rid,
                 "include_tables": include_tables,
@@ -1289,7 +1296,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "rows": rows,
                 "count": len(rows),
                 "limit": limit,
-            })
+            }, default=_json_default)
         except Exception as e:
             logger.error(f"Failed to denormalize dataset: {e}")
             error_msg = str(e)
