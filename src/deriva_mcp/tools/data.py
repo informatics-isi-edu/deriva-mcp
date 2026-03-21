@@ -21,6 +21,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from deriva_mcp.result_cache import ResultCache
+
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
 
@@ -139,6 +141,34 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         """
         try:
             ml = conn_manager.get_active_or_raise()
+
+            # Check result cache
+            conn_info = conn_manager.get_active_connection_info()
+            result_cache = getattr(conn_info, 'result_cache', None) if conn_info else None
+            cache_key = None
+            if isinstance(result_cache, ResultCache):
+                from deriva_mcp.result_cache import CacheMeta
+                cache_key = result_cache.cache_key(
+                    "query",
+                    table_name=table_name,
+                    columns=columns,
+                    filters=filters,
+                    limit=limit,
+                    offset=offset,
+                )
+                if result_cache.has(cache_key):
+                    cached = result_cache.query(cache_key, limit=limit, offset=offset)
+                    if cached:
+                        return json.dumps({
+                            "table": table_name,
+                            "records": cached.rows,
+                            "count": cached.count,
+                            "limit": limit,
+                            "offset": offset,
+                            "from_cache": True,
+                            "cache_key": cache_key,
+                        })
+
             table = ml.model.name_to_table(table_name)
             pb = ml.pathBuilder()
             path = pb.schemas[table.schema.name].tables[table_name]
@@ -166,12 +196,27 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                     for rec in all_records
                 ]
 
+            # Store in result cache
+            if isinstance(result_cache, ResultCache) and cache_key and all_records:
+                from deriva_mcp.result_cache import CacheMeta
+                record_columns = list(all_records[0].keys()) if all_records else []
+                result_cache.store(cache_key, record_columns, all_records, CacheMeta(
+                    cache_key=cache_key,
+                    tool_name="query_table",
+                    params={"table_name": table_name, "columns": columns, "filters": filters},
+                    columns=record_columns,
+                    source="catalog",
+                    ttl_seconds=300,
+                ))
+
             return json.dumps({
                 "table": table_name,
                 "records": all_records,
                 "count": len(all_records),
                 "limit": limit,
                 "offset": offset,
+                "from_cache": False,
+                "cache_key": cache_key,
             })
         except Exception as e:
             logger.error(f"Failed to query table: {e}")
@@ -327,6 +372,12 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                 if conn_info:
                     conn_info.data_dirty = True
 
+            # Invalidate catalog-sourced result cache
+            conn_info = conn_manager.get_active_connection_info()
+            rc = getattr(conn_info, 'result_cache', None) if conn_info else None
+            if isinstance(rc, ResultCache):
+                rc.invalidate(source="catalog")
+
             return json.dumps({
                 "status": "inserted",
                 "table": table_name,
@@ -429,6 +480,12 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
             # Update in database
             path.update([record])
+
+            # Invalidate catalog-sourced result cache
+            conn_info = conn_manager.get_active_connection_info()
+            rc = getattr(conn_info, 'result_cache', None) if conn_info else None
+            if isinstance(rc, ResultCache):
+                rc.invalidate(source="catalog")
 
             return json.dumps({
                 "status": "updated",

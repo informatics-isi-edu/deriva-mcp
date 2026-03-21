@@ -6,6 +6,7 @@ DerivaML operations as MCP tools.
 
 from deriva_mcp.tools.annotation import register_annotation_tools
 from deriva_mcp.tools.background_tasks import register_background_task_tools
+from deriva_mcp.tools.cache import register_cache_tools
 from deriva_mcp.tools.catalog import register_catalog_tools
 from deriva_mcp.tools.data import register_data_tools
 from deriva_mcp.tools.dataset import register_dataset_tools
@@ -20,6 +21,7 @@ from deriva_mcp.tools.workflow import register_workflow_tools
 __all__ = [
     "register_annotation_tools",
     "register_background_task_tools",
+    "register_cache_tools",
     "register_catalog_tools",
     "register_dataset_tools",
     "register_vocabulary_tools",

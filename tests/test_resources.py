@@ -1521,6 +1521,8 @@ class TestResourceRegistration:
         "deriva://table/{table_name}/feature-values/majority_vote",
         "deriva://dataset/{dataset_rid}/bag-preview",
         "deriva://catalog/element-type-paths",
+        # Cache resources
+        "deriva://cache/results",
     ]
 
     @pytest.mark.parametrize("uri", EXPECTED_URIS)

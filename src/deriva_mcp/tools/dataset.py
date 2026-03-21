@@ -52,6 +52,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger("deriva-mcp")
 
 
+def _json_default(obj):
+    """Handle datetime/date serialization for denormalized data."""
+    from datetime import date, datetime
+
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 def _serialize_dataset(dataset) -> dict:
     """Serialize a Dataset object to a JSON-compatible dictionary."""
     return {
@@ -1251,14 +1260,41 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
 
+            # Check result cache
+            conn_info = conn_manager.get_active_connection_info()
+            from deriva_mcp.result_cache import ResultCache, CacheMeta
+            result_cache = getattr(conn_info, 'result_cache', None) if conn_info else None
+            cache_key = None
+            if isinstance(result_cache, ResultCache):
+                cache_key = result_cache.cache_key(
+                    "denormalize",
+                    dataset_rid=dataset_rid,
+                    tables=include_tables,
+                    version=version or str(dataset.current_version),
+                )
+                if result_cache.has(cache_key):
+                    cached = result_cache.query(cache_key, limit=limit)
+                    if cached:
+                        return json.dumps({
+                            "dataset_rid": dataset_rid,
+                            "include_tables": include_tables,
+                            "source": cached.source,
+                            "columns": cached.columns,
+                            "rows": cached.rows,
+                            "count": cached.count,
+                            "limit": limit,
+                            "from_cache": True,
+                            "cache_key": cache_key,
+                        }, default=_json_default)
+
             # Prefer bag denormalization if a downloaded bag is cached locally.
             # Bag denormalization uses SQLite (faster, no catalog queries) and
             # supports multi-hop FK joins that may timeout on the live catalog.
             source = "catalog"
             from deriva_ml.dataset.bag_cache import BagCache
             cache = BagCache(ml.cache_dir)
-            cache_info = cache.cache_status(dataset_rid)
-            if cache_info["cache_path"] is not None:
+            cache_info_bag = cache.cache_status(dataset_rid)
+            if cache_info_bag["cache_path"] is not None:
                 try:
                     bag = dataset.download_dataset_bag(
                         version=version or str(dataset.current_version),
@@ -1281,12 +1317,16 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Get column names from first row
             columns = list(rows[0].keys()) if rows else []
 
-            def _json_default(obj):
-                """Handle datetime/date serialization for denormalized data."""
-                from datetime import date, datetime
-                if isinstance(obj, (datetime, date)):
-                    return obj.isoformat()
-                raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+            # Store in result cache
+            if isinstance(result_cache, ResultCache) and cache_key and rows:
+                result_cache.store(cache_key, columns, rows, CacheMeta(
+                    cache_key=cache_key,
+                    tool_name="denormalize_dataset",
+                    params={"dataset_rid": dataset_rid, "include_tables": include_tables, "version": version},
+                    columns=columns,
+                    source=source,
+                    ttl_seconds=None if source == "bag" else 300,
+                ))
 
             return json.dumps({
                 "dataset_rid": dataset_rid,
@@ -1296,6 +1336,8 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "rows": rows,
                 "count": len(rows),
                 "limit": limit,
+                "from_cache": False,
+                "cache_key": cache_key,
             }, default=_json_default)
         except Exception as e:
             logger.error(f"Failed to denormalize dataset: {e}")

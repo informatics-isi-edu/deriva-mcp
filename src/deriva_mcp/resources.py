@@ -2203,3 +2203,25 @@ multirun_config(
             )
         except Exception as e:
             return json.dumps({"error": str(e)})
+
+    # =========================================================================
+    # Result Cache
+    # =========================================================================
+
+    @mcp.resource(
+        "deriva://cache/results",
+        name="Cached Results",
+        description="Cached tabular query results available for re-querying",
+        mime_type="application/json",
+    )
+    async def cache_results_resource() -> str:
+        """Cached tabular query results available for re-querying."""
+        conn_info = conn_manager.get_active_connection_info()
+        if not conn_info or not conn_info.result_cache:
+            return json.dumps({"results": [], "message": "No result cache available"})
+
+        entries = conn_info.result_cache.list_cached()
+        return json.dumps({
+            "results": [e.to_summary() for e in entries],
+            "count": len(entries),
+        })

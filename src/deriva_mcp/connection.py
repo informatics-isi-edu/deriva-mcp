@@ -31,9 +31,11 @@ import hashlib
 import logging
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deriva_ml import DerivaML, DerivaMLException
+from deriva_mcp.result_cache import ResultCache
 
 if TYPE_CHECKING:
     pass
@@ -109,6 +111,7 @@ class ConnectionInfo:
     data_dirty: bool = False         # Data mutations → lazy reindex
     _schema_reindex_at: float = 0.0  # Debounce timestamp
     _data_reindex_at: float = 0.0    # Debounce timestamp
+    result_cache: Any = None  # ResultCache for caching tabular query results
 
 
 class ConnectionManager:
@@ -303,6 +306,15 @@ class ConnectionManager:
                 workflow_rid=workflow_rid,
                 execution=execution,
             )
+            # Create result cache for tabular query results
+            try:
+                cache_dir = Path.home() / ".deriva-ml" / "result_cache"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                cache_db = cache_dir / f"{user_id[:8]}_{hostname}_{catalog_id}.db"
+                self._connections[key].result_cache = ResultCache(cache_db)
+                logger.info(f"Created result cache at {cache_db}")
+            except Exception as e:
+                logger.warning(f"Failed to create result cache: {e}")
             if set_active:
                 self._active_connection = key
             logger.info(f"Successfully connected to {key}")
@@ -362,6 +374,14 @@ class ConnectionManager:
                             logger.warning(f"Failed to upload execution outputs: {e}")
                 except Exception as e:
                     logger.warning(f"Failed to close execution: {e}")
+
+            # Close the result cache
+            if conn_info.result_cache is not None:
+                try:
+                    conn_info.result_cache.close()
+                    logger.info(f"Closed result cache for {key}")
+                except Exception as e:
+                    logger.warning(f"Failed to close result cache: {e}")
 
             del self._connections[key]
             if self._active_connection == key:

@@ -40,6 +40,7 @@ from deriva_mcp.resources import register_resources
 from deriva_mcp.tools import (
     register_annotation_tools,
     register_background_task_tools,
+    register_cache_tools,
     register_catalog_tools,
     register_data_tools,
     register_dataset_tools,
@@ -829,6 +830,7 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     register_execution_tools(mcp_server, conn_manager)
     register_storage_tools(mcp_server, conn_manager)
     register_data_tools(mcp_server, conn_manager)
+    register_cache_tools(mcp_server, conn_manager)
     register_devtools(mcp_server, conn_manager)
     register_rag_tools(mcp_server, conn_manager)
 
