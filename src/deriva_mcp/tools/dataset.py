@@ -1234,7 +1234,10 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             limit: Maximum rows to return (default: 1000).
 
         Returns:
-            JSON with columns list and rows array.
+            JSON with columns list, rows array, and source ("bag" or "catalog").
+            If a downloaded bag is cached locally, bag denormalization is used
+            automatically (faster, no catalog queries). The source field indicates
+            which was used.
 
         Example:
             denormalize_dataset("1-ABC", ["Image", "Diagnosis"])
@@ -1248,9 +1251,29 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
 
+            # Prefer bag denormalization if a downloaded bag is cached locally.
+            # Bag denormalization uses SQLite (faster, no catalog queries) and
+            # supports multi-hop FK joins that may timeout on the live catalog.
+            source = "catalog"
+            from deriva_ml.dataset.bag_cache import BagCache
+            cache = BagCache(ml.cache_dir)
+            cache_info = cache.cache_status(dataset_rid)
+            if cache_info["cache_path"] is not None:
+                try:
+                    bag = dataset.download_dataset_bag(
+                        version=version or str(dataset.current_version),
+                        materialize=False,
+                    )
+                    denorm_source = bag
+                    source = "bag"
+                except Exception:
+                    denorm_source = dataset
+            else:
+                denorm_source = dataset
+
             # Get denormalized data as dict
             rows = []
-            for i, row in enumerate(dataset.denormalize_as_dict(include_tables, version=version)):
+            for i, row in enumerate(denorm_source.denormalize_as_dict(include_tables, version=version)):
                 if i >= limit:
                     break
                 rows.append(dict(row))
@@ -1261,6 +1284,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({
                 "dataset_rid": dataset_rid,
                 "include_tables": include_tables,
+                "source": source,
                 "columns": columns,
                 "rows": rows,
                 "count": len(rows),
