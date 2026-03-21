@@ -1480,6 +1480,34 @@ class TestDenormalizeDataset:
         assert data["count"] == 0
 
     @pytest.mark.asyncio
+    async def test_denormalize_columns_only(self, dataset_tools, mock_ml):
+        """columns_only=True returns column schema without fetching data."""
+        mock_dataset = _make_mock_dataset()
+        mock_dataset.denormalize_columns.return_value = [
+            ("Image.RID", "ermrest_rid"),
+            ("Image.Filename", "text"),
+            ("Diagnosis.Label", "text"),
+        ]
+        mock_ml.lookup_dataset.return_value = mock_dataset
+
+        result = await dataset_tools["denormalize_dataset"](
+            dataset_rid="DS-001",
+            include_tables=["Image", "Diagnosis"],
+            columns_only=True,
+        )
+
+        data = parse_json_result(result)
+        assert data["columns_only"] is True
+        assert data["rows"] == []
+        assert data["count"] == 0
+        assert len(data["columns"]) == 3
+        assert data["columns"][0] == {"name": "Image.RID", "type": "ermrest_rid"}
+        assert data["columns"][2] == {"name": "Diagnosis.Label", "type": "text"}
+        assert data["column_names"] == ["Image.RID", "Image.Filename", "Diagnosis.Label"]
+        # denormalize_as_dict should NOT have been called
+        mock_dataset.denormalize_as_dict.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_denormalize_exception(self, dataset_tools, mock_ml):
         """When denormalize_as_dict raises, return an error."""
         mock_ml.lookup_dataset.side_effect = RuntimeError("Bad table")

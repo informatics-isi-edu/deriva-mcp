@@ -1195,6 +1195,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         include_tables: list[str],
         version: str | None = None,
         limit: int = 1000,
+        columns_only: bool = False,
     ) -> str:
         """Denormalize dataset tables into a wide table for ML.
 
@@ -1233,6 +1234,15 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         Column names are prefixed with the source table name using dots to avoid
         collisions (e.g., "Image.Filename", "Subject.RID", "Diagnosis.Label").
 
+        **Columns-only mode:**
+
+        Set ``columns_only=True`` to preview the column schema without fetching any
+        data. This is fast and useful for:
+        - Discovering what columns a denormalization would produce
+        - Verifying FK paths resolve correctly before running expensive queries
+        - Finding the correct column name for stratify_by_column in split_dataset
+        - Debugging ambiguous FK path errors
+
         Args:
             dataset_rid: RID of the dataset to denormalize.
             include_tables: List of table names to include in the join.
@@ -1240,13 +1250,19 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 Order doesn't matter - the join order is determined automatically.
             version: Semantic version to query (e.g., "1.0.0"). If not specified,
                 uses the current version.
-            limit: Maximum rows to return (default: 1000).
+            limit: Maximum rows to return (default: 1000). Ignored when columns_only=True.
+            columns_only: If True, return only the column schema (names and types)
+                without fetching any data. Fast preview of what denormalization
+                would produce.
 
         Returns:
             JSON with columns list, rows array, and source ("bag" or "catalog").
             If a downloaded bag is cached locally, bag denormalization is used
             automatically (faster, no catalog queries). The source field indicates
             which was used.
+
+            When columns_only=True, returns JSON with columns list (name and type
+            for each), no rows, and no data fetching.
 
         Example:
             denormalize_dataset("1-ABC", ["Image", "Diagnosis"])
@@ -1255,10 +1271,49 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Include subject info for analysis by demographics
             denormalize_dataset("1-ABC", ["Subject", "Image", "Diagnosis"])
             -> {"columns": ["Subject.Age", "Subject.Gender", "Image.RID", ...], "rows": [...]}
+
+            # Preview columns only (no data fetched)
+            denormalize_dataset("1-ABC", ["Image", "Diagnosis"], columns_only=True)
+            -> {"columns": [{"name": "Image.RID", "type": "ermrest_rid"}, ...], "rows": []}
         """
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
+
+            # Columns-only mode: return schema without fetching data
+            if columns_only:
+                # Use bag if cached locally, otherwise catalog
+                source = "catalog"
+                denorm_source = dataset
+                from deriva_ml.dataset.bag_cache import BagCache
+                bag_cache = BagCache(ml.cache_dir)
+                bag_cache_info = bag_cache.cache_status(dataset_rid)
+                if bag_cache_info["cache_path"] is not None:
+                    try:
+                        bag = dataset.download_dataset_bag(
+                            version=version or str(dataset.current_version),
+                            materialize=False,
+                        )
+                        denorm_source = bag
+                        source = "bag"
+                    except Exception:
+                        pass
+
+                col_tuples = denorm_source.denormalize_columns(include_tables)
+                columns_info = [
+                    {"name": name, "type": col_type}
+                    for name, col_type in col_tuples
+                ]
+                return json.dumps({
+                    "dataset_rid": dataset_rid,
+                    "include_tables": include_tables,
+                    "source": source,
+                    "columns": columns_info,
+                    "column_names": [c["name"] for c in columns_info],
+                    "rows": [],
+                    "count": 0,
+                    "columns_only": True,
+                })
 
             # Check result cache
             conn_info = conn_manager.get_active_connection_info()
