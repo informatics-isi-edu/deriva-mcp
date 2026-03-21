@@ -793,7 +793,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         materialize: bool = True,
         exclude_tables: list[str] | None = None,
         timeout: list[int] | None = None,
-        fetch_concurrency: int = 8,
+        fetch_concurrency: int = 1,
     ) -> str:
         """Download a dataset version as a BDBag for local processing.
 

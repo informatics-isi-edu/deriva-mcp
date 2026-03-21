@@ -1210,7 +1210,7 @@ class TestDownloadDataset:
         assert data["bag_path"] == "/tmp/bags/DS-001"
         mock_spec_cls.assert_called_once_with(
             rid="DS-001", version="1.0.0", materialize=True,
-            exclude_tables=None, timeout=None, fetch_concurrency=8,
+            exclude_tables=None, timeout=None, fetch_concurrency=1,
         )
         mock_ml.download_dataset_bag.assert_called_once_with(mock_spec_instance)
 
@@ -1241,7 +1241,7 @@ class TestDownloadDataset:
         assert data["status"] == "downloaded"
         mock_spec_cls.assert_called_once_with(
             rid="DS-001", version="1.0.0", materialize=False,
-            exclude_tables=None, timeout=None, fetch_concurrency=8,
+            exclude_tables=None, timeout=None, fetch_concurrency=1,
         )
 
     @pytest.mark.asyncio
