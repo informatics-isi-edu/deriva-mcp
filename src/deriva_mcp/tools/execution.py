@@ -6,36 +6,7 @@ Executions track ML workflow runs with full provenance. Key concepts:
 1. **create_execution()**: Create execution with workflow type and input datasets/assets
 2. **start_execution()**: Begin timing the workflow run
 3. **[Do ML work]**: Run your training, inference, or processing pipeline
-4. **asset_file_path()**: Register output files for upload (repeat as needed)
-5. **stop_execution()**: End timing and mark complete
-6. **upload_execution_outputs()**: Upload all registered files to catalog (REQUIRED)
-
-**Python Context Manager** (for direct Python usage):
-```python
-from deriva_ml import DerivaML
-from deriva_ml.execution import ExecutionConfiguration
-
-ml = DerivaML(hostname, catalog_id)
-config = ExecutionConfiguration(
-    workflow=ml.create_workflow("Training", "Training"),
-    datasets=[DatasetSpec(rid="1-ABC")],
-)
-
-# Context manager handles start/stop timing automatically
-with ml.create_execution(config) as exe:
-    # Download input data
-    bag = exe.download_dataset_bag(DatasetSpec(rid="1-ABC"))
-
-    # Do ML work...
-    model = train_model(bag)
-
-    # Register outputs for upload
-    model_path = exe.asset_file_path("Model", "model.pt")
-    torch.save(model, model_path)
-
-# After context exits, call upload separately
-exe.upload_execution_outputs()
-```
+4. **stop_execution()**: End timing and mark complete
 
 **Provenance Tracking**:
 Executions automatically track:
@@ -50,26 +21,12 @@ Executions automatically track:
 Each execution references a Workflow (from Workflow_Type vocabulary) that
 categorizes what type of work was done: Training, Inference, Preprocessing,
 Evaluation, etc.
-
-**Asset File Paths**:
-Use asset_file_path() to register files for upload. This:
-- Stages files in a local working directory
-- Associates files with asset tables (e.g., "Model", "Image")
-- Applies asset type labels from vocabulary
-- Tracks the execution that produced them
-
-Files are NOT uploaded until upload_execution_outputs() is called.
-
-**Working Directory**:
-Each execution has a temporary working directory for staging files.
-Use get_execution_working_dir() to get the path for writing outputs.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -112,9 +69,7 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
         1. create_execution() - You are here
         2. start_execution() - Begin timing
         3. [Run your ML workflow]
-        4. asset_file_path() - Register each output file
-        5. stop_execution() - End timing
-        6. upload_execution_outputs() - Upload files (REQUIRED)
+        4. stop_execution() - End timing
 
         Args:
             workflow_name: Descriptive name (e.g., "ResNet50 Training Run 3").
@@ -201,10 +156,10 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
 
     @mcp.tool()
     async def stop_execution() -> str:
-        """Stop timing and mark execution complete. Call before upload_execution_outputs().
+        """Stop timing and mark execution complete.
 
         Records the stop timestamp and calculates duration. Call this after
-        your ML workflow completes but BEFORE uploading outputs.
+        your ML workflow completes.
         """
         try:
             execution = _get_active_tool_execution()
@@ -298,37 +253,6 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def get_execution_info() -> str:
-        """Get details about the active execution including upload status.
-
-        Returns:
-            JSON with execution_rid, status, working_dir, upload_pending flag.
-        """
-        try:
-            execution = _get_active_tool_execution()
-            if execution is None:
-                return json.dumps({
-                    "status": "no_active_execution",
-                    "message": "No active execution. Use create_execution first.",
-                })
-
-            has_pending_uploads = execution.uploaded_assets is None
-
-            return json.dumps({
-                "execution_rid": execution.execution_rid,
-                "workflow_rid": execution.workflow_rid,
-                "status": execution.status.value if hasattr(execution.status, 'value') else str(execution.status),
-                "dataset_rids": execution.dataset_rids,
-                "dataset_count": len(execution.datasets),
-                "working_dir": str(execution.working_dir),
-                "upload_pending": has_pending_uploads,
-                "upload_reminder": "Call upload_execution_outputs() when done." if has_pending_uploads else None,
-            })
-        except Exception as e:
-            logger.error(f"Failed to get execution info: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def restore_execution(execution_rid: str) -> str:
         """Restore a previous execution to continue working with it.
 
@@ -354,199 +278,6 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             logger.error(f"Failed to restore execution: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    @mcp.tool()
-    async def asset_file_path(
-        asset_name: str,
-        file_name: str,
-        asset_types: list[str] | None = None,
-        copy_file: bool = False,
-        rename_file: str | None = None,
-    ) -> str:
-        """Register a file for upload as an execution output asset.
-
-        This is the key method for uploading files produced by your workflow.
-        Files are staged in the execution's working directory and uploaded
-        when upload_execution_outputs() is called.
-
-        The file will be:
-        - Associated with the specified asset table (e.g., "Model", "Image")
-        - Tagged with asset types from the Asset_Type vocabulary
-        - Linked to this execution for provenance tracking
-
-        Args:
-            asset_name: Target asset table (e.g., "Image", "Model", "Execution_Metadata").
-            file_name: Path to existing file to stage, OR filename for new file to create.
-            asset_types: Asset_Type vocabulary terms (defaults to [asset_name]).
-            copy_file: True to copy file, False to symlink (default, saves disk space).
-            rename_file: Optionally rename the file during staging.
-
-        Returns:
-            JSON with file_path (use this path for writing), file_name, asset_types.
-
-        Examples:
-            # Register existing model file
-            asset_file_path("Model", "/tmp/trained_model.pt")
-
-            # Get path for new file to write
-            asset_file_path("Execution_Metadata", "metrics.json")
-            # Then write to the returned file_path
-        """
-        try:
-            execution = _get_active_tool_execution()
-            if execution is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution. Use create_execution first.",
-                })
-
-            asset_path = execution.asset_file_path(
-                asset_name=asset_name,
-                file_name=file_name,
-                asset_types=asset_types,
-                copy_file=copy_file,
-                rename_file=rename_file,
-            )
-
-            return json.dumps({
-                "status": "registered",
-                "execution_rid": execution.execution_rid,
-                "asset_name": asset_name,
-                "file_path": str(asset_path),
-                "file_name": asset_path.file_name,
-                "asset_types": asset_path.asset_types,
-                "note": "Call upload_execution_outputs() to upload.",
-            })
-        except Exception as e:
-            logger.error(f"Failed to register asset file: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def upload_execution_outputs(clean_folder: bool = True) -> str:
-        """Upload all registered assets to the catalog. REQUIRED to complete execution.
-
-        This is the final step in the execution lifecycle. Uploads all files
-        registered with asset_file_path() to the catalog's object store and
-        creates asset records with proper provenance linking.
-
-        IMPORTANT: When using the Python context manager, this must be called AFTER
-        exiting the `with` block (see example below). The context manager handles
-        start/stop timing, while upload is a separate step.
-
-        IMPORTANT: Outputs are NOT persisted until this is called. Always call
-        this method, even if the workflow failed (to record partial results).
-
-        Args:
-            clean_folder: Remove local staging directory after upload (default: True).
-
-        Returns:
-            JSON with assets_uploaded counts by asset table type.
-
-        Example (MCP tool sequence):
-            1. create_execution("Training", "Training", ...)
-            2. start_execution()
-            3. [Do ML work, call asset_file_path() to register outputs]
-            4. stop_execution()
-            5. upload_execution_outputs()  <- Call this LAST
-
-        Example (Python context manager):
-            ```python
-            with ml.create_execution(config) as exe:
-                # Do work inside context manager
-                path = exe.asset_file_path("Model", "model.pt")
-                # Write to path...
-
-            # Upload AFTER exiting context manager
-            exe.upload_execution_outputs()
-            ```
-
-        Note:
-            For progress monitoring during uploads, use the Python API directly with
-            a progress_callback parameter. See UploadProgress and UploadCallback in
-            deriva_ml for details.
-        """
-        try:
-            execution = _get_active_tool_execution()
-            if execution is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution.",
-                })
-
-            results = execution.upload_execution_outputs(clean_folder=clean_folder)
-
-            summary = {}
-            for asset_type, paths in results.items():
-                summary[asset_type] = len(paths)
-
-            return json.dumps({
-                "status": "uploaded",
-                "execution_rid": execution.execution_rid,
-                "assets_uploaded": summary,
-            })
-        except Exception as e:
-            logger.error(f"Failed to upload outputs: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def download_asset(
-        asset_rid: str,
-        dest_dir: str | None = None,
-    ) -> str:
-        """Download an asset file from the catalog to the local filesystem.
-
-        Downloads the file associated with an asset record to the execution's
-        working directory (or a specified directory). Records the download as
-        an input for provenance tracking.
-
-        Args:
-            asset_rid: RID of the asset to download (e.g., "1-ABC").
-            dest_dir: Optional destination directory. If not provided, uses
-                the execution's working directory.
-
-        Returns:
-            JSON with:
-            - file_path: Local path to the downloaded file
-            - filename: Name of the file
-            - asset_table: The asset table name (e.g., "Model", "Image")
-            - asset_types: List of asset type labels
-
-        Example:
-            download_asset("1-ABC")  # Download to execution working dir
-            download_asset("1-ABC", "/tmp/models")  # Download to specific dir
-        """
-        try:
-            from pathlib import Path
-
-            execution = _get_active_tool_execution()
-            if execution is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution. Use create_execution first.",
-                })
-
-            # Use provided dest_dir or default to execution working dir
-            if dest_dir:
-                destination = Path(dest_dir)
-            else:
-                destination = execution.working_dir
-
-            asset_path = execution.download_asset(
-                asset_rid=asset_rid,
-                dest_dir=destination,
-            )
-
-            return json.dumps({
-                "status": "downloaded",
-                "execution_rid": execution.execution_rid,
-                "asset_rid": asset_rid,
-                "file_path": str(asset_path),
-                "filename": asset_path.file_name,
-                "asset_table": asset_path.asset_table,
-                "asset_types": asset_path.asset_types,
-            })
-        except Exception as e:
-            logger.error(f"Failed to download asset: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def create_execution_dataset(
@@ -590,96 +321,6 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             logger.error(f"Failed to create execution dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    @mcp.tool()
-    async def download_execution_dataset(
-        dataset_rid: str,
-        version: str,
-        materialize: bool = True,
-        exclude_tables: list[str] | None = None,
-        timeout: list[int] | None = None,
-    ) -> str:
-        """Download a dataset version as a BDBag for use in this execution.
-
-        Creates a self-contained BDBag archive of the specified dataset version
-        and records it as an input for provenance tracking. The bag includes
-        all dataset members, nested datasets (recursively), feature values,
-        vocabulary terms, and asset files.
-
-        The bag captures the exact catalog state at the version's snapshot time,
-        ensuring reproducibility regardless of later catalog changes.
-
-        Args:
-            dataset_rid: RID of the dataset to download.
-            version: Semantic version to download (e.g., "1.0.0"). Required.
-                Use lookup_dataset() to find the current_version if needed.
-            materialize: If True (default), fetch all referenced asset files
-                (images, model weights, etc.) from Hatrac storage. If False,
-                bag contains only metadata and remote file references.
-            exclude_tables: Optional list of table names to exclude from FK path
-                traversal during bag export. Use when downloads are slow or
-                timing out due to expensive joins through large tables.
-            timeout: Optional [connect_timeout, read_timeout] in seconds for
-                network requests. Default is [10, 610]. Increase read_timeout
-                for large datasets with deep FK joins that need more time.
-
-        Returns:
-            JSON with bag attributes: dataset_rid, version, description,
-            dataset_types, execution_rid, and bag_path (local filesystem path).
-        """
-        try:
-            from deriva_ml.dataset.aux_classes import DatasetSpec
-
-            execution = _get_active_tool_execution()
-            if execution is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution.",
-                })
-
-            spec = DatasetSpec(
-                rid=dataset_rid,
-                version=version,
-                materialize=materialize,
-                exclude_tables=set(exclude_tables) if exclude_tables else None,
-                timeout=tuple(timeout) if timeout else None,
-            )
-            bag = execution.download_dataset_bag(spec)
-
-            return json.dumps({
-                "status": "downloaded",
-                "dataset_rid": bag.dataset_rid,
-                "version": str(bag.current_version) if bag.current_version else None,
-                "description": bag.description,
-                "dataset_types": bag.dataset_types,
-                "execution_rid": bag.execution_rid,
-                "bag_path": str(bag.model.bag_path),
-            })
-        except Exception as e:
-            logger.error(f"Failed to download dataset: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def get_execution_working_dir() -> str:
-        """Get the local working directory path for the active execution.
-
-        Returns:
-            JSON with working_dir path.
-        """
-        try:
-            execution = _get_active_tool_execution()
-            if execution is None:
-                return json.dumps({
-                    "status": "error",
-                    "message": "No active execution.",
-                })
-
-            return json.dumps({
-                "working_dir": str(execution.working_dir),
-                "execution_rid": execution.execution_rid,
-            })
-        except Exception as e:
-            logger.error(f"Failed to get working dir: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
 
     # =========================================================================
     # Execution Nesting Tools
@@ -769,216 +410,3 @@ def register_execution_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> N
             logger.error(f"Failed to list nested executions: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
-    @mcp.tool()
-    async def list_parent_executions(
-        execution_rid: str,
-        recurse: bool = False,
-    ) -> str:
-        """List all parent executions that contain this execution as a child.
-
-        Args:
-            execution_rid: RID of the child execution.
-            recurse: If True, return all ancestors (parents, grandparents, etc.).
-
-        Returns:
-            JSON array of {execution_rid, workflow_rid, status, description} for each parent.
-
-        Example:
-            list_parent_executions("1-CHILD")  # Direct parents only
-            list_parent_executions("1-CHILD", recurse=True)  # All ancestors
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            execution = ml.lookup_execution(execution_rid)
-            parents = execution.list_parent_executions(recurse=recurse)
-
-            result = []
-            for parent in parents:
-                result.append({
-                    "execution_rid": parent.execution_rid,
-                    "workflow_rid": parent.workflow_rid,
-                    "status": parent.status.value if hasattr(parent.status, 'value') else str(parent.status),
-                    "description": parent.description,
-                })
-
-            return json.dumps({
-                "child_rid": execution_rid,
-                "recurse": recurse,
-                "count": len(result),
-                "parents": result,
-            })
-        except Exception as e:
-            logger.error(f"Failed to list parent executions: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-# =============================================================================
-# Storage Management Tools
-# =============================================================================
-
-
-def _discover_storage_entries() -> list[dict[str, Any]]:
-    """Discover all storage entries across ~/.deriva-ml/.
-
-    Delegates to deriva_ml.cache_tui.discover_entries() for consistent
-    behavior with the CLI tool (deriva-ml-storage).
-
-    Returns a flat list of dicts with: rid, label, location, category,
-    size_bytes, size, item_count, modified, path.
-    """
-    from deriva_ml.cache_tui import discover_entries
-
-    return [e.to_dict() for e in discover_entries()]
-
-
-def register_storage_tools(mcp_server: FastMCP, conn_manager: ConnectionManager):
-    """Register storage management tools with the MCP server."""
-    from deriva_ml.cache_tui import _human_readable_size
-
-    @mcp_server.tool()
-    async def list_storage_contents(
-        filter: str = "all",
-    ) -> str:
-        """List DerivaML storage contents across all working directories.
-
-        Scans ~/.deriva-ml/ for cached dataset bags, execution directories,
-        and other artifacts (hydra configs, client exports, etc.).
-
-        Use this to understand what's consuming disk space before deciding
-        what to delete with delete_storage.
-
-        Equivalent to the CLI: `deriva-ml-storage --list [cache|executions|all]`
-
-        Args:
-            filter: What to show. One of:
-                - "all" (default): All storage entries
-                - "cache": Only cached dataset bags
-                - "executions": Only execution working directories
-
-        Returns:
-            JSON with:
-                - entries: list of storage entries, each with rid, label,
-                  location, category (dataset/execution/other), size, item_count,
-                  modified, path
-                - total_entries: number of entries
-                - total_size / total_size_bytes: aggregate size
-        """
-        try:
-            all_entries = _discover_storage_entries()
-
-            if filter == "cache":
-                all_entries = [e for e in all_entries if e["category"] == "dataset"]
-            elif filter == "executions":
-                all_entries = [e for e in all_entries if e["category"] == "execution"]
-
-            # Sort by size descending
-            all_entries.sort(key=lambda e: e["size_bytes"], reverse=True)
-
-            total_bytes = sum(e["size_bytes"] for e in all_entries)
-
-            return json.dumps({
-                "status": "success",
-                "filter": filter,
-                "entries": all_entries,
-                "total_entries": len(all_entries),
-                "total_size_bytes": total_bytes,
-                "total_size": _human_readable_size(total_bytes),
-            })
-        except Exception as e:
-            logger.error(f"Failed to list storage contents: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp_server.tool()
-    async def delete_storage(
-        rids: list[str],
-        confirm: bool = False,
-    ) -> str:
-        """Delete storage entries by RID.
-
-        Finds and removes cached dataset bags, execution directories, or
-        other artifacts matching the given RID(s). A single RID may match
-        multiple entries (e.g., a dataset with several cached versions,
-        or an execution RID matching a working directory).
-
-        Searches across all DerivaML working directories in ~/.deriva-ml/.
-
-        IMPORTANT: This permanently deletes local data. Cached bags can be
-        re-downloaded from the catalog but execution outputs that have not
-        been uploaded will be lost. Always call list_storage_contents first
-        to review entries, and set confirm=true to proceed.
-
-        Equivalent to the CLI: `deriva-ml-storage --delete <RID> [<RID> ...]`
-
-        Args:
-            rids: One or more RIDs to delete. Matches against dataset RIDs
-                (for cached bags) and execution RIDs (for working directories).
-            confirm: Must be set to true to actually delete. If false,
-                returns a preview of what would be deleted (dry run).
-
-        Returns:
-            JSON with deleted entries and bytes freed, or dry run preview.
-        """
-        try:
-            import shutil
-
-            all_entries = _discover_storage_entries()
-
-            rid_set = set(rids)
-            matches = [e for e in all_entries if e.get("rid") in rid_set]
-
-            if not matches:
-                return json.dumps({
-                    "status": "success",
-                    "message": f"No entries found matching: {', '.join(rids)}",
-                    "entries_found": 0,
-                })
-
-            total_bytes = sum(e["size_bytes"] for e in matches)
-
-            if not confirm:
-                return json.dumps({
-                    "status": "dry_run",
-                    "message": f"Found {len(matches)} entry/entries "
-                               f"({_human_readable_size(total_bytes)}). "
-                               f"Set confirm=true to delete.",
-                    "entries": matches,
-                    "total_bytes": total_bytes,
-                    "total_size": _human_readable_size(total_bytes),
-                })
-
-            # Actually delete
-            deleted = []
-            errors = []
-            bytes_freed = 0
-            for entry in matches:
-                try:
-                    shutil.rmtree(entry["path"])
-                    deleted.append(entry)
-                    bytes_freed += entry["size_bytes"]
-                except Exception as e:
-                    errors.append({"path": entry["path"], "error": str(e)})
-
-            # Clean up empty parent dirs
-            deriva_root = Path.home() / ".deriva-ml"
-            for entry in deleted:
-                parent = Path(entry["path"]).parent
-                while parent != deriva_root and parent.exists():
-                    try:
-                        if not any(parent.iterdir()):
-                            parent.rmdir()
-                            parent = parent.parent
-                        else:
-                            break
-                    except OSError:
-                        break
-
-            return json.dumps({
-                "status": "success",
-                "deleted": deleted,
-                "entries_deleted": len(deleted),
-                "bytes_freed": bytes_freed,
-                "size_freed": _human_readable_size(bytes_freed),
-                "errors": errors,
-            })
-        except Exception as e:
-            logger.error(f"Failed to delete storage entries: {e}")
-            return json.dumps({"status": "error", "message": str(e)})

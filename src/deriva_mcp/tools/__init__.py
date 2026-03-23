@@ -9,8 +9,7 @@ from deriva_mcp.tools.background_tasks import register_background_task_tools
 from deriva_mcp.tools.catalog import register_catalog_tools
 from deriva_mcp.tools.data import register_data_tools
 from deriva_mcp.tools.dataset import register_dataset_tools
-from deriva_mcp.tools.devtools import register_devtools
-from deriva_mcp.tools.execution import register_execution_tools, register_storage_tools
+from deriva_mcp.tools.execution import register_execution_tools
 from deriva_mcp.tools.feature import register_feature_tools
 from deriva_mcp.tools.rag import register_rag_tools
 from deriva_mcp.tools.schema import register_schema_tools
@@ -27,8 +26,6 @@ __all__ = [
     "register_feature_tools",
     "register_schema_tools",
     "register_execution_tools",
-    "register_storage_tools",
     "register_data_tools",
-    "register_devtools",
     "register_rag_tools",
 ]

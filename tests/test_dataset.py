@@ -1,6 +1,6 @@
 """Unit tests for dataset management tools.
 
-Tests cover all 21 dataset tools registered by register_dataset_tools:
+Tests cover the dataset tools registered by register_dataset_tools:
 - create_dataset: Create datasets within execution context
 - get_dataset_spec: Generate DatasetSpecConfig strings
 - list_dataset_members: List members grouped by table
@@ -13,14 +13,11 @@ Tests cover all 21 dataset tools registered by register_dataset_tools:
 - remove_dataset_type: Remove type from dataset
 - add_dataset_element_type: Register table as element type
 - add_dataset_child: Nest datasets
-- list_dataset_children: List child datasets
 - list_dataset_parents: List parent datasets
-- list_dataset_executions: List executions that used a dataset
-- download_dataset: Download as BDBag
-- denormalize_dataset: Join tables into wide format
+- estimate_bag_size: Estimate bag download size
+- preview_denormalized_dataset: Join tables into wide format
 - create_dataset_type_term: Create Dataset_Type vocab term
 - delete_dataset_type_term: Delete Dataset_Type vocab term
-- restructure_assets: Restructure assets into directory hierarchy
 - split_dataset: Split dataset into train/test
 """
 
@@ -271,116 +268,6 @@ class TestGetDatasetSpec:
 # =============================================================================
 
 
-class TestListDatasetMembers:
-    """Tests for the list_dataset_members tool."""
-
-    @pytest.mark.asyncio
-    async def test_list_members_basic(self, dataset_tools, mock_ml):
-        """List members grouped by table name."""
-        mock_dataset = _make_mock_dataset()
-        mock_dataset.list_dataset_members.return_value = {
-            "Image": [{"RID": "IMG-1"}, {"RID": "IMG-2"}],
-            "Subject": [{"RID": "SUBJ-1"}],
-        }
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        result = await dataset_tools["list_dataset_members"](dataset_rid="DS-001")
-
-        data = parse_json_result(result)
-        assert len(data["Image"]) == 2
-        assert data["Image"][0]["RID"] == "IMG-1"
-        assert len(data["Subject"]) == 1
-        assert data["Subject"][0]["RID"] == "SUBJ-1"
-
-    @pytest.mark.asyncio
-    async def test_list_members_with_version(self, dataset_tools, mock_ml):
-        """Version is passed through to the underlying method."""
-        mock_dataset = _make_mock_dataset()
-        mock_dataset.list_dataset_members.return_value = {}
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        await dataset_tools["list_dataset_members"](
-            dataset_rid="DS-001",
-            version="1.0.0",
-        )
-
-        mock_dataset.list_dataset_members.assert_called_once_with(
-            version="1.0.0", recurse=False, limit=None,
-        )
-
-    @pytest.mark.asyncio
-    async def test_list_members_recurse(self, dataset_tools, mock_ml):
-        """Recurse parameter is passed through."""
-        mock_dataset = _make_mock_dataset()
-        mock_dataset.list_dataset_members.return_value = {}
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        await dataset_tools["list_dataset_members"](
-            dataset_rid="DS-001",
-            recurse=True,
-        )
-
-        mock_dataset.list_dataset_members.assert_called_once_with(
-            version=None, recurse=True, limit=None,
-        )
-
-    @pytest.mark.asyncio
-    async def test_list_members_with_limit(self, dataset_tools, mock_ml):
-        """Limit parameter is passed through."""
-        mock_dataset = _make_mock_dataset()
-        mock_dataset.list_dataset_members.return_value = {}
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        await dataset_tools["list_dataset_members"](
-            dataset_rid="DS-001",
-            limit=10,
-        )
-
-        mock_dataset.list_dataset_members.assert_called_once_with(
-            version=None, recurse=False, limit=10,
-        )
-
-    @pytest.mark.asyncio
-    async def test_list_members_empty(self, dataset_tools, mock_ml):
-        """Empty dataset returns empty dict."""
-        mock_dataset = _make_mock_dataset()
-        mock_dataset.list_dataset_members.return_value = {}
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        result = await dataset_tools["list_dataset_members"](dataset_rid="DS-001")
-
-        data = parse_json_result(result)
-        assert data == {}
-
-    @pytest.mark.asyncio
-    async def test_list_members_only_rid_returned(self, dataset_tools, mock_ml):
-        """Only the RID field is returned from each member (extra fields stripped)."""
-        mock_dataset = _make_mock_dataset()
-        mock_dataset.list_dataset_members.return_value = {
-            "Image": [{"RID": "IMG-1", "Filename": "img1.jpg", "Size": 1024}],
-        }
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        result = await dataset_tools["list_dataset_members"](dataset_rid="DS-001")
-
-        data = parse_json_result(result)
-        assert data["Image"] == [{"RID": "IMG-1"}]
-
-    @pytest.mark.asyncio
-    async def test_list_members_exception(self, dataset_tools, mock_ml):
-        """When list_dataset_members raises, return an error."""
-        mock_ml.lookup_dataset.side_effect = RuntimeError("Dataset not found")
-
-        result = await dataset_tools["list_dataset_members"](dataset_rid="INVALID")
-
-        assert_error(result, expected_message="Dataset not found")
-
-    @pytest.mark.asyncio
-    async def test_list_members_no_connection(self, dataset_tools_disconnected):
-        """When not connected, return an error."""
-        result = await dataset_tools_disconnected["list_dataset_members"](dataset_rid="DS-001")
-
-        assert_error(result, expected_message="No active catalog connection")
 
 
 # =============================================================================
@@ -930,100 +817,6 @@ class TestAddDatasetChild:
 
 
 # =============================================================================
-# TestListDatasetChildren
-# =============================================================================
-
-
-class TestListDatasetChildren:
-    """Tests for the list_dataset_children tool."""
-
-    @pytest.mark.asyncio
-    async def test_list_children_success(self, dataset_tools, mock_ml):
-        """Listing children returns serialized child datasets."""
-        mock_parent = _make_mock_dataset()
-        child1 = _make_mock_dataset(
-            dataset_rid="CHILD-1", description="Training set",
-            dataset_types=["Training"], current_version="0.2.0",
-        )
-        child2 = _make_mock_dataset(
-            dataset_rid="CHILD-2", description="Testing set",
-            dataset_types=["Testing"], current_version="0.3.0",
-        )
-        mock_parent.list_dataset_children.return_value = [child1, child2]
-        mock_ml.lookup_dataset.return_value = mock_parent
-
-        result = await dataset_tools["list_dataset_children"](dataset_rid="DS-001")
-
-        data = parse_json_result(result)
-        assert len(data) == 2
-        assert data[0]["dataset_rid"] == "CHILD-1"
-        assert data[0]["description"] == "Training set"
-        assert data[0]["dataset_types"] == ["Training"]
-        assert data[0]["current_version"] == "0.2.0"
-        assert data[1]["dataset_rid"] == "CHILD-2"
-
-    @pytest.mark.asyncio
-    async def test_list_children_empty(self, dataset_tools, mock_ml):
-        """When no children, return empty array."""
-        mock_parent = _make_mock_dataset()
-        mock_parent.list_dataset_children.return_value = []
-        mock_ml.lookup_dataset.return_value = mock_parent
-
-        result = await dataset_tools["list_dataset_children"](dataset_rid="DS-001")
-
-        data = parse_json_result(result)
-        assert data == []
-
-    @pytest.mark.asyncio
-    async def test_list_children_with_params(self, dataset_tools, mock_ml):
-        """Recurse and version parameters are passed through."""
-        mock_parent = _make_mock_dataset()
-        mock_parent.list_dataset_children.return_value = []
-        mock_ml.lookup_dataset.return_value = mock_parent
-
-        await dataset_tools["list_dataset_children"](
-            dataset_rid="DS-001",
-            recurse=True,
-            version="1.0.0",
-        )
-
-        mock_parent.list_dataset_children.assert_called_once_with(
-            recurse=True, version="1.0.0",
-        )
-
-    @pytest.mark.asyncio
-    async def test_list_children_null_version(self, dataset_tools, mock_ml):
-        """Child with null current_version serializes as None."""
-        mock_parent = _make_mock_dataset()
-        child = _make_mock_dataset(dataset_rid="CHILD-1", current_version=None)
-        mock_parent.list_dataset_children.return_value = [child]
-        mock_ml.lookup_dataset.return_value = mock_parent
-
-        result = await dataset_tools["list_dataset_children"](dataset_rid="DS-001")
-
-        data = parse_json_result(result)
-        assert data[0]["current_version"] is None
-
-    @pytest.mark.asyncio
-    async def test_list_children_exception(self, dataset_tools, mock_ml):
-        """When list_dataset_children raises, return an error."""
-        mock_ml.lookup_dataset.side_effect = RuntimeError("Lookup failed")
-
-        result = await dataset_tools["list_dataset_children"](dataset_rid="INVALID")
-
-        assert_error(result, expected_message="Lookup failed")
-
-    @pytest.mark.asyncio
-    async def test_list_children_no_connection(self, dataset_tools_disconnected):
-        """When not connected, return an error."""
-        result = await dataset_tools_disconnected["list_dataset_children"](
-            dataset_rid="DS-001",
-        )
-
-        assert_error(result, expected_message="No active catalog connection")
-
-
-# =============================================================================
 # TestListDatasetParents
 # =============================================================================
 
@@ -1094,202 +887,6 @@ class TestListDatasetParents:
         """When not connected, return an error."""
         result = await dataset_tools_disconnected["list_dataset_parents"](
             dataset_rid="DS-001",
-        )
-
-        assert_error(result, expected_message="No active catalog connection")
-
-
-# =============================================================================
-# TestListDatasetExecutions
-# =============================================================================
-
-
-class TestListDatasetExecutions:
-    """Tests for the list_dataset_executions tool."""
-
-    @pytest.mark.asyncio
-    async def test_list_executions_success(self, dataset_tools, mock_ml):
-        """Listing executions returns execution details."""
-        mock_dataset = _make_mock_dataset()
-
-        mock_exe1 = MagicMock()
-        mock_exe1.execution_rid = "EXE-1"
-        mock_exe1.description = "Training run"
-        mock_exe1.status.value = "complete"
-        mock_exe1.workflow_rid = "WF-1"
-
-        mock_exe2 = MagicMock()
-        mock_exe2.execution_rid = "EXE-2"
-        mock_exe2.description = None
-        mock_exe2.status = None
-        mock_exe2.workflow_rid = "WF-2"
-
-        mock_dataset.list_executions.return_value = [mock_exe1, mock_exe2]
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        result = await dataset_tools["list_dataset_executions"](dataset_rid="DS-001")
-
-        data = parse_json_result(result)
-        assert len(data) == 2
-        assert data[0]["execution_rid"] == "EXE-1"
-        assert data[0]["description"] == "Training run"
-        assert data[0]["status"] == "complete"
-        assert data[0]["workflow_rid"] == "WF-1"
-        assert data[1]["execution_rid"] == "EXE-2"
-        assert data[1]["description"] is None
-        assert data[1]["status"] is None
-
-    @pytest.mark.asyncio
-    async def test_list_executions_empty(self, dataset_tools, mock_ml):
-        """When no executions, return empty array."""
-        mock_dataset = _make_mock_dataset()
-        mock_dataset.list_executions.return_value = []
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        result = await dataset_tools["list_dataset_executions"](dataset_rid="DS-001")
-
-        data = parse_json_result(result)
-        assert data == []
-
-    @pytest.mark.asyncio
-    async def test_list_executions_exception(self, dataset_tools, mock_ml):
-        """When list_executions raises, return an error."""
-        mock_ml.lookup_dataset.side_effect = RuntimeError("Not found")
-
-        result = await dataset_tools["list_dataset_executions"](dataset_rid="INVALID")
-
-        assert_error(result, expected_message="Not found")
-
-    @pytest.mark.asyncio
-    async def test_list_executions_no_connection(self, dataset_tools_disconnected):
-        """When not connected, return an error."""
-        result = await dataset_tools_disconnected["list_dataset_executions"](
-            dataset_rid="DS-001",
-        )
-
-        assert_error(result, expected_message="No active catalog connection")
-
-
-# =============================================================================
-# TestDownloadDataset
-# =============================================================================
-
-
-class TestDownloadDataset:
-    """Tests for the download_dataset tool."""
-
-    @pytest.mark.asyncio
-    async def test_download_success(self, dataset_tools, mock_ml):
-        """Downloading a dataset returns bag metadata."""
-        mock_bag = MagicMock()
-        mock_bag.dataset_rid = "DS-001"
-        mock_bag.current_version = "1.0.0"
-        mock_bag.description = "Training data"
-        mock_bag.dataset_types = ["Training"]
-        mock_bag.execution_rid = "EXE-001"
-        mock_bag.model.bag_path = "/tmp/bags/DS-001"
-        mock_ml.download_dataset_bag.return_value = mock_bag
-
-        mock_spec_cls = MagicMock()
-        mock_spec_instance = MagicMock()
-        mock_spec_cls.return_value = mock_spec_instance
-
-        with patch("deriva_ml.dataset.aux_classes.DatasetSpec", mock_spec_cls):
-            result = await dataset_tools["download_dataset"](
-                dataset_rid="DS-001",
-                version="1.0.0",
-            )
-
-        data = assert_success(result)
-        assert data["status"] == "downloaded"
-        assert data["dataset_rid"] == "DS-001"
-        assert data["version"] == "1.0.0"
-        assert data["description"] == "Training data"
-        assert data["dataset_types"] == ["Training"]
-        assert data["execution_rid"] == "EXE-001"
-        assert data["bag_path"] == "/tmp/bags/DS-001"
-        mock_spec_cls.assert_called_once_with(
-            rid="DS-001", version="1.0.0", materialize=True,
-            exclude_tables=None, timeout=None,
-        )
-        mock_ml.download_dataset_bag.assert_called_once_with(mock_spec_instance)
-
-    @pytest.mark.asyncio
-    async def test_download_no_materialize(self, dataset_tools, mock_ml):
-        """Downloading with materialize=False passes the flag through."""
-        mock_bag = MagicMock()
-        mock_bag.dataset_rid = "DS-001"
-        mock_bag.current_version = "1.0.0"
-        mock_bag.description = "Metadata only"
-        mock_bag.dataset_types = []
-        mock_bag.execution_rid = None
-        mock_bag.model.bag_path = "/tmp/bags/DS-001"
-        mock_ml.download_dataset_bag.return_value = mock_bag
-
-        mock_spec_cls = MagicMock()
-        mock_spec_instance = MagicMock()
-        mock_spec_cls.return_value = mock_spec_instance
-
-        with patch("deriva_ml.dataset.aux_classes.DatasetSpec", mock_spec_cls):
-            result = await dataset_tools["download_dataset"](
-                dataset_rid="DS-001",
-                version="1.0.0",
-                materialize=False,
-            )
-
-        data = assert_success(result)
-        assert data["status"] == "downloaded"
-        mock_spec_cls.assert_called_once_with(
-            rid="DS-001", version="1.0.0", materialize=False,
-            exclude_tables=None, timeout=None,
-        )
-
-    @pytest.mark.asyncio
-    async def test_download_null_version(self, dataset_tools, mock_ml):
-        """When bag has no current_version, version is None."""
-        mock_bag = MagicMock()
-        mock_bag.dataset_rid = "DS-001"
-        mock_bag.current_version = None
-        mock_bag.description = "No version"
-        mock_bag.dataset_types = []
-        mock_bag.execution_rid = None
-        mock_bag.model.bag_path = "/tmp/bags/DS-001"
-        mock_ml.download_dataset_bag.return_value = mock_bag
-
-        mock_spec_cls = MagicMock()
-        mock_spec_cls.return_value = MagicMock()
-
-        with patch("deriva_ml.dataset.aux_classes.DatasetSpec", mock_spec_cls):
-            result = await dataset_tools["download_dataset"](
-                dataset_rid="DS-001",
-                version="1.0.0",
-            )
-
-        data = assert_success(result)
-        assert data["version"] is None
-
-    @pytest.mark.asyncio
-    async def test_download_exception(self, dataset_tools, mock_ml):
-        """When download_dataset_bag raises, return an error."""
-        mock_ml.download_dataset_bag.side_effect = RuntimeError("Download failed")
-
-        mock_spec_cls = MagicMock()
-        mock_spec_cls.return_value = MagicMock()
-
-        with patch("deriva_ml.dataset.aux_classes.DatasetSpec", mock_spec_cls):
-            result = await dataset_tools["download_dataset"](
-                dataset_rid="DS-001",
-                version="1.0.0",
-            )
-
-        assert_error(result, expected_message="Download failed")
-
-    @pytest.mark.asyncio
-    async def test_download_no_connection(self, dataset_tools_disconnected):
-        """When not connected, return an error."""
-        result = await dataset_tools_disconnected["download_dataset"](
-            dataset_rid="DS-001",
-            version="1.0.0",
         )
 
         assert_error(result, expected_message="No active catalog connection")
@@ -1399,7 +996,7 @@ class TestEstimateBagSize:
 
 
 class TestDenormalizeDataset:
-    """Tests for the denormalize_dataset tool."""
+    """Tests for the preview_denormalized_dataset tool."""
 
     @pytest.mark.asyncio
     async def test_denormalize_success(self, dataset_tools, mock_ml):
@@ -1411,7 +1008,7 @@ class TestDenormalizeDataset:
         ])
         mock_ml.lookup_dataset.return_value = mock_dataset
 
-        result = await dataset_tools["denormalize_dataset"](
+        result = await dataset_tools["preview_denormalized_dataset"](
             dataset_rid="DS-001",
             include_tables=["Image", "Diagnosis"],
         )
@@ -1433,7 +1030,7 @@ class TestDenormalizeDataset:
         ])
         mock_ml.lookup_dataset.return_value = mock_dataset
 
-        await dataset_tools["denormalize_dataset"](
+        await dataset_tools["preview_denormalized_dataset"](
             dataset_rid="DS-001",
             include_tables=["Image"],
             version="1.0.0",
@@ -1452,7 +1049,7 @@ class TestDenormalizeDataset:
         ])
         mock_ml.lookup_dataset.return_value = mock_dataset
 
-        result = await dataset_tools["denormalize_dataset"](
+        result = await dataset_tools["preview_denormalized_dataset"](
             dataset_rid="DS-001",
             include_tables=["Image"],
             limit=5,
@@ -1469,7 +1066,7 @@ class TestDenormalizeDataset:
         mock_dataset.denormalize_as_dict.return_value = iter([])
         mock_ml.lookup_dataset.return_value = mock_dataset
 
-        result = await dataset_tools["denormalize_dataset"](
+        result = await dataset_tools["preview_denormalized_dataset"](
             dataset_rid="DS-001",
             include_tables=["Image"],
         )
@@ -1484,7 +1081,7 @@ class TestDenormalizeDataset:
         """When denormalize_as_dict raises, return an error."""
         mock_ml.lookup_dataset.side_effect = RuntimeError("Bad table")
 
-        result = await dataset_tools["denormalize_dataset"](
+        result = await dataset_tools["preview_denormalized_dataset"](
             dataset_rid="DS-001",
             include_tables=["NonExistent"],
         )
@@ -1494,7 +1091,7 @@ class TestDenormalizeDataset:
     @pytest.mark.asyncio
     async def test_denormalize_no_connection(self, dataset_tools_disconnected):
         """When not connected, return an error."""
-        result = await dataset_tools_disconnected["denormalize_dataset"](
+        result = await dataset_tools_disconnected["preview_denormalized_dataset"](
             dataset_rid="DS-001",
             include_tables=["Image"],
         )
@@ -1654,138 +1251,6 @@ class TestDeleteDatasetTypeTerm:
         """When not connected, return an error."""
         result = await dataset_tools_disconnected["delete_dataset_type_term"](
             type_name="Test",
-        )
-
-        assert_error(result, expected_message="No active catalog connection")
-
-
-# =============================================================================
-# TestRestructureAssets
-# =============================================================================
-
-
-class TestRestructureAssets:
-    """Tests for the restructure_assets tool."""
-
-    @pytest.mark.asyncio
-    async def test_restructure_success(self, dataset_tools, mock_ml, tmp_path):
-        """Restructuring assets returns status=success with file count."""
-        mock_dataset = _make_mock_dataset(current_version="1.0.0")
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        # Create mock bag
-        mock_bag = MagicMock()
-        mock_dataset.to_bag.return_value = mock_bag
-
-        # Create actual files in tmp_path for rglob to count
-        result_path = tmp_path / "output"
-        result_path.mkdir()
-        (result_path / "training").mkdir()
-        (result_path / "training" / "Normal").mkdir()
-        (result_path / "training" / "Normal" / "img1.jpg").touch()
-        (result_path / "training" / "Normal" / "img2.jpg").touch()
-        mock_bag.restructure_assets.return_value = result_path
-
-        result = await dataset_tools["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir=str(tmp_path / "output"),
-            group_by=["Diagnosis"],
-        )
-
-        data = assert_success(result)
-        assert data["dataset_rid"] == "DS-001"
-        assert data["asset_table"] == "Image"
-        assert data["group_by"] == ["Diagnosis"]
-        assert data["file_count"] == 2
-        mock_dataset.to_bag.assert_called_once_with(materialize=True)
-
-    @pytest.mark.asyncio
-    async def test_restructure_with_version(self, dataset_tools, mock_ml, tmp_path):
-        """When version is provided, set_version is called first."""
-        mock_dataset = _make_mock_dataset()
-        mock_versioned = _make_mock_dataset(current_version="2.0.0")
-        mock_dataset.set_version.return_value = mock_versioned
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        mock_bag = MagicMock()
-        mock_versioned.to_bag.return_value = mock_bag
-        result_path = tmp_path / "out"
-        result_path.mkdir()
-        mock_bag.restructure_assets.return_value = result_path
-
-        result = await dataset_tools["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir=str(tmp_path / "out"),
-            version="2.0.0",
-        )
-
-        data = assert_success(result)
-        mock_dataset.set_version.assert_called_once_with("2.0.0")
-
-    @pytest.mark.asyncio
-    async def test_restructure_default_group_by(self, dataset_tools, mock_ml, tmp_path):
-        """When group_by is None, pass empty list."""
-        mock_dataset = _make_mock_dataset()
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        mock_bag = MagicMock()
-        mock_dataset.to_bag.return_value = mock_bag
-        result_path = tmp_path / "out"
-        result_path.mkdir()
-        mock_bag.restructure_assets.return_value = result_path
-
-        await dataset_tools["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir=str(tmp_path / "out"),
-        )
-
-        call_kwargs = mock_bag.restructure_assets.call_args.kwargs
-        assert call_kwargs["group_by"] == []
-
-    @pytest.mark.asyncio
-    async def test_restructure_no_materialize(self, dataset_tools, mock_ml, tmp_path):
-        """When materialize=False, pass it through to to_bag."""
-        mock_dataset = _make_mock_dataset()
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        mock_bag = MagicMock()
-        mock_dataset.to_bag.return_value = mock_bag
-        result_path = tmp_path / "out"
-        result_path.mkdir()
-        mock_bag.restructure_assets.return_value = result_path
-
-        await dataset_tools["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir=str(tmp_path / "out"),
-            materialize=False,
-        )
-
-        mock_dataset.to_bag.assert_called_once_with(materialize=False)
-
-    @pytest.mark.asyncio
-    async def test_restructure_exception(self, dataset_tools, mock_ml):
-        """When restructure_assets raises, return an error."""
-        mock_ml.lookup_dataset.side_effect = RuntimeError("Download failed")
-
-        result = await dataset_tools["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir="/tmp/out",
-        )
-
-        assert_error(result, expected_message="Download failed")
-
-    @pytest.mark.asyncio
-    async def test_restructure_no_connection(self, dataset_tools_disconnected):
-        """When not connected, return an error."""
-        result = await dataset_tools_disconnected["restructure_assets"](
-            dataset_rid="DS-001",
-            asset_table="Image",
-            output_dir="/tmp/out",
         )
 
         assert_error(result, expected_message="No active catalog connection")
@@ -2006,11 +1471,10 @@ class TestToolRegistration:
     """Verify that all expected dataset tools are registered."""
 
     def test_all_tools_registered(self, dataset_tools):
-        """All 21 dataset tools should be registered."""
+        """All expected dataset tools should be registered."""
         expected_tools = [
             "create_dataset",
             "get_dataset_spec",
-            "list_dataset_members",
             "add_dataset_members",
             "delete_dataset_members",
             "increment_dataset_version",
@@ -2020,14 +1484,11 @@ class TestToolRegistration:
             "remove_dataset_type",
             "add_dataset_element_type",
             "add_dataset_child",
-            "list_dataset_children",
             "list_dataset_parents",
-            "list_dataset_executions",
-            "download_dataset",
-            "denormalize_dataset",
+            "estimate_bag_size",
+            "preview_denormalized_dataset",
             "create_dataset_type_term",
             "delete_dataset_type_term",
-            "restructure_assets",
             "split_dataset",
         ]
         for tool_name in expected_tools:
@@ -2035,8 +1496,86 @@ class TestToolRegistration:
 
     def test_no_extra_tools(self, dataset_tools):
         """Only the expected tools should be registered."""
-        expected_count = 21
+        expected_count = 17
         assert len(dataset_tools) == expected_count, (
             f"Expected {expected_count} tools, got {len(dataset_tools)}: "
             f"{sorted(dataset_tools.keys())}"
         )
+
+
+# =============================================================================
+# TestEstimateBagSize
+# =============================================================================
+
+
+class TestEstimateBagSize:
+    """Tests for the estimate_bag_size tool."""
+
+    @pytest.mark.asyncio
+    async def test_success(self, dataset_tools, mock_ml):
+        """estimate_bag_size returns size estimates."""
+        mock_ml.estimate_bag_size.return_value = {
+            "tables": {
+                "Image": {"row_count": 100, "is_asset": True, "asset_bytes": 5242880},
+                "Subject": {"row_count": 10, "is_asset": False, "asset_bytes": 0},
+            },
+            "total_rows": 110,
+            "total_asset_bytes": 5242880,
+            "total_asset_size": "5.0 MB",
+        }
+
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec"):
+            result = await dataset_tools["estimate_bag_size"](
+                dataset_rid="1-ABC",
+                version="1.0.0",
+            )
+
+        data = assert_success(result)
+        assert data["total_rows"] == 110
+        assert data["total_asset_bytes"] == 5242880
+        assert data["total_asset_size"] == "5.0 MB"
+        assert "Image" in data["tables"]
+        assert data["tables"]["Image"]["row_count"] == 100
+
+    @pytest.mark.asyncio
+    async def test_with_exclude_tables(self, dataset_tools, mock_ml):
+        """estimate_bag_size passes exclude_tables parameter."""
+        mock_ml.estimate_bag_size.return_value = {
+            "tables": {"Subject": {"row_count": 10, "is_asset": False, "asset_bytes": 0}},
+            "total_rows": 10,
+            "total_asset_bytes": 0,
+            "total_asset_size": "0 B",
+        }
+
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec"):
+            result = await dataset_tools["estimate_bag_size"](
+                dataset_rid="1-ABC",
+                version="1.0.0",
+                exclude_tables=["Image"],
+            )
+
+        data = assert_success(result)
+        assert "Image" not in data["tables"]
+
+    @pytest.mark.asyncio
+    async def test_exception(self, dataset_tools, mock_ml):
+        """estimate_bag_size returns error on exception."""
+        mock_ml.estimate_bag_size.side_effect = Exception("Dataset not found")
+
+        with patch("deriva_ml.dataset.aux_classes.DatasetSpec"):
+            result = await dataset_tools["estimate_bag_size"](
+                dataset_rid="1-XYZ",
+                version="1.0.0",
+            )
+
+        assert_error(result, "Dataset not found")
+
+    @pytest.mark.asyncio
+    async def test_no_connection(self, dataset_tools_disconnected):
+        """estimate_bag_size returns error when not connected."""
+        result = await dataset_tools_disconnected["estimate_bag_size"](
+            dataset_rid="1-ABC",
+            version="1.0.0",
+        )
+
+        assert_error(result, "No active")
