@@ -772,3 +772,61 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 "message": str(e),
             })
 
+    @mcp.tool()
+    async def list_catalog_registry(hostname: str) -> str:
+        """List all catalogs and aliases available on a Deriva server.
+
+        Queries the server's ermrest registry to discover available catalogs
+        and their aliases. Use this to find catalogs before connecting.
+
+        Args:
+            hostname: Server hostname (e.g., "www.eye-ai.org", "dev.facebase.org").
+
+        Returns:
+            JSON with:
+            - hostname: The server queried
+            - catalogs: List of {id, name, description} for each catalog
+            - aliases: List of {id, alias_target, name, description} for each alias
+
+        Example:
+            list_catalog_registry("www.eye-ai.org")
+            -> {"hostname": "www.eye-ai.org", "catalogs": [...], "aliases": [...]}
+        """
+        try:
+            from deriva.core import DerivaServer, get_credential
+
+            server = DerivaServer("https", hostname, credentials=get_credential(hostname))
+            registry_catalog = server.connect_ermrest(0)
+            pb = registry_catalog.getPathBuilder()
+            registry = pb.schemas["ermrest"].tables["registry"]
+            entries = list(registry.entities().fetch())
+
+            catalogs = []
+            aliases = []
+
+            for entry in entries:
+                if entry.get("deleted_on"):
+                    continue
+                if entry.get("is_catalog"):
+                    catalogs.append({
+                        "id": entry["id"],
+                        "name": entry.get("name"),
+                        "description": entry.get("description"),
+                    })
+                elif entry.get("alias_target"):
+                    aliases.append({
+                        "id": entry["id"],
+                        "alias_target": entry["alias_target"],
+                        "name": entry.get("name"),
+                        "description": entry.get("description"),
+                    })
+
+            return json.dumps({
+                "hostname": hostname,
+                "catalogs": catalogs,
+                "aliases": aliases,
+            })
+        except Exception as e:
+            logger.error(f"Failed to list catalog registry: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
+
