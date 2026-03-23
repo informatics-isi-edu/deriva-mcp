@@ -1090,3 +1090,78 @@ class TestCite:
         result = await catalog_tools_disconnected["cite"](rid="1-ABC")
 
         assert_error(result, expected_message="No active catalog connection")
+
+
+# =============================================================================
+# TestContextFile
+# =============================================================================
+
+
+class TestContextFile:
+    """Tests for .deriva-context.json writing and cleanup."""
+
+    def test_write_context_file(self, tmp_path):
+        """_write_context_file creates a valid JSON context file."""
+        import json
+        from deriva_mcp.tools.catalog import _write_context_file, CONTEXT_FILENAME
+
+        with patch("deriva_mcp.tools.catalog.Path") as MockPath:
+            # Make Path(os.getcwd()) return tmp_path
+            mock_context_path = tmp_path / CONTEXT_FILENAME
+            MockPath.return_value.__truediv__ = lambda self, other: mock_context_path
+
+            _write_context_file("test.example.org", "42", "my_schema", "/tmp/working")
+
+        assert mock_context_path.exists()
+        data = json.loads(mock_context_path.read_text())
+        assert data["hostname"] == "test.example.org"
+        assert data["catalog_id"] == "42"
+        assert data["default_schema"] == "my_schema"
+        assert data["working_dir"] == "/tmp/working"
+        assert "connected_at" in data
+
+    def test_remove_context_file(self, tmp_path):
+        """_remove_context_file deletes the context file if it exists."""
+        from deriva_mcp.tools.catalog import _remove_context_file, CONTEXT_FILENAME
+
+        context_path = tmp_path / CONTEXT_FILENAME
+        context_path.write_text('{"test": true}')
+        assert context_path.exists()
+
+        with patch("deriva_mcp.tools.catalog.Path") as MockPath:
+            mock_context_path = context_path
+            MockPath.return_value.__truediv__ = lambda self, other: mock_context_path
+
+            _remove_context_file()
+
+        assert not context_path.exists()
+
+    def test_remove_context_file_missing(self, tmp_path):
+        """_remove_context_file does nothing if file doesn't exist."""
+        from deriva_mcp.tools.catalog import _remove_context_file, CONTEXT_FILENAME
+
+        with patch("deriva_mcp.tools.catalog.Path") as MockPath:
+            mock_context_path = tmp_path / CONTEXT_FILENAME
+            MockPath.return_value.__truediv__ = lambda self, other: mock_context_path
+
+            # Should not raise
+            _remove_context_file()
+
+    @pytest.mark.asyncio
+    async def test_set_active_catalog_writes_context(self, catalog_tools, mock_ml):
+        """set_active_catalog writes context file for the newly active catalog."""
+        from unittest.mock import MagicMock
+
+        mock_ml.default_schema = "test_schema"
+        mock_ml.working_dir = "/tmp/test_working"
+
+        with patch("deriva_mcp.tools.catalog._write_context_file") as mock_write:
+            result = await catalog_tools["set_active_catalog"](
+                hostname="test.example.org",
+                catalog_id="42",
+            )
+
+            data = assert_success(result)
+            mock_write.assert_called_once_with(
+                "test.example.org", "42", "test_schema", "/tmp/test_working"
+            )

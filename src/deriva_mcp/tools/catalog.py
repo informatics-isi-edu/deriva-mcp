@@ -113,6 +113,10 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             catalog_id: Catalog ID to activate.
         """
         if conn_manager.set_active(hostname, catalog_id):
+            # Update context file for the newly active catalog
+            ml = conn_manager.get_active_or_raise()
+            _write_context_file(hostname, catalog_id, ml.default_schema,
+                                str(ml.working_dir))
             return json.dumps({
                 "status": "success",
                 "active_catalog": f"{hostname}:{catalog_id}",
