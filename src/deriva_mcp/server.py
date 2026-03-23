@@ -44,12 +44,10 @@ from deriva_mcp.tools import (
     register_catalog_tools,
     register_data_tools,
     register_dataset_tools,
-    register_devtools,
     register_execution_tools,
     register_feature_tools,
     register_rag_tools,
     register_schema_tools,
-    register_storage_tools,
     register_vocabulary_tools,
     register_workflow_tools,
 )
@@ -83,7 +81,7 @@ Always call `connect_catalog` before using other tools. This establishes the con
 - Never construct raw ERMRest REST URLs (e.g., `https://host/ermrest/catalog/N/entity/...`) for inserts, updates, or deletes
 - Raw ERMRest URLs bypass business logic, FK validation, provenance tracking, and version management
 - For bulk operations not covered by MCP tools, use the DerivaML Python API with `ml.pathBuilder()` which provides type-safe datapath operations
-- If you must read data and no MCP tool exists, use `query_table` rather than constructing ERMRest URLs
+- If you must read data and no MCP tool exists, use `preview_table` rather than constructing ERMRest URLs
 
 **Provenance tracking:**
 
@@ -118,41 +116,20 @@ Always call `connect_catalog` before using other tools. This establishes the con
 **Working with datasets:**
 1. `create_dataset` - Create a new dataset with types
 2. `add_dataset_members` - Add assets or nested datasets as members
-3. `list_dataset_members` - View dataset contents
-4. `split_dataset` - Create train/test splits with optional stratification
-5. `download_dataset` - Download dataset assets locally
-6. `restructure_assets` - Organize downloaded assets into ML-ready directories (supports `value_selector` for multi-annotator data)
+3. `split_dataset` - Create train/test splits with optional stratification
+4. Read `deriva://dataset/{rid}/members` resource to view dataset contents
+
+For downloading datasets and restructuring assets locally, use the DerivaML Python API.
 
 **Adding features:**
 1. `create_feature` - Define a new feature linking a target table to vocabulary terms
 2. `add_feature_value` or `add_feature_value_record` - Assign feature values to records
-3. `fetch_table_features` - Query feature values with deduplication selectors
-
-**Feature value selection** (for resolving multiple values per record):
-- `selector="newest"` - Most recent annotation (default choice)
-- `selector="first"` - Earliest annotation (preserve originals)
-- `selector="latest"` - Alias for newest
-- `selector="majority_vote"` - Consensus label (requires `feature_name`)
-- `workflow="Training"` - Filter by workflow type name or RID
-- `execution="3-XYZ"` - Filter by specific execution RID
-- Only one selection method at a time (mutually exclusive)
-
-**Feature value resources** (pre-deduplicated, no tool call needed):
-- `deriva://catalog/features` - All feature definitions
-- `deriva://table/{table}/feature-values` - All values (raw, no dedup)
-- `deriva://table/{table}/feature-values/newest` - One per record (most recent)
-- `deriva://table/{table}/feature-values/first` - One per record (earliest)
-- `deriva://table/{table}/feature-values/majority_vote` - One per record (consensus)
-
-**Before running an experiment (pre-flight checklist):**
-1. `validate_rids` - Verify all dataset and asset RIDs exist and versions are valid
-2. `bag_info` - Check dataset sizes and local cache status
-3. `cache_dataset` - Download datasets/assets into local cache ahead of time (no execution needed)
 
 **Running workflows:**
 1. `create_execution` - Start a tracked execution
 2. `start_execution` / `stop_execution` - Manage execution lifecycle
-3. `upload_execution_outputs` - Upload results to the catalog
+
+For uploading outputs, use the DerivaML Python API execution context manager.
 
 **Managing workflows:**
 
@@ -169,7 +146,6 @@ Before creating an execution:
 5. `add_workflow_type()` - Add new workflow type if needed
 
 **Provenance queries:**
-- `list_dataset_executions` - Find all executions that used a dataset
 - `list_asset_executions` - Find executions that created/used an asset
 
 ## Schema Conventions
@@ -249,7 +225,7 @@ DatasetSpecConfig(rid="28EA")  # ERROR: missing required 'version'
 ## Dataset Bags (BDBags)
 
 A **BDBag** (Big Data Bag) is a self-describing, portable archive of a specific dataset version.
-Use `download_dataset(dataset_rid, version)` to export a dataset as a BDBag for local processing.
+Use the DerivaML Python API (`ml.download_dataset(dataset_rid, version)`) to export a dataset as a BDBag for local processing.
 
 **A BDBag for a specific version contains:**
 
@@ -342,16 +318,6 @@ asset_store(
 Bags can be registered with a MINID (Minimal Viable Identifier) for permanent, citable references.
 This requires S3 bucket configuration on the catalog.
 
-**Example workflow:**
-```python
-# Download dataset for local ML training
-download_dataset("ABC123", version="1.2.0", materialize=True)
-# Returns: {"bag_path": "/path/to/Dataset_ABC123", ...}
-
-# The bag contains all members, nested datasets, features, and asset files
-# at the exact catalog state when version 1.2.0 was created
-```
-
 ## Running Models with deriva-ml-run
 
 The `deriva-ml-run` CLI executes ML models with full provenance tracking. It uses hydra-zen configuration for all parameters.
@@ -420,7 +386,7 @@ Multiruns create a parent-child execution structure:
 
 Example: `+multirun=lr_sweep` with 4 learning rates creates 5 executions (1 parent + 4 children).
 
-Use `list_parent_executions` and `list_nested_executions` to navigate this hierarchy.
+Use `list_nested_executions` to navigate this hierarchy.
 
 ## Discovering Execution Outputs
 
@@ -559,7 +525,7 @@ split_dataset("1-ABC", test_size=0.2,
 
 The `stratify_by_column` uses the denormalized column name format `{FeatureTableName}_{ColumnName}`.
 Derive this from the table schema (via `deriva://catalog/schema` or `deriva://catalog/features`)
-rather than calling `denormalize_dataset` just to discover column names.
+rather than calling `preview_denormalized_dataset` just to discover column names.
 Stratification works with both two-way and three-way splits.
 
 **When creating splits, consider whether ground truth labels are needed:**
@@ -592,31 +558,9 @@ See the `catalog-operations-workflow` prompt for the recommended workflow.
 
 ## Restructuring Assets for ML Frameworks
 
-After downloading a dataset, use `restructure_assets` to organize files into the directory
-structure expected by ML frameworks (e.g., PyTorch ImageFolder):
-
-```python
-restructure_assets(dataset_rid="1-ABC", asset_table="Image",
-                   output_dir="./ml_data", group_by=["Diagnosis"])
-```
-
-This creates:
-```
-./ml_data/
-  Training/
-    Normal/
-      image1.jpg
-      image2.jpg
-    Abnormal/
-      image3.jpg
-  Testing/
-    Normal/
-      image4.jpg
-    Abnormal/
-      image5.jpg
-```
-
-By default, symlinks are used to save disk space. Set `use_symlinks=False` to copy files instead.
+To organize downloaded dataset files into ML-ready directory structures (e.g., PyTorch ImageFolder),
+use the DerivaML Python API's `restructure_assets()` method. This is not available as an MCP tool
+but can be called from Python scripts and notebooks.
 
 ## Notebook Display Utilities
 
@@ -828,10 +772,8 @@ def register_all_tools(mcp_server: FastMCP, conn_manager: ConnectionManager) -> 
     register_feature_tools(mcp_server, conn_manager)
     register_schema_tools(mcp_server, conn_manager)
     register_execution_tools(mcp_server, conn_manager)
-    register_storage_tools(mcp_server, conn_manager)
     register_data_tools(mcp_server, conn_manager)
     register_cache_tools(mcp_server, conn_manager)
-    register_devtools(mcp_server, conn_manager)
     register_rag_tools(mcp_server, conn_manager)
 
     # Register resources

@@ -3,16 +3,14 @@
 These tools enable querying and inserting records in catalog tables.
 Use these to explore data, find specific records, and add new entries.
 
-**Querying Data**:
-- get_table(): Get all records from a table (simple, no filtering)
-- query_table(): Fetch records from any table with optional filtering
-- count_table(): Count records in a table
+**Previewing Data**:
+- preview_table(): Preview records from any table with optional filtering (max 100 rows)
 
 **Inserting Data**:
 - insert_records(): Add new records to a table
 
-For asset tables, use the execution workflow (asset_file_path + upload_execution_outputs)
-to properly track provenance.
+For asset tables, use the DerivaML Python API execution workflow for asset
+staging and upload to properly track provenance.
 """
 
 from __future__ import annotations
@@ -20,8 +18,6 @@ from __future__ import annotations
 import json
 import logging
 from typing import TYPE_CHECKING, Any
-
-from deriva_mcp.result_cache import ResultCache
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -58,117 +54,35 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
     """Register data query and manipulation tools with the MCP server."""
 
     @mcp.tool()
-    async def get_table(
-        table_name: str,
-        limit: int = 1000,
-    ) -> str:
-        """Get all records from a catalog table (deprecated — use query_table instead).
-
-        This tool retrieves table data without filtering. Prefer query_table(),
-        which supports the same use case plus column selection, filtering, and
-        pagination.
-
-        Args:
-            table_name: Name of the table to retrieve (e.g., "Image", "Subject").
-            limit: Maximum records to return (default: 1000).
-
-        Returns:
-            JSON with table name and records array.
-
-        Example:
-            get_table("Image") -> all images in catalog
-            get_table("Subject", limit=100) -> first 100 subjects
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-
-            # Get table data using the deriva-ml API
-            rows = []
-            for i, row in enumerate(ml.get_table_as_dict(table_name)):
-                if i >= limit:
-                    break
-                rows.append(row)
-
-            return json.dumps({
-                "table": table_name,
-                "records": rows,
-                "count": len(rows),
-                "limit": limit,
-            })
-        except Exception as e:
-            logger.error(f"Failed to get table: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_entity(table_name, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
-
-            return json.dumps(result)
-
-    @mcp.tool()
-    async def query_table(
+    async def preview_table(
         table_name: str,
         columns: list[str] | None = None,
         filters: dict[str, Any] | None = None,
-        limit: int = 100,
+        limit: int = 25,
         offset: int = 0,
     ) -> str:
-        """Query records from a table with optional column selection and filtering.
+        """Preview records from a table with optional column selection and filtering.
 
-        Fetches data from any table in the domain or ML schema. Use filters
-        to narrow results. For large tables, use limit/offset for pagination.
+        Returns a sample of records for understanding data structure and content.
+        For bulk data access, use the DerivaML Python API directly.
 
         Args:
-            table_name: Name of the table to query (e.g., "Image", "Subject", "Dataset").
+            table_name: Name of the table to preview (e.g., "Image", "Subject", "Dataset").
             columns: List of column names to return. Default: all columns.
             filters: Dictionary of {column: value} equality filters.
-            limit: Maximum records to return (default: 100, max: 1000).
-            offset: Number of records to skip for pagination.
+            limit: Maximum records to return (default: 25, max: 100).
+            offset: Number of records to skip.
 
         Returns:
-            JSON with records array and total_count.
+            JSON with records array, count, and table name.
 
         Examples:
-            query_table("Image") -> first 100 images
-            query_table("Image", columns=["RID", "Filename"], limit=10)
-            query_table("Subject", filters={"Species": "Human"})
+            preview_table("Image") -> first 25 images
+            preview_table("Image", columns=["RID", "Filename"], limit=10)
+            preview_table("Subject", filters={"Species": "Human"})
         """
         try:
             ml = conn_manager.get_active_or_raise()
-
-            # Check result cache
-            conn_info = conn_manager.get_active_connection_info()
-            result_cache = getattr(conn_info, 'result_cache', None) if conn_info else None
-            cache_key = None
-            if isinstance(result_cache, ResultCache):
-                from deriva_mcp.result_cache import CacheMeta
-                cache_key = result_cache.cache_key(
-                    "query",
-                    table_name=table_name,
-                    columns=columns,
-                    filters=filters,
-                    limit=limit,
-                    offset=offset,
-                )
-                if result_cache.has(cache_key):
-                    cached = result_cache.query(cache_key, limit=limit, offset=offset)
-                    if cached:
-                        return json.dumps({
-                            "table": table_name,
-                            "records": cached.rows,
-                            "count": cached.count,
-                            "limit": limit,
-                            "offset": offset,
-                            "from_cache": True,
-                            "cache_key": cache_key,
-                        })
-
             table = ml.model.name_to_table(table_name)
             pb = ml.pathBuilder()
             path = pb.schemas[table.schema.name].tables[table_name]
@@ -179,7 +93,7 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                     path = path.filter(getattr(path, col) == val)
 
             # Fetch with limit
-            limit = min(limit, 1000)  # Cap at 1000
+            limit = min(limit, 100)  # Hard cap at 100 rows
             entities = path.entities()
 
             # Fetch records with offset by fetching (offset + limit) and slicing
@@ -196,96 +110,16 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                     for rec in all_records
                 ]
 
-            # Store in result cache
-            if isinstance(result_cache, ResultCache) and cache_key and all_records:
-                from deriva_mcp.result_cache import CacheMeta
-                record_columns = list(all_records[0].keys()) if all_records else []
-                result_cache.store(cache_key, record_columns, all_records, CacheMeta(
-                    cache_key=cache_key,
-                    tool_name="query_table",
-                    params={"table_name": table_name, "columns": columns, "filters": filters},
-                    columns=record_columns,
-                    source="catalog",
-                    ttl_seconds=300,
-                ))
-
             return json.dumps({
                 "table": table_name,
                 "records": all_records,
                 "count": len(all_records),
                 "limit": limit,
                 "offset": offset,
-                "from_cache": False,
-                "cache_key": cache_key,
             })
         except Exception as e:
             logger.error(f"Failed to query table: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_entity(table_name, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
-
-            return json.dumps(result)
-
-    @mcp.tool()
-    async def count_table(
-        table_name: str,
-        filters: dict[str, Any] | None = None,
-    ) -> str:
-        """Count records in a table, optionally with filters.
-
-        Args:
-            table_name: Name of the table to count.
-            filters: Dictionary of {column: value} equality filters.
-
-        Returns:
-            JSON with table name and count.
-
-        Examples:
-            count_table("Image") -> total image count
-            count_table("Subject", filters={"Species": "Human"}) -> count of human subjects
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            table = ml.model.name_to_table(table_name)
-            pb = ml.pathBuilder()
-            path = pb.schemas[table.schema.name].tables[table_name]
-
-            # Apply filters
-            if filters:
-                for col, val in filters.items():
-                    path = path.filter(getattr(path, col) == val)
-
-            # Count using aggregates
-            count = len(list(path.entities().fetch()))
-
-            return json.dumps({
-                "table": table_name,
-                "count": count,
-                "filters": filters,
-            })
-        except Exception as e:
-            logger.error(f"Failed to count table: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_entity(table_name, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
-
-            return json.dumps(result)
+            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def insert_records(
@@ -301,7 +135,7 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
         - Vocabularies → use add_term()
         - Executions → use create_execution()
         - Workflows → use create_workflow()
-        - Assets with files → use asset_file_path() + upload_execution_outputs()
+        - Assets with files → use the DerivaML Python API execution workflow
 
         Args:
             table_name: Name of the domain table to insert into.
@@ -346,7 +180,7 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             if ml.model.is_asset(table):
                 return json.dumps({
                     "status": "error",
-                    "message": f"Cannot use insert_records for asset table '{table_name}'. Use asset_file_path() + upload_execution_outputs() for proper provenance tracking.",
+                    "message": f"Cannot use insert_records for asset table '{table_name}'. Use the DerivaML Python API execution workflow for asset staging and upload with proper provenance tracking.",
                     "table": table_name,
                 })
 
@@ -365,19 +199,6 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             result = path.insert(records)
             inserted = list(result)
 
-            # Layer 5: Mark data dirty when inserting into indexed tables
-            from deriva_mcp.rag.data import DEFAULT_INDEXED_TABLES
-            if table_name in DEFAULT_INDEXED_TABLES:
-                conn_info = conn_manager.get_active_connection_info()
-                if conn_info:
-                    conn_info.data_dirty = True
-
-            # Invalidate catalog-sourced result cache
-            conn_info = conn_manager.get_active_connection_info()
-            rc = getattr(conn_info, 'result_cache', None) if conn_info else None
-            if isinstance(rc, ResultCache):
-                rc.invalidate(source="catalog")
-
             return json.dumps({
                 "status": "inserted",
                 "table": table_name,
@@ -386,19 +207,7 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
             })
         except Exception as e:
             logger.error(f"Failed to insert records: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_entity(table_name, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
-
-            return json.dumps(result)
+            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def get_record(
@@ -480,12 +289,6 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 
             # Update in database
             path.update([record])
-
-            # Invalidate catalog-sourced result cache
-            conn_info = conn_manager.get_active_connection_info()
-            rc = getattr(conn_info, 'result_cache', None) if conn_info else None
-            if isinstance(rc, ResultCache):
-                rc.invalidate(source="catalog")
 
             return json.dumps({
                 "status": "updated",

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -100,17 +100,6 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         """
         try:
             ml = conn_manager.get_active_or_raise()
-
-            # Layer 3: Check for semantic near-duplicates
-            from deriva_mcp.rag.helpers import rag_suggest_entity, DUPLICATE_RELEVANCE_THRESHOLD
-            conn_info = conn_manager.get_active_connection_info()
-            similar = rag_suggest_entity(feature_name, conn_info, limit=3)
-            dup_warnings = [
-                s for s in similar
-                if s["relevance"] > DUPLICATE_RELEVANCE_THRESHOLD
-                and s["name"].lower() != feature_name.lower()
-            ]
-
             ml.create_feature(
                 target_table=table_name,
                 feature_name=feature_name,
@@ -119,21 +108,13 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 metadata=metadata or [],
                 comment=comment,
             )
-            from deriva_mcp.rag.helpers import trigger_schema_reindex
-            trigger_schema_reindex(conn_manager.get_active_connection_info())
-            result = {
-                "status": "created",
-                "feature_name": feature_name,
-                "target_table": table_name,
-            }
-            if dup_warnings:
-                result["similar_existing"] = dup_warnings
-                result["warning"] = (
-                    f"Created '{feature_name}', but similar entities exist: "
-                    f"{', '.join(w['name'] for w in dup_warnings)}. "
-                    f"Verify this isn't a duplicate."
-                )
-            return json.dumps(result)
+            return json.dumps(
+                {
+                    "status": "created",
+                    "feature_name": feature_name,
+                    "target_table": table_name,
+                }
+            )
         except Exception as e:
             logger.error(f"Failed to create feature: {e}")
             return json.dumps({"status": "error", "message": str(e)})
@@ -156,8 +137,6 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             success = ml.delete_feature(table_name, feature_name)
             if success:
-                from deriva_mcp.rag.helpers import trigger_schema_reindex
-                trigger_schema_reindex(conn_manager.get_active_connection_info())
                 return json.dumps(
                     {
                         "status": "deleted",
@@ -297,22 +276,7 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             )
         except Exception as e:
             logger.error(f"Failed to add feature values: {e}")
-            error_msg = str(e)
-            result: dict[str, Any] = {"status": "error", "message": error_msg}
-
-            # Suggest alternatives when feature or table not found
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                # Try suggesting the feature name first, then the table name
-                suggestions = rag_suggest_entity(feature_name, conn_info)
-                if not suggestions:
-                    suggestions = rag_suggest_entity(table_name, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
-
-            return json.dumps(result)
+            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def add_feature_value_record(
@@ -418,185 +382,5 @@ def register_feature_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             )
         except Exception as e:
             logger.error(f"Failed to add feature value records: {e}")
-            error_msg = str(e)
-            result: dict[str, Any] = {"status": "error", "message": error_msg}
+            return json.dumps({"status": "error", "message": str(e)})
 
-            # Suggest alternatives when feature or table not found
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_entity(feature_name, conn_info)
-                if not suggestions:
-                    suggestions = rag_suggest_entity(table_name, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
-
-            return json.dumps(result)
-
-    @mcp.tool()
-    async def fetch_table_features(
-        table_name: str,
-        feature_name: str | None = None,
-        selector: str | None = None,
-        workflow: str | None = None,
-        execution: str | None = None,
-    ) -> str:
-        """Fetch all feature values for a table, grouped by feature name.
-
-        Returns a dictionary mapping feature names to lists of feature value records.
-        Useful for retrieving all annotations on a table at once — for example, getting
-        all classification labels and quality scores for images in a single call.
-
-        **Resolving multiple values per object:**
-
-        When the same object has multiple values for a feature (e.g., labels from
-        different annotators or model runs), use ``selector``, ``workflow``, or
-        ``execution`` to pick one value per object:
-
-        - **selector="newest"**: Picks the value with the most recent creation time
-          (RCT). Good for getting the latest annotation regardless of source.
-        - **workflow**: Filters to values produced by a specific workflow, then picks
-          the newest. Pass a Workflow RID (e.g., "2-ABC1") or a Workflow_Type name
-          (e.g., "Training"). Auto-detected.
-        - **execution**: Filters to values produced by a specific execution RID,
-          then picks the newest. Use this when multiple executions of the same
-          workflow have produced values and you want a specific run's results.
-
-        Only one of ``selector``, ``workflow``, or ``execution`` may be specified.
-
-        Args:
-            table_name: Table to fetch features for (e.g., "Image", "Subject").
-            feature_name: If provided, only fetch this specific feature.
-                If not provided, fetches all features on the table.
-            selector: Built-in selector name. Supported: "newest", "first",
-                "latest", "majority_vote" (requires feature_name).
-                Picks one value per target object using the most recent RCT.
-            workflow: Workflow RID or Workflow_Type name. Filters values to those
-                produced by executions of the matching workflow, then picks the
-                newest per target object.
-            execution: Execution RID. Filters values to those produced by a
-                specific execution, then picks the newest per target object.
-
-        Returns:
-            JSON dict mapping feature names to lists of feature value records.
-            Each record includes target RID, feature values, Execution RID,
-            RCT (creation time), and Feature_Name.
-
-        Examples:
-            # Get all features for Image table
-            fetch_table_features("Image")
-
-            # Get just Classification, deduplicated to newest per image
-            fetch_table_features("Image", feature_name="Classification", selector="newest")
-
-            # Get values from Training workflow only
-            fetch_table_features("Image", feature_name="Classification", workflow="Training")
-
-            # Get values from a specific execution
-            fetch_table_features("Image", feature_name="FooBar", execution="3WY2")
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-
-            # Validate mutual exclusivity
-            specified = [x for x in [selector, workflow, execution] if x is not None]
-            if len(specified) > 1:
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": "Only one of 'selector', 'workflow', or 'execution' may be specified.",
-                    }
-                )
-
-            # Resolve selector callable
-            from deriva_ml.feature import FeatureRecord
-
-            selector_fn = None
-            if selector == "newest":
-                selector_fn = FeatureRecord.select_newest
-            elif selector == "first":
-                selector_fn = FeatureRecord.select_first
-            elif selector == "latest":
-                selector_fn = FeatureRecord.select_latest
-            elif selector == "majority_vote":
-                if not feature_name:
-                    return json.dumps(
-                        {
-                            "status": "error",
-                            "message": "selector='majority_vote' requires feature_name to be specified.",
-                        }
-                    )
-                feat = ml.lookup_feature(table_name, feature_name)
-                RecordClass = feat.feature_record_class()
-                selector_fn = RecordClass.select_majority_vote()
-            elif selector is not None:
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": f"Unknown selector '{selector}'. Supported: 'newest', 'first', 'latest', 'majority_vote'.",
-                    }
-                )
-
-            if execution:
-                selector_fn = FeatureRecord.select_by_execution(execution)
-                features = ml.fetch_table_features(
-                    table_name,
-                    feature_name=feature_name,
-                    selector=selector_fn,
-                )
-                result = {fname: [r.model_dump(mode="json") for r in records] for fname, records in features.items()}
-            elif workflow:
-                # Fetch without selector, then apply select_by_workflow per group
-                features = ml.fetch_table_features(table_name, feature_name=feature_name)
-                result = {}
-                for fname, records in features.items():
-                    if not records:
-                        result[fname] = []
-                        continue
-                    # Group by target column and apply select_by_workflow
-                    feat = ml.lookup_feature(table_name, fname)
-                    target_col = feat.target_table.name
-                    from collections import defaultdict
-
-                    grouped: dict[str, list] = defaultdict(list)
-                    for rec in records:
-                        target_rid = getattr(rec, target_col, None)
-                        if target_rid is not None:
-                            grouped[target_rid].append(rec)
-                    selected = []
-                    for group in grouped.values():
-                        try:
-                            selected.append(ml.select_by_workflow(group, workflow))
-                        except Exception:
-                            pass  # Skip targets with no matching workflow records
-                    result[fname] = [r.model_dump(mode="json") for r in selected]
-            else:
-                features = ml.fetch_table_features(
-                    table_name,
-                    feature_name=feature_name,
-                    selector=selector_fn,
-                )
-                result = {fname: [r.model_dump(mode="json") for r in records] for fname, records in features.items()}
-
-            return json.dumps(result, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to fetch table features: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                # Try feature_name first (more specific), then table_name
-                suggestions = None
-                if feature_name:
-                    suggestions = rag_suggest_entity(feature_name, conn_info)
-                if not suggestions:
-                    suggestions = rag_suggest_entity(table_name, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
-
-            return json.dumps(result)

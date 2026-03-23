@@ -53,7 +53,7 @@ Use catalog resources to see the current state:
 
 ```
 # View table annotations and column details
-get_table(table="Image")
+preview_table(table_name="Image", limit=5)
 
 # View sample data to understand what users see
 get_table_sample_data(table="Image", limit=5)
@@ -104,7 +104,7 @@ Control which columns appear and in what order for each context.
 
 ### View current visible columns
 ```
-get_table(table="Image")
+preview_table(table_name="Image", limit=5)
 # Check the visible_columns annotation in the response
 ```
 
@@ -295,7 +295,7 @@ apply_annotations()
 - Row name patterns use Handlebars syntax: `{{{column_name}}}` for column values.
 - Foreign key columns are automatically rendered as links to the related record in Chaise.
 - Test your changes by viewing the table in Chaise after applying annotations.
-- If something looks wrong, use `get_table()` to inspect the current annotations."""
+- If something looks wrong, use `preview_table()` to inspect the current data, or read `deriva://table/{name}/schema` for the schema."""
 
     @mcp.prompt(
         name="use-annotation-builders",
@@ -566,11 +566,10 @@ pattern = "{{#each Diagnoses}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}"
 pattern = "[{{{Name}}}](/chaise/record/#{{{$catalog.id}}}/Schema:Table/RID={{{$url_encode.RID}}})"
 ```
 
-**Template validation tools:**
+**Template helper tools:**
 ```
-validate_template_syntax(template="{{{Name}}} ({{{Age}}})")
-get_handlebars_template_variables(template="{{{Name}}} ({{{Age}}})")
-preview_handlebars_template(template="{{{Name}}}", table="Subject", rid="2-XXXX")
+get_handlebars_template_variables(table_name="Subject")
+get_table_sample_data(table_name="Subject", limit=3)
 ```
 
 ### Context Constants
@@ -696,7 +695,7 @@ ml.apply_annotations()
 - Use MCP tools for quick interactive changes.
 - Always call `ml.apply_annotations()` (Python) or `apply_annotations()` (MCP) after making changes.
 - PseudoColumns are powerful for showing related data without changing the data model.
-- Test complex Handlebars patterns with `preview_handlebars_template` before applying them."""
+- Test complex Handlebars patterns with `get_table_sample_data` to verify column values before applying them."""
 
     @mcp.prompt(
         name="query-catalog-data",
@@ -725,36 +724,34 @@ This skill covers how to find, filter, and explore data in a Deriva catalog usin
 
 | Tool | Purpose |
 |------|---------|
-| `query_table` | Query with filters, columns, limit/offset |
-| `count_table` | Count matching records |
+| `preview_table` | Query with filters, columns, limit/offset |
 | `get_record` | Fetch a single record by RID |
 | `validate_rids` | Check if RIDs exist |
-| `denormalize_dataset` | Join dataset tables into flat DataFrame |
-| `download_dataset` | Download full dataset as BDBag |
-| `list_dataset_members` | List records in a dataset |
+| `preview_denormalized_dataset` | Join dataset tables into flat DataFrame |
+| `deriva://dataset/{rid}/members resource` | List records in a dataset |
 | `list_asset_executions` | Find executions that created/used an asset |
 
 ## Common Patterns
 
 ```
 # Query with filter
-query_table(table_name="Subject", filters={"Species": "Mouse"}, limit=50)
+preview_table(table_name="Subject", filters={"Species": "Mouse"}, limit=50)
 
 # Paginate
-query_table(table_name="Image", limit=100, offset=200)
+preview_table(table_name="Image", limit=100, offset=200)
 
 # Get specific record
 get_record(table_name="Subject", rid="2-B4C8")
 
 # ML-ready flat data
-denormalize_dataset(dataset_rid="2-B4C8")
+preview_denormalized_dataset(dataset_rid="2-B4C8")
 ```
 
 ## Tips
 
 - Always use `limit` for large tables to avoid timeouts
 - Column names are case-sensitive — check schema first
-- Use `denormalize_dataset` to resolve FK RIDs into readable values
+- Use `preview_denormalized_dataset` to resolve FK RIDs into readable values
 - Pin to specific dataset versions for reproducibility
 
 For the full guide with query patterns, feature queries, provenance tracking, and troubleshooting, read `references/workflow.md`.
@@ -785,16 +782,16 @@ For a specific table:
 - `deriva://table/{table_name}/schema` -- Column names, types, nullability, and descriptions.
 - `deriva://table/{table_name}/sample` -- A few sample rows to understand the data shape.
 
-Use the `get_table` MCP tool for programmatic access to table metadata.
+Use the `preview_table` MCP tool for programmatic access to table data, or read `deriva://table/{name}/schema` for metadata.
 
 ## Simple Queries
 
 ### Query All Rows
 
-Use the `query_table` MCP tool:
+Use the `preview_table` MCP tool:
 
 ```
-query_table(table_name="Subject")
+preview_table(table_name="Subject")
 ```
 
 This returns all rows. For large tables, use `limit` and `offset` for pagination.
@@ -802,21 +799,21 @@ This returns all rows. For large tables, use `limit` and `offset` for pagination
 ### Specific Columns
 
 ```
-query_table(table_name="Subject", columns=["RID", "Name", "Species"])
+preview_table(table_name="Subject", columns=["RID", "Name", "Species"])
 ```
 
 ### Limit Results
 
 ```
-query_table(table_name="Subject", limit=10)
+preview_table(table_name="Subject", limit=10)
 ```
 
 ### Paginate Through Results
 
 ```
-query_table(table_name="Subject", limit=100, offset=0)    # First 100
-query_table(table_name="Subject", limit=100, offset=100)   # Next 100
-query_table(table_name="Subject", limit=100, offset=200)   # Next 100
+preview_table(table_name="Subject", limit=100, offset=0)    # First 100
+preview_table(table_name="Subject", limit=100, offset=100)   # Next 100
+preview_table(table_name="Subject", limit=100, offset=200)   # Next 100
 ```
 
 ## Filter Queries
@@ -824,13 +821,13 @@ query_table(table_name="Subject", limit=100, offset=200)   # Next 100
 ### Equality Filter
 
 ```
-query_table(table_name="Subject", filter={"Species": "Mouse"})
+preview_table(table_name="Subject", filter={"Species": "Mouse"})
 ```
 
 ### Multiple AND Conditions
 
 ```
-query_table(
+preview_table(
     table_name="Subject",
     filter={"Species": "Mouse", "Status": "Active"}
 )
@@ -840,11 +837,11 @@ This returns rows where Species is "Mouse" AND Status is "Active".
 
 ### Count Rows
 
-Use the `count_table` MCP tool to get the number of matching rows without fetching data:
+Use `preview_table` with a filter and check the `total_count` field in the response:
 
 ```
-count_table(table_name="Subject")
-count_table(table_name="Subject", filter={"Species": "Mouse"})
+preview_table(table_name="Subject", limit=1)
+preview_table(table_name="Subject", filters={"Species": "Mouse"}, limit=1)
 ```
 
 ## Get Specific Records
@@ -871,10 +868,10 @@ validate_rids(rids=["2-B4C8", "2-D1E2"])
 
 ### Denormalize for ML
 
-Use the `denormalize_dataset` MCP tool to get ML-ready joined data from a dataset:
+Use the `preview_denormalized_dataset` MCP tool to get ML-ready joined data from a dataset:
 
 ```
-denormalize_dataset(dataset_rid="2-B4C8")
+preview_denormalized_dataset(dataset_rid="2-B4C8")
 ```
 
 This joins the dataset's member tables, resolving foreign keys into human-readable values. The result is a flat table suitable for loading into a DataFrame.
@@ -883,18 +880,18 @@ Tables don't need to be explicit dataset members — denormalize follows multi-h
 
 ### Query a Single Table
 
-For simpler needs, `query_table` on the relevant table is sufficient:
+For simpler needs, `preview_table` on the relevant table is sufficient:
 
 ```
-query_table(table_name="Image", filter={"Subject": "2-A1B2"})
+preview_table(table_name="Image", filter={"Subject": "2-A1B2"})
 ```
 
 ### Download a Full Dataset
 
-Use the `download_dataset` MCP tool to get a complete local copy of a dataset:
+Use the DerivaML Python API to download a complete local copy of a dataset:
 
-```
-download_dataset(dataset_rid="2-B4C8", version=3)
+```python
+ml.download_dataset("2-B4C8", version="3.0.0")
 ```
 
 This downloads all dataset members and assets to a local directory.
@@ -908,11 +905,11 @@ Deriva uses controlled vocabularies for categorical values. Look them up via MCP
 
 Common vocabularies include dataset types, workflow types, species, and status values.
 
-Use `query_table` to query vocabulary tables directly:
+Use `preview_table` to query vocabulary tables directly:
 
 ```
-query_table(table_name="Species")
-query_table(table_name="Dataset_Type")
+preview_table(table_name="Species")
+preview_table(table_name="Dataset_Type")
 ```
 
 ## Feature Queries
@@ -934,10 +931,10 @@ Features have:
 
 ### Query Feature Values
 
-Use `query_table` on the feature table:
+Use `preview_table` on the feature table:
 
 ```
-query_table(table_name="Image_Cell_Count")
+preview_table(table_name="Image_Cell_Count")
 ```
 
 Or use the `get_table_sample_data` MCP tool for a quick preview:
@@ -951,14 +948,14 @@ get_table_sample_data(table_name="Image_Cell_Count")
 ### Find Images for a Subject
 
 ```
-query_table(table_name="Image", filter={"Subject": "2-A1B2"})
+preview_table(table_name="Image", filter={"Subject": "2-A1B2"})
 ```
 
 ### Find All Subjects in a Dataset
 
 First get the dataset members:
 ```
-list_dataset_members(dataset_rid="2-B4C8")
+deriva://dataset/{rid}/members resource(dataset_rid="2-B4C8")
 ```
 
 ### Date Range Queries
@@ -966,7 +963,7 @@ list_dataset_members(dataset_rid="2-B4C8")
 Deriva supports date filtering. Use ISO 8601 format:
 
 ```
-query_table(
+preview_table(
     table_name="Execution",
     filter={"Status": "Complete"},
     sort=[{"column": "RCT", "descending": True}],
@@ -981,16 +978,16 @@ Note: For complex date range queries, you may need to use the ERMrest API direct
 To get data ready for ML training:
 
 1. **Identify the dataset**: `get_record(table_name="Dataset", rid="2-B4C8")`
-2. **Get the members**: `list_dataset_members(dataset_rid="2-B4C8")`
-3. **Denormalize**: `denormalize_dataset(dataset_rid="2-B4C8")`
-4. **Download assets**: `download_dataset(dataset_rid="2-B4C8", version=3)`
+2. **Get the members**: `deriva://dataset/{rid}/members resource(dataset_rid="2-B4C8")`
+3. **Denormalize**: `preview_denormalized_dataset(dataset_rid="2-B4C8")`
+4. **Download assets**: Use the DerivaML Python API: `ml.download_dataset("2-B4C8", version="3.0.0")`
 
 ## Historical Queries with Versions
 
 Datasets in Deriva can be versioned. Query specific versions:
 
 ```
-download_dataset(dataset_rid="2-B4C8", version=3)
+ml.download_dataset("2-B4C8", version="3.0.0")
 ```
 
 To see available versions, read:
@@ -1016,17 +1013,17 @@ Here is a typical workflow for exploring and extracting data from a catalog:
 
 2. **Explore a table**: Read `deriva://table/Subject/schema` to understand columns, then `get_table_sample_data(table_name="Subject")` for sample rows.
 
-3. **Count records**: `count_table(table_name="Subject")` and `count_table(table_name="Subject", filter={"Species": "Mouse"})`.
+3. **Count records**: `preview_table(table_name="Subject", limit=1)` to get the `total_count`.
 
-4. **Query with filters**: `query_table(table_name="Subject", filter={"Species": "Mouse"}, limit=50)`.
+4. **Query with filters**: `preview_table(table_name="Subject", filter={"Species": "Mouse"}, limit=50)`.
 
 5. **Inspect a specific record**: `get_record(table_name="Subject", rid="2-A1B2")`.
 
-6. **Find related data**: `query_table(table_name="Image", filter={"Subject": "2-A1B2"})`.
+6. **Find related data**: `preview_table(table_name="Image", filter={"Subject": "2-A1B2"})`.
 
-7. **Check features**: Read `deriva://table/Image/features`, then `query_table(table_name="Image_Cell_Count", filter={"Image": "2-C3D4"})`.
+7. **Check features**: Read `deriva://table/Image/features`, then `preview_table(table_name="Image_Cell_Count", filter={"Image": "2-C3D4"})`.
 
-8. **Get dataset for ML**: `denormalize_dataset(dataset_rid="2-B4C8")` for a flat view, or `download_dataset(dataset_rid="2-B4C8", version=3)` for a full local copy.
+8. **Get dataset for ML**: `preview_denormalized_dataset(dataset_rid="2-B4C8")` for a flat view, or use the DerivaML Python API (`ml.download_dataset(...)`) for a full local copy.
 
 9. **Share with a colleague**: Read `deriva://chaise-url/Subject/2-A1B2` to get a shareable URL.
 
@@ -1042,8 +1039,8 @@ list_asset_executions(asset_rid="2-IMG1")
 # Look up a specific asset by RID
 get_record(table_name="Slide_Image", rid="2-IMG1")
 
-# Download a specific asset
-download_asset(asset_rid="2-IMG1")
+# Download a specific asset (use DerivaML Python API)
+# ml.download_asset("2-IMG1")
 ```
 
 ## Tips and Troubleshooting
@@ -1051,8 +1048,8 @@ download_asset(asset_rid="2-IMG1")
 - **Large tables**: Always use `limit` and `offset` for tables with more than a few hundred rows. Fetching the entire table can be slow and may time out.
 - **Column names are case-sensitive**: Use the exact column names from the schema. `"Species"` is not the same as `"species"`.
 - **RID format**: RIDs look like `2-B4C8` (a number, a dash, and an alphanumeric string). They are unique within a catalog.
-- **Foreign keys**: Many columns contain RIDs referencing other tables. Use `denormalize_dataset` to resolve these into readable values, or `get_record` to look up individual references.
-- **Empty results**: If a query returns no rows, double-check the filter values. Use `query_table` without filters first to verify the table has data, then add filters incrementally.
+- **Foreign keys**: Many columns contain RIDs referencing other tables. Use `preview_denormalized_dataset` to resolve these into readable values, or `get_record` to look up individual references.
+- **Empty results**: If a query returns no rows, double-check the filter values. Use `preview_table` without filters first to verify the table has data, then add filters incrementally.
 - **Schema mismatch**: If a table is not found, verify you are connected to the correct schema. Use `set_default_schema` if needed.
 - **Stale data**: Catalog data can change. If you need a stable snapshot, use versioned datasets."""
 
@@ -1089,7 +1086,7 @@ Features link domain objects (e.g., Image, Subject) to vocabulary terms, assets,
 2. `create_feature` — Link a target table to vocabulary terms/assets
 3. `create_execution` + `start_execution` — Start provenance tracking
 4. `add_feature_value` / `add_feature_value_record` — Assign labels to records
-5. `stop_execution` + `upload_execution_outputs` — Finalize
+5. `stop_execution` — Finalize (use the DerivaML Python API to upload outputs if needed)
 
 ## Feature Types
 
@@ -1121,11 +1118,11 @@ Features in DerivaML link a target table (e.g., Image, Subject) to vocabulary te
 
 ```
 # List existing features
-query_table(table_name="Feature")
+preview_table(table_name="Feature")
 
 # Check existing vocabularies
-query_table(table_name="Diagnosis")
-query_table(table_name="Image_Quality")
+preview_table(table_name="Diagnosis")
+preview_table(table_name="Image_Quality")
 ```
 
 ## Step 2: Create a Vocabulary (if needed)
@@ -1291,9 +1288,6 @@ add_feature_value_record(
 
 # Step 4: Stop timing
 stop_execution()
-
-# Step 5: Upload outputs
-upload_execution_outputs()
 ```
 
 ### Python API with Context Manager
@@ -1337,16 +1331,16 @@ After populating feature values, query them for analysis or training.
 
 ```
 # Get all feature values for a feature
-query_table(table_name="Tumor_Classification_Feature_Value")
+preview_table(table_name="Tumor_Classification_Feature_Value")
 
 # Get feature values for a specific image
-query_table(
+preview_table(
     table_name="Tumor_Classification_Feature_Value",
     filters={"Image": "2-IMG1"}
 )
 
 # Get all images with a specific grade
-query_table(
+preview_table(
     table_name="Tumor_Classification_Feature_Value",
     filters={"Tumor_Grade": "Grade III"}
 )
@@ -1393,7 +1387,6 @@ add_feature_value(
 )
 
 stop_execution()
-upload_execution_outputs()
 ```
 
 ## Managing Features
@@ -1406,7 +1399,7 @@ This removes the feature and its feature value table. Existing data will be lost
 
 ### List all features
 ```
-query_table(table_name="Feature")
+preview_table(table_name="Feature")
 ```
 
 ## Tips
@@ -1615,13 +1608,13 @@ After creation, verify the table was created correctly:
 
 ```
 # View the full table schema
-get_table(table="Sample")
+# Read resource: deriva://table/Sample/schema
 
 # View sample data (will be empty for new tables)
 get_table_sample_data(table="Sample", limit=5)
 
-# Count records
-count_table(table="Sample")
+# Query records
+preview_table(table_name="Sample", limit=10)
 ```
 
 ## Common Patterns
@@ -1769,7 +1762,7 @@ Read resource: deriva://catalog/vocabularies
 Read resource: deriva://vocabulary/Species
 
 # Or query directly
-query_table(table="Species")
+preview_table(table="Species")
 ```
 
 ### Search for a term across vocabularies
@@ -2020,7 +2013,7 @@ The standard sequence for creating a dataset:
 5. `add_dataset_members` — add records by RID
 6. `split_dataset` (optional) — create train/test/val child datasets
 7. `increment_dataset_version` — version the dataset
-8. `stop_execution` + `upload_execution_outputs` — finalize
+8. `stop_execution` — finalize (use DerivaML Python API to upload outputs if needed)
 
 For the full step-by-step guide with code examples (both Python API and MCP tools), see `references/workflow.md`.
 
@@ -2083,13 +2076,13 @@ When a dataset is downloaded as a BDBag, the export follows foreign key relation
 
 ```
 # List existing datasets
-query_table(table="Dataset")
+preview_table(table="Dataset")
 
 # List existing dataset types
-query_table(table="Dataset_Type")
+preview_table(table="Dataset_Type")
 
 # Check what element types are registered for a dataset
-list_dataset_members(dataset_rid="2-XXXX")
+deriva://dataset/{rid}/members resource(dataset_rid="2-XXXX")
 ```
 
 ## Step 2: Create a Dataset via Execution
@@ -2185,7 +2178,6 @@ add_dataset_members(
 
 # Step 6: Finalize
 stop_execution(execution_rid="2-EXEC")
-upload_execution_outputs(execution_rid="2-EXEC")
 ```
 
 ## Step 3: Manage Dataset Types
@@ -2208,7 +2200,7 @@ delete_dataset_type_term(name="Preprocessed")
 
 ```
 # List current members
-list_dataset_members(dataset_rid="2-DS01")
+deriva://dataset/{rid}/members resource(dataset_rid="2-DS01")
 
 # Add more members
 add_dataset_members(
@@ -2326,9 +2318,6 @@ add_dataset_child(
 
 ### Navigate the hierarchy
 ```
-# List children of a dataset
-list_dataset_children(dataset_rid="2-DS01")
-
 # List parents of a dataset
 list_dataset_parents(dataset_rid="2-DS02")
 ```
@@ -2399,18 +2388,14 @@ split_dataset(
 # 8. Finalize
 increment_dataset_version(dataset_rid="2-DS01")
 stop_execution(execution_rid="2-EXEC")
-upload_execution_outputs(execution_rid="2-EXEC")
 ```
 
 ## Provenance Tracking
 
-Track which executions created or used datasets:
+Track which executions created or used assets:
 
 ```
-# Which executions used this dataset as input?
-list_dataset_executions(dataset_rid="2-DS01")
-
-# Which executions used this asset?
+# Which executions created or used this asset?
 list_asset_executions(asset_rid="2-IMG1")
 ```
 
@@ -2436,7 +2421,7 @@ delete_dataset(dataset_rid="2-DS01")
 - For large datasets with deep FK chains, add intermediate table records as direct members to avoid export timeouts.
 - Use stratified splits when your labels are imbalanced to ensure each split has representative samples.
 - Nested datasets maintain the parent's element types automatically.
-- Use `list_dataset_children` and `list_dataset_parents` to navigate dataset hierarchies."""
+- Use `list_dataset_parents` to navigate dataset hierarchies."""
 
     @mcp.prompt(
         name="dataset-versioning",
@@ -2576,7 +2561,7 @@ When a dataset bag export is missing expected data, follow this step-by-step dia
 Dataset members are the explicit records that belong to a dataset. If data is missing from a bag, the first question is whether the right members are in the dataset.
 
 - **Resource**: Check the dataset resource to see the dataset's summary and member counts.
-- **Tool**: `list_dataset_members` with the dataset RID to get the full list of members, grouped by table.
+- **Tool**: `deriva://dataset/{rid}/members resource` with the dataset RID to get the full list of members, grouped by table.
 - Verify that the records you expect are listed as members. If they are missing, add them with `add_dataset_members`.
 
 ---
@@ -2658,7 +2643,7 @@ The bag export algorithm uses foreign key (FK) path traversal to determine which
 
 **Fix**:
 - Vocabulary terms referenced by included records should be automatically exported. If they are missing, verify the FK relationship between the data table and the vocabulary table is intact.
-- **Tool**: `get_table` on the vocabulary table to confirm its structure.
+- **Tool**: `preview_table` on the vocabulary table to confirm its structure.
 
 ---
 
@@ -2666,12 +2651,9 @@ The bag export algorithm uses foreign key (FK) path traversal to determine which
 
 Use the validation tool to get a detailed comparison of expected vs. actual bag contents.
 
-- **Tool**: `validate_dataset_bag` with the dataset RID.
-  - Returns a **per-table comparison** showing:
-    - Expected RIDs (based on dataset members and FK traversal).
-    - Actual RIDs present in the downloaded bag.
-    - **Missing RIDs**: records that should be in the bag but are not.
-    - **Extra RIDs**: records in the bag that were not expected (usually not a problem but worth investigating).
+- Use the DerivaML Python API to download and validate the bag locally.
+  - Compare expected RIDs (based on dataset members and FK traversal) against actual contents.
+  - Identify **Missing RIDs**: records that should be in the bag but are not.
   - Use the missing RIDs to identify exactly which records are being dropped and from which tables.
 
 ---
@@ -2714,7 +2696,7 @@ For each registered element type, examine the FK paths that the export will foll
 
 **Fix**:
 - Check the FK columns on the related records. Ensure they contain the correct RID values pointing to the dataset member records.
-- **Tool**: `query_table` with filters to verify FK column values.
+- **Tool**: `preview_table` with filters to verify FK column values.
 
 ---
 
@@ -2723,7 +2705,7 @@ For each registered element type, examine the FK paths that the export will foll
 Use this checklist when data is missing from a bag:
 
 1. **Are the records dataset members?**
-   - `list_dataset_members` -- check if expected records appear.
+   - `deriva://dataset/{rid}/members resource` -- check if expected records appear.
    - If not: `add_dataset_members`.
 
 2. **Is the table a registered element type?**
@@ -2735,7 +2717,7 @@ Use this checklist when data is missing from a bag:
    - If not: add intermediate records as members, or restructure FKs.
 
 4. **Does validation show the discrepancy?**
-   - `validate_dataset_bag` -- look at missing RIDs per table.
+   - Use the DerivaML Python API to validate bag contents.
 
 5. **Is the version current?**
    - `increment_dataset_version` if members were recently changed.
@@ -2747,17 +2729,16 @@ Use this checklist when data is missing from a bag:
 
 | Tool | Purpose |
 |------|---------|
-| `list_dataset_members` | List all members of a dataset |
+| `deriva://dataset/{rid}/members resource` | List all members of a dataset |
 | `add_dataset_members` | Add records to a dataset |
 | `delete_dataset_members` | Remove records from a dataset |
 | `add_dataset_element_type` | Register a table as dataset element type |
-| `validate_dataset_bag` | Validate bag contents against expectations |
 | `increment_dataset_version` | Bump dataset version after changes |
 | `get_dataset_spec` | View dataset specification |
-| `download_dataset` | Download the dataset bag |
-| `denormalize_dataset` | Flatten dataset for analysis |
-| `query_table` | Inspect FK column values |
-| `get_table` | Check table schema and FK relationships |"""
+| `preview_denormalized_dataset` | Flatten dataset for analysis |
+| `preview_table` | Inspect FK column values and table schema |
+
+For downloading and validating dataset bags, use the DerivaML Python API."""
 
     @mcp.prompt(
         name="prepare-training-data",
@@ -2775,13 +2756,13 @@ Start by understanding what is in the dataset using catalog resources.
 
 ```
 # List available datasets
-query_table(table="Dataset")
+preview_table(table="Dataset")
 
 # Get details about a specific dataset
 get_record(table="Dataset", rid="2-XXXX")
 
 # See what element types the dataset contains
-list_dataset_members(dataset_rid="2-XXXX")
+deriva://dataset/{rid}/members resource(dataset_rid="2-XXXX")
 
 # View the dataset specification (element types, export configuration)
 get_dataset_spec(dataset_rid="2-XXXX")
@@ -2797,8 +2778,8 @@ Read resource: deriva://table/Image/schema
 Read resource: deriva://table/Subject/schema
 
 # View sample data
-query_table(table="Image", limit=5)
-query_table(table="Subject", limit=5)
+preview_table(table="Image", limit=5)
+preview_table(table="Subject", limit=5)
 ```
 
 Key things to look for:
@@ -2808,12 +2789,12 @@ Key things to look for:
 
 ## Step 3: Choose Your Data Extraction Approach
 
-### Option A: `denormalize_dataset` -- Best for Training
+### Option A: `preview_denormalized_dataset` -- Best for Training
 
 Joins all dataset tables into a single flat DataFrame, ideal for feeding into ML frameworks.
 
 ```
-denormalize_dataset(
+preview_denormalized_dataset(
     dataset_rid="2-XXXX",
     include_tables=["Image", "Subject", "Diagnosis"]  # Optional: limit which tables to join
 )
@@ -2831,19 +2812,19 @@ denormalize_dataset(
 - `dataset_rid` (required): The dataset to denormalize
 - `include_tables` (optional): List of table names to include. If omitted, all tables in the dataset are joined.
 
-### Option B: `query_table` -- Best for Specific Tables
+### Option B: `preview_table` -- Best for Specific Tables
 
 Query individual tables when you need fine-grained control or only need data from one table.
 
 ```
 # Get all images in a dataset
-query_table(
+preview_table(
     table="Image",
     filters=[{"column": "Dataset", "operator": "=", "value": "2-XXXX"}]
 )
 
 # Get specific columns
-query_table(
+preview_table(
     table="Subject",
     columns=["RID", "Age", "Sex", "Species"]
 )
@@ -2851,12 +2832,12 @@ query_table(
 
 **When to use:** When you need data from a single table, need to apply filters, or need precise column selection.
 
-### Option C: `download_dataset` -- Best for Production
+### Option C: DerivaML Python API `download_dataset` -- Best for Production
 
-Downloads the full dataset as a BDBag archive with all assets (files, images).
+Downloads the full dataset as a BDBag archive with all assets (files, images). This is done via the DerivaML Python API (not an MCP tool):
 
-```
-download_dataset(dataset_rid="2-XXXX")
+```python
+ml.download_dataset("2-XXXX", version="1.0.0")
 ```
 
 **What it does:**
@@ -2885,7 +2866,7 @@ After denormalization, columns follow the pattern `TableName.ColumnName`:
 ### Building a Training DataFrame
 
 ```python
-# After denormalize_dataset returns data:
+# After preview_denormalized_dataset returns data:
 import pandas as pd
 
 # The denormalized result gives you a flat table
@@ -2908,8 +2889,8 @@ X_train, X_test, y_train, y_test = train_test_split(features_encoded, labels, te
 image_urls = df["Image.URL"]
 labels = df["Diagnosis.Label"]
 
-# Download images using the URLs, or use download_dataset for batch download
-# If using download_dataset, images are already local
+# Download images using the URLs, or use the DerivaML Python API for batch download
+# If using ml.download_dataset(), images are already local
 ```
 
 ## Step 5: Version Pinning for Reproducibility
@@ -2934,10 +2915,10 @@ increment_dataset_version(dataset_rid="2-XXXX")
 
 ## Tips
 
-- Start with `denormalize_dataset` for quick exploration, then move to `download_dataset` for production.
+- Start with `preview_denormalized_dataset` for quick exploration, then move to the DerivaML Python API `download_dataset` for production.
 - Use `include_tables` in denormalize to limit the join to only the tables you need -- this avoids unnecessary data and speeds up the operation.
-- If denormalization produces unexpected results, check the foreign key paths between tables using `get_table()`.
-- For large datasets, use `query_table` with filters to work with subsets before processing the full dataset.
+- If denormalization produces unexpected results, check the foreign key paths between tables using `preview_table()` or schema resources.
+- For large datasets, use `preview_table` with filters to work with subsets before processing the full dataset.
 - Always wrap data preparation in an execution for provenance tracking."""
 
     @mcp.prompt(
@@ -2953,15 +2934,17 @@ Every data transformation, model training run, or analysis in DerivaML should be
 ## Execution Lifecycle
 
 ```
-create_execution → start → work → stop → upload_execution_outputs
+create_execution → start → work → stop
 ```
+
+For uploading outputs, downloading datasets, and registering asset files, use the DerivaML Python API execution context manager.
 
 ## Critical Rules
 
 1. **Every execution needs a workflow** — Create or find one with `create_workflow` first.
 2. **Use the context manager in Python** — `with ml.create_execution(config) as exe:` auto-starts and auto-stops.
 3. **Upload AFTER the with block** — `exe.upload_execution_outputs()` must be called after exiting the context manager, never inside it.
-4. **Use `asset_file_path()` for all outputs** — This both creates the path and registers the file as an output asset. Never manually place files in the working directory.
+4. **Use `exe.asset_file_path()` for all outputs** — This both creates the path and registers the file as an output asset. Never manually place files in the working directory.
 5. **Failed executions are tracked** — If an exception occurs in the with block, status is set to "Failed" automatically.
 
 ## Python API (Recommended)
@@ -2982,21 +2965,20 @@ exe.upload_execution_outputs()
 
 ## MCP Tools
 
+The MCP tools handle execution creation and lifecycle. For downloading datasets, registering output files, and uploading outputs, use the DerivaML Python API.
+
 ```
 create_execution(workflow_rid=..., description=..., dataset_rids=[...])
 start_execution(execution_rid=...)
-download_execution_dataset(execution_rid=...)
-# ... do work ...
-asset_file_path(execution_rid=..., filename=..., description=...)
+# ... do work using DerivaML Python API ...
 stop_execution(execution_rid=...)
-upload_execution_outputs(execution_rid=...)
 ```
 
 ## Key Tools
 
 - `restore_execution` — Re-download a previous execution's assets for debugging
 - `add_nested_execution` — Multi-step pipelines with parent-child structure
-- `list_nested_executions` / `list_parent_executions` — Navigate execution hierarchy
+- `list_nested_executions` — Navigate execution hierarchy
 - `add_asset_type` / `create_asset_table` — Manage asset categories and tables
 
 For the full guide with ExecutionConfiguration details, nested executions, asset management, and inspection tools, read `references/workflow.md`.
@@ -3073,7 +3055,7 @@ For interactive use or when working through the MCP interface:
 
 ```
 Step 1: Find or create a workflow
-  -> query_table(table="Workflow") or create_workflow(...)
+  -> preview_table(table="Workflow") or create_workflow(...)
 
 Step 2: Create the execution
   -> create_execution(
@@ -3087,20 +3069,15 @@ Step 2: Create the execution
 Step 3: Start the execution
   -> start_execution(execution_rid="2-YYYY")
 
-Step 4: Download input data
-  -> download_execution_dataset(execution_rid="2-YYYY")
-
-Step 5: Do your work
+Step 4: Do your work
   (run notebooks, scripts, generate outputs)
+  Use the DerivaML Python API for downloading datasets and registering output files.
 
-Step 6: Register output files
-  -> asset_file_path(execution_rid="2-YYYY", filename="results.csv", description="Model predictions")
-
-Step 7: Stop the execution
+Step 5: Stop the execution
   -> stop_execution(execution_rid="2-YYYY")
 
-Step 8: Upload outputs
-  -> upload_execution_outputs(execution_rid="2-YYYY")
+Step 6: Upload outputs
+  Use the DerivaML Python API: exe.upload_execution_outputs()
 ```
 
 ## ExecutionConfiguration Details
@@ -3118,7 +3095,7 @@ config = ExecutionConfiguration(
 
 ## Downloading Execution Datasets
 
-Once an execution is started, download all configured input datasets:
+Once an execution is started, download all configured input datasets using the Python API:
 
 ```python
 # Python API
@@ -3127,16 +3104,11 @@ with ml.create_execution(config) as exe:
     # Returns dict mapping dataset RID -> local directory path
 ```
 
-```
-# MCP tools
-download_execution_dataset(execution_rid="2-YYYY")
-```
-
 The downloaded data lands in the execution's working directory under a structured layout.
 
 ## Registering Output Files
 
-Use `asset_file_path()` to both get the correct output path and register the file as an execution output:
+Use `exe.asset_file_path()` (Python API) to both get the correct output path and register the file as an execution output:
 
 ```python
 # Python API
@@ -3148,18 +3120,7 @@ df.to_csv(output_path, index=False)
 nested_path = exe.asset_file_path("plots/confusion_matrix.png", description="Confusion matrix plot")
 ```
 
-```
-# MCP tools
-asset_file_path(execution_rid="2-YYYY", filename="predictions.csv", description="Model predictions")
-```
-
 ## Useful Inspection and Management Tools
-
-### Get execution info
-```python
-info = ml.get_execution_info(execution_rid="2-YYYY")
-# Returns: workflow, status, datasets, assets, nested executions, timestamps
-```
 
 ### Update execution status
 ```python
@@ -3172,11 +3133,6 @@ ml.update_execution_status(execution_rid="2-YYYY", status="Running")
 ml.restore_execution(execution_rid="2-YYYY")
 # Re-downloads execution assets and datasets to local working directory
 # Useful for debugging or continuing work from a previous execution
-```
-
-### Get execution working directory
-```python
-working_dir = ml.get_execution_working_dir(execution_rid="2-YYYY")
 ```
 
 ### Nested executions
@@ -3201,8 +3157,6 @@ add_nested_execution(parent_rid="2-PARENT", workflow_rid="2-STEP1_WF", descripti
 ### List related executions
 ```
 list_nested_executions(execution_rid="2-YYYY")   # Child executions
-list_parent_executions(execution_rid="2-YYYY")    # Parent executions
-list_dataset_executions(dataset_rid="2-ABC1")     # Executions that used this dataset
 list_asset_executions(asset_rid="2-DEF2")         # Executions that used this asset
 ```
 
@@ -3238,8 +3192,8 @@ This creates the table with standard asset columns (URL, Filename, Length, MD5, 
 ## Tips
 
 - Always wrap work in an execution for provenance tracking.
-- Upload outputs AFTER the `with` block exits, never inside it.
-- Use `asset_file_path()` for every output file -- do not manually place files in the working directory.
+- Upload outputs AFTER the `with` block exits, never inside it (Python API: `exe.upload_execution_outputs()`).
+- Use `exe.asset_file_path()` (Python API) for every output file -- do not manually place files in the working directory.
 - Set meaningful descriptions on workflows, executions, and output assets.
 - For long-running work, use `update_execution_status()` to track progress.
 - Use `restore_execution()` to resume or inspect a completed execution's local state.
@@ -3261,10 +3215,10 @@ Use the catalog resources and query tools to find assets:
 
 ```
 # List all tables — asset tables have URL, Filename, Length, MD5 columns
-query_table(table="Slide_Image", limit=5)
+preview_table(table="Slide_Image", limit=5)
 
 # Search assets with filters
-query_table(table_name="Slide_Image", filter={"Subject": "2-A1B2"})
+preview_table(table_name="Slide_Image", filter={"Subject": "2-A1B2"})
 
 # Look up a specific asset
 get_record(table_name="Slide_Image", rid="2-IMG1")
@@ -3283,20 +3237,19 @@ list_asset_executions(asset_rid="2-IMG1")
 
 ## Downloading Assets
 
-```
+Use the DerivaML Python API for downloading assets:
+
+```python
 # Download a specific asset by RID
-download_asset(asset_rid="2-IMG1")
+ml.download_asset("2-IMG1")
 
 # Download all assets in an execution's input configuration
-download_execution_dataset(execution_rid="2-EXEC")
-
-# Find where downloaded assets are located
-get_execution_working_dir(execution_rid="2-EXEC")
+exe.download_execution_dataset()
 ```
 
 ## Uploading Assets and Creating Asset Tables
 
-For uploading assets as execution outputs, creating new asset tables, and managing asset types, see the `run-ml-execution` skill. Assets should always be uploaded within an execution context for provenance tracking."""
+For uploading assets as execution outputs, creating new asset tables, and managing asset types, see the `run-ml-execution` skill. Assets should always be uploaded within an execution context for provenance tracking using the DerivaML Python API."""
 
     @mcp.prompt(
         name="configure-experiment",
@@ -4331,7 +4284,7 @@ For each config file, check:
 | Symptom | Cause | Fix |
 |---|---|---|
 | `Dataset not found: RID=...` | RID doesn't exist in target catalog | Verify RID against correct catalog (dev vs prod) |
-| `Version X not found` | Version never created | Use `get_current_version` to find latest, or `increment_dataset_version` |
+| `Version X not found` | Version never created | Read `deriva://dataset/{rid}` to find the current version, or use `increment_dataset_version` |
 | Stale version | Data changed since version was created | Call `increment_dataset_version`, then update config |
 | Wrong catalog | Config RIDs are from a different catalog | Check `deriva_ml` config group — are you pointing at the right host/catalog? |
 
@@ -4392,11 +4345,9 @@ Returns all items of a type within a given context.
 | `list_vocabulary_terms` | All terms in a vocabulary |
 | `list_tables` | All tables in a schema |
 | `list_assets` | All assets of a type |
-| `list_dataset_members` | All members of a dataset |
+| `deriva://dataset/{rid}/members resource` | All members of a dataset |
 | `list_dataset_parents` | All parent datasets |
-| `list_dataset_children` | All child datasets |
 | `list_nested_executions` | All nested executions |
-| `list_parent_executions` | All parent executions |
 
 **Behavior**: Returns a complete list. No filtering -- returns everything in scope.
 
@@ -4406,12 +4357,9 @@ Returns data in a specific format or with transformation applied.
 
 | Method | Description |
 |--------|-------------|
-| `get_table` | Get table schema/definition |
 | `get_table_sample_data` | Get sample rows from a table |
 | `get_record` | Get a specific record by RID |
 | `get_dataset_spec` | Get dataset specification |
-| `get_execution_info` | Get execution details |
-| `get_execution_working_dir` | Get execution working directory path |
 
 **Behavior**: Returns a specific data type or transformed view. Use when you need data in a particular format.
 
@@ -5196,7 +5144,7 @@ deriva://dataset/<rid>       # Specific dataset details
 deriva://catalog/workflows   # All workflows with descriptions
 ```
 
-For queries that need actual data (counts, specific records, filtering), use the `query_table` or `count_table` MCP tools.
+For queries that need actual data (specific records, filtering), use the `preview_table` MCP tool.
 
 ### 4. Score Closeness Across Multiple Signals
 
@@ -5341,10 +5289,10 @@ uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --host ml.derivacloud.
 uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
 ```
 
-## MCP Tools
+## CLI Tools
 
-- `inspect_notebook` — View notebook structure, parameters, and tags without running
-- `run_notebook` — Execute notebook with parameters and return execution RID
+- `uv run deriva-ml-run-notebook <notebook.ipynb> --info` — View available configs and parameters
+- `uv run deriva-ml-run-notebook <notebook.ipynb>` — Execute notebook with parameters and return execution RID
 
 ## Pre-Production Checklist
 
@@ -5412,7 +5360,7 @@ dry_run = False
 
 **How to tag a cell in JupyterLab**: Click the cell, then go to the sidebar (View > Cell Inspector or click the gear icon) and add `"parameters"` to the cell tags.
 
-When the notebook is run via papermill (by `deriva-ml-run` or the `run_notebook` MCP tool), the values in this cell are replaced by injected parameters. A new cell is inserted immediately after with the injected values.
+When the notebook is run via papermill (by `deriva-ml-run` or `deriva-ml-run-notebook` CLI commands), the values in this cell are replaced by injected parameters. A new cell is inserted immediately after with the injected values.
 
 ### 3. Config Loading
 
@@ -5559,15 +5507,19 @@ uv run papermill notebook.ipynb output.ipynb -f params.yaml
 
 ### Inspect Before Running
 
-Use the MCP tool to inspect the notebook structure without running it:
+Use the CLI to inspect the notebook structure without running it:
 
-- `inspect_notebook` shows the parameters cell, tags, and overall structure.
+```bash
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb --info
+```
 
-### Run via MCP Tool
+### Run via CLI
 
-Use the `run_notebook` MCP tool for programmatic execution:
+Use the `deriva-ml-run-notebook` CLI command for programmatic execution:
 
-- `run_notebook` runs the notebook with specified parameters and returns the execution RID.
+```bash
+uv run deriva-ml-run-notebook notebooks/my_analysis.ipynb
+```
 
 ## What Happens During Execution
 
@@ -5681,9 +5633,6 @@ uv run deriva-ml-install-kernel
 ```
 
 This registers the project's virtual environment as a Jupyter kernel. The kernel name is derived from the project name in `pyproject.toml`.
-
-Alternatively, use the MCP tool:
-- `install_jupyter_kernel` to install the kernel programmatically.
 
 To verify the kernel was installed:
 ```bash
@@ -5868,7 +5817,7 @@ This guide covers common problems encountered when running DerivaML executions a
 
 ## Problem: "No Active Execution"
 
-**Symptom**: Tools that require an execution context (like `asset_file_path`, `upload_execution_outputs`) fail with an error about no active execution.
+**Symptom**: Tools that require an execution context fail with an error about no active execution.
 
 **Cause**: The execution was not properly started, or you are outside the execution context.
 
@@ -5879,7 +5828,7 @@ This guide covers common problems encountered when running DerivaML executions a
       # All execution work goes here
   ```
 - With MCP tools, ensure you called `start_execution` before attempting execution-scoped operations.
-- If the execution was started but the error persists, the execution may have been stopped or may have failed. Check with `get_execution_info`.
+- If the execution was started but the error persists, the execution may have been stopped or may have failed. Check with `preview_table(table_name="Execution", filters={"RID": "<execution_rid>"})`.
 
 ---
 
@@ -5887,14 +5836,14 @@ This guide covers common problems encountered when running DerivaML executions a
 
 **Symptom**: Execution completes but asset files are not visible in the catalog.
 
-**Cause**: `upload_execution_outputs` was not called, or files were written to the wrong path.
+**Cause**: `exe.upload_execution_outputs()` (Python API) was not called, or files were written to the wrong path.
 
 **Solution**:
-1. Call `upload_execution_outputs` **after** writing all files but **before** the execution context closes (i.e., inside the `with` block in Python).
-2. Ensure files are written to the **exact path** returned by `asset_file_path`. Writing to any other directory will cause the upload to miss those files.
+1. Call `exe.upload_execution_outputs()` **after** the `with` block exits in Python.
+2. Ensure files are written to the **exact path** returned by `exe.asset_file_path()`. Writing to any other directory will cause the upload to miss those files.
 3. Verify the file actually exists at the path before uploading:
    ```python
-   path = exec.asset_file_path("MyAssetTable", "output.csv")
+   path = exe.asset_file_path("MyAssetTable", "output.csv")
    # Write file to `path`
    # Verify: os.path.exists(path) should be True
    ```
@@ -5975,7 +5924,7 @@ This guide covers common problems encountered when running DerivaML executions a
 
 ## Problem: "Upload Timeout"
 
-**Symptom**: `upload_execution_outputs` hangs or times out.
+**Symptom**: `exe.upload_execution_outputs()` (Python API) hangs or times out.
 
 **Cause**: Large files, network issues, or server limits.
 
@@ -5984,7 +5933,7 @@ This guide covers common problems encountered when running DerivaML executions a
 - For large files, consider breaking them into smaller batches.
 - The server may have upload size limits. Check with your catalog administrator.
 - Retry the upload -- transient network issues are the most common cause.
-- **Tool**: `get_execution_info` to check if partial uploads succeeded.
+- Query the execution record to check if partial uploads succeeded.
 
 ---
 
@@ -5998,7 +5947,7 @@ This guide covers common problems encountered when running DerivaML executions a
 - **Best practice**: Always use the context manager (`with ml.execution(...)`) which automatically handles cleanup on both success and failure.
 - To fix a stuck execution manually:
   - **Tool**: `update_execution_status` with the execution RID and status `Failed` (or `Complete` if the work actually finished).
-- **Tool**: `get_execution_info` to inspect the execution's current state and metadata.
+- Query the execution record to inspect its current state and metadata.
 - For future runs, always use the context manager to prevent this issue.
 
 ---
@@ -6027,25 +5976,20 @@ logging.basicConfig(level=logging.DEBUG)
 ```
 
 ### Inspect Execution State
-- **Tool**: `get_execution_info` with the execution RID to see full execution metadata, status, inputs, and outputs.
-- **Tool**: `get_execution_working_dir` to find the local working directory and inspect files directly.
+- Query the Execution table with the execution RID to see full execution metadata, status, inputs, and outputs.
+- Use the DerivaML Python API to inspect the execution's working directory and files directly.
 
 ### Check Catalog State
 - Use the catalog resources to review the current catalog schema, tables, and vocabularies.
-- **Tool**: `count_table` to quickly verify data exists in expected tables.
+- **Tool**: `preview_table` with a `limit=1` to quickly verify data exists in expected tables.
 
 ### Review Recent Executions
 - Check the recent executions resource to see the latest execution activity, statuses, and any patterns of failure.
 - **Tool**: `list_nested_executions` if the execution is part of a larger workflow to see the full execution tree.
-- **Tool**: `list_parent_executions` to find the parent execution if this is a nested step.
 
 ### Verify Working Directory
-- **Tool**: `get_execution_working_dir` returns the local filesystem path for the execution.
+- Use the DerivaML Python API to get the local filesystem path for the execution.
 - Inspect this directory to verify:
   - Input files were downloaded correctly.
   - Output files were written to the correct locations.
-  - No unexpected files or directory structures.
-
-### Clean Up
-- **Tool**: `list_storage_contents` to see what's consuming disk space (cached bags, execution dirs, etc.)
-- **Tool**: `delete_storage` to remove specific entries by RID, freeing disk space."""
+  - No unexpected files or directory structures."""

@@ -321,16 +321,6 @@ def execution_tools_disconnected(disconnected_conn_manager):
 
 
 @pytest.fixture
-def storage_tools(mock_conn_manager):
-    """Capture storage tools with a connected mock."""
-    pytest.importorskip("deriva_ml.cache_tui")
-    from deriva_mcp.tools.execution import register_storage_tools
-    mcp, tools = _create_tool_capture()
-    register_storage_tools(mcp, mock_conn_manager)
-    return tools
-
-
-@pytest.fixture
 def annotation_tools(mock_conn_manager):
     """Capture annotation tools with a connected mock."""
     from deriva_mcp.tools.annotation import register_annotation_tools
@@ -356,23 +346,6 @@ def bg_task_tools(mock_conn_manager):
     register_background_task_tools(mcp, mock_conn_manager)
     return tools
 
-
-@pytest.fixture
-def devtools(mock_conn_manager):
-    """Capture devtools with a connected mock."""
-    from deriva_mcp.tools.devtools import register_devtools
-    mcp, tools = _create_tool_capture()
-    register_devtools(mcp, mock_conn_manager)
-    return tools
-
-
-@pytest.fixture
-def devtools_disconnected(disconnected_conn_manager):
-    """Capture devtools with no connection."""
-    from deriva_mcp.tools.devtools import register_devtools
-    mcp, tools = _create_tool_capture()
-    register_devtools(mcp, disconnected_conn_manager)
-    return tools
 
 
 # =============================================================================

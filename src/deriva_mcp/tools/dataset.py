@@ -33,9 +33,9 @@ Each version captures a catalog snapshot, allowing queries against historical st
 The same version always returns the same data, regardless of later catalog changes.
 
 **Dataset Bags (BDBags)**:
-A BDBag is a self-describing, portable archive of a specific dataset version. Use
-`download_dataset()` to export a dataset as a BDBag. See server instructions for
-detailed documentation on BDBag contents and usage.
+A BDBag is a self-describing, portable archive of a specific dataset version.
+Use the DerivaML Python API for downloading and processing bags locally.
+See DerivaML documentation for detailed BDBag contents and usage.
 """
 
 from __future__ import annotations
@@ -50,15 +50,6 @@ if TYPE_CHECKING:
     from deriva_mcp.connection import ConnectionManager
 
 logger = logging.getLogger("deriva-mcp")
-
-
-def _json_default(obj):
-    """Handle datetime/date serialization for denormalized data."""
-    from datetime import date, datetime
-
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
-    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 def _serialize_dataset(dataset) -> dict:
@@ -123,10 +114,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                 description=description,
                 dataset_types=dataset_types or [],
             )
-
-            conn_info = conn_manager.get_active_connection_info()
-            if conn_info:
-                conn_info.data_dirty = True
 
             return json.dumps({
                 "status": "created",
@@ -206,45 +193,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_dataset_members(
-        dataset_rid: str,
-        version: str | None = None,
-        recurse: bool = False,
-        limit: int | None = None,
-    ) -> str:
-        """List all dataset elements (records) grouped by table type.
-
-        Dataset elements are records from domain tables that have been added to this
-        dataset. Results are grouped by table name. Specify a version to query
-        historical states for reproducibility.
-
-        Args:
-            dataset_rid: The RID of the dataset.
-            version: Semantic version to query (e.g., "1.0.0"). If not specified,
-                uses the current version.
-            recurse: If True, include members from nested child datasets.
-            limit: Maximum number of members to return per table (default: no limit).
-
-        Returns:
-            JSON object mapping table names to arrays of {RID} objects.
-
-        Example:
-            list_dataset_members("1-ABC") -> {"Image": [{"RID": "2-DEF"}, ...], "Subject": [...]}
-            list_dataset_members("1-ABC", recurse=True) -> includes members from child datasets
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            dataset = ml.lookup_dataset(dataset_rid)
-            members = dataset.list_dataset_members(version=version, recurse=recurse, limit=limit)
-            result = {}
-            for table_name, items in members.items():
-                result[table_name] = [{"RID": m["RID"]} for m in items]
-            return json.dumps(result)
-        except Exception as e:
-            logger.error(f"Failed to list dataset members: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def add_dataset_members(
         dataset_rid: str,
         member_rids: list[str] | None = None,
@@ -306,10 +254,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
                     "message": "Provide either member_rids or members_by_table.",
                 })
 
-            conn_info = conn_manager.get_active_connection_info()
-            if conn_info:
-                conn_info.data_dirty = True
-
             return json.dumps({
                 "status": "success",
                 "added_count": total,
@@ -317,19 +261,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to add dataset members: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_record(dataset_rid, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
-
-            return json.dumps(result)
+            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def delete_dataset_members(
@@ -358,11 +290,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.delete_dataset_members(members=member_rids)
-
-            conn_info = conn_manager.get_active_connection_info()
-            if conn_info:
-                conn_info.data_dirty = True
-
             return json.dumps({
                 "status": "success",
                 "removed_count": len(member_rids),
@@ -370,19 +297,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to delete dataset members: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_record(dataset_rid, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
-
-            return json.dumps(result)
+            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def increment_dataset_version(
@@ -488,11 +403,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             ml.delete_dataset(dataset, recurse=recurse)
-
-            conn_info = conn_manager.get_active_connection_info()
-            if conn_info:
-                conn_info.data_dirty = True
-
             return json.dumps({
                 "status": "deleted",
                 "dataset_rid": dataset_rid,
@@ -531,10 +441,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Update the local object
             dataset.description = description
 
-            conn_info = conn_manager.get_active_connection_info()
-            if conn_info:
-                conn_info.data_dirty = True
-
             return json.dumps({
                 "status": "updated",
                 "dataset_rid": dataset_rid,
@@ -542,19 +448,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to set dataset description: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_record(dataset_rid, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
-
-            return json.dumps(result)
+            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def add_dataset_type(dataset_rid: str, dataset_type: str) -> str:
@@ -577,11 +471,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.add_dataset_type(dataset_type)
-
-            conn_info = conn_manager.get_active_connection_info()
-            if conn_info:
-                conn_info.data_dirty = True
-
             return json.dumps({
                 "status": "added",
                 "dataset_rid": dataset_rid,
@@ -589,19 +478,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to add dataset type: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_record(dataset_rid, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
-
-            return json.dumps(result)
+            return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
     async def remove_dataset_type(dataset_rid: str, dataset_type: str) -> str:
@@ -624,11 +501,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
             dataset.remove_dataset_type(dataset_type)
-
-            conn_info = conn_manager.get_active_connection_info()
-            if conn_info:
-                conn_info.data_dirty = True
-
             return json.dumps({
                 "status": "removed",
                 "dataset_rid": dataset_rid,
@@ -704,36 +576,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_dataset_children(
-        dataset_rid: str,
-        recurse: bool = False,
-        version: str | None = None,
-    ) -> str:
-        """List all nested child datasets.
-
-        Args:
-            dataset_rid: RID of the parent dataset.
-            recurse: If True, recursively list all descendants (children of children).
-            version: Semantic version to query (e.g., "1.0.0"). If not specified,
-                uses the current version.
-
-        Returns:
-            JSON array of child datasets with {rid, description, dataset_types, current_version}.
-
-        Example:
-            list_dataset_children("1-ABC") -> direct children only
-            list_dataset_children("1-ABC", recurse=True) -> all descendants
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            dataset = ml.lookup_dataset(dataset_rid)
-            children = dataset.list_dataset_children(recurse=recurse, version=version)
-            return json.dumps([_serialize_dataset(c) for c in children])
-        except Exception as e:
-            logger.error(f"Failed to list dataset children: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
     async def list_dataset_parents(
         dataset_rid: str,
         recurse: bool = False,
@@ -764,143 +606,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def list_dataset_executions(dataset_rid: str) -> str:
-        """List all executions associated with a dataset.
-
-        Returns all executions that used this dataset as input. This is useful
-        for provenance tracking - finding which workflows processed a given dataset.
-
-        Args:
-            dataset_rid: RID of the dataset.
-
-        Returns:
-            JSON array of execution records with {execution_rid, description, status,
-            workflow_rid}.
-        """
-        try:
-            ml = conn_manager.get_active_or_raise()
-            dataset = ml.lookup_dataset(dataset_rid)
-            executions = dataset.list_executions()
-
-            results = []
-            for exe in executions:
-                results.append({
-                    "execution_rid": exe.execution_rid,
-                    "description": exe.description,
-                    "status": exe.status.value if exe.status else None,
-                    "workflow_rid": exe.workflow_rid,
-                })
-            return json.dumps(results)
-        except Exception as e:
-            logger.error(f"Failed to list dataset executions: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def download_dataset(
-        dataset_rid: str,
-        version: str,
-        materialize: bool = True,
-        exclude_tables: list[str] | None = None,
-        timeout: list[int] | None = None,
-        fetch_concurrency: int = 1,
-    ) -> str:
-        """Download a dataset version as a BDBag for local processing.
-
-        Creates a self-contained BDBag archive of the specified dataset version.
-        The bag includes all dataset members, nested datasets (recursively),
-        feature values for members, vocabulary terms, and asset files.
-
-        The bag captures the exact catalog state at the version's snapshot time,
-        ensuring reproducibility regardless of later catalog changes.
-
-        The export follows foreign key paths from member tables to include all
-        FK-reachable data. Starting from each member element type, the export
-        traverses all FK-connected tables (both incoming and outgoing foreign keys),
-        with vocabulary tables acting as natural path terminators. Only paths starting
-        from element types that have members in this dataset are included.
-
-        If any query fails during export (e.g., due to server-side timeout on deep
-        joins), the export raises an error. Use exclude_tables to prune the FK
-        graph and avoid the problematic join, or add affected records as direct
-        dataset members to flatten the traversal.
-
-        Use this for standalone processing outside an execution context. For
-        tracked ML workflows, use download_execution_dataset instead.
-
-        Args:
-            dataset_rid: RID of the dataset to download.
-            version: Semantic version to download (e.g., "1.0.0"). Required.
-                Use lookup_dataset() to find the current_version if needed.
-            materialize: If True (default), fetch all referenced asset files
-                (images, model weights, etc.) from Hatrac storage. If False,
-                bag contains only metadata and remote file references.
-            exclude_tables: Optional list of table names to exclude from FK path
-                traversal during bag export. Tables in this list will not be
-                visited, pruning branches of the FK graph. Use this when bag
-                downloads are slow or timing out due to expensive joins through
-                large intermediate tables.
-            timeout: Optional [connect_timeout, read_timeout] in seconds for
-                network requests. Default is [10, 610]. Increase read_timeout
-                for large datasets with deep FK joins that need more time.
-
-        Returns:
-            JSON with bag attributes: dataset_rid, version, description,
-            dataset_types, execution_rid, bag_path (local filesystem path),
-            and bag_tables (dict of table names to row counts).
-        """
-        try:
-            from deriva_ml.dataset.aux_classes import DatasetSpec
-            from deriva_ml.model.deriva_ml_database import DerivaMLDatabase
-
-            ml = conn_manager.get_active_or_raise()
-            spec = DatasetSpec(
-                rid=dataset_rid,
-                version=version,
-                materialize=materialize,
-                exclude_tables=set(exclude_tables) if exclude_tables else None,
-                timeout=tuple(timeout) if timeout else None,
-                fetch_concurrency=fetch_concurrency,
-            )
-            bag = ml.download_dataset_bag(spec)
-
-            # Build table inventory with row counts
-            db = DerivaMLDatabase(bag.model)
-            bag_tables = {}
-            for table_name in bag.model.list_tables():
-                try:
-                    rows = list(db.get_table_as_dict(table_name))
-                    if rows:
-                        bag_tables[table_name] = len(rows)
-                except Exception:
-                    bag_tables[table_name] = -1  # error reading
-
-            return json.dumps({
-                "status": "downloaded",
-                "dataset_rid": bag.dataset_rid,
-                "version": str(bag.current_version) if bag.current_version else None,
-                "description": bag.description,
-                "dataset_types": bag.dataset_types,
-                "execution_rid": bag.execution_rid,
-                "bag_path": str(bag.model.bag_path),
-                "bag_tables": bag_tables,
-            })
-        except Exception as e:
-            logger.error(f"Failed to download dataset: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_record(dataset_rid, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
-
-            return json.dumps(result)
-
-    @mcp.tool()
     async def estimate_bag_size(
         dataset_rid: str,
         version: str,
@@ -908,7 +613,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
     ) -> str:
         """Estimate the size of a dataset bag before downloading.
 
-        Runs the same FK path traversal as download_dataset, then queries the
+        Runs the same FK path traversal as a dataset bag download, then queries the
         snapshot catalog for row counts and asset file sizes. Use this to
         preview what a download will contain and how large it will be before
         committing to the full download.
@@ -917,7 +622,7 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             dataset_rid: RID of the dataset to estimate.
             version: Semantic version to estimate (e.g., "1.0.0").
             exclude_tables: Optional list of table names to exclude from FK
-                path traversal, same as in download_dataset.
+                path traversal during bag export.
 
         Returns:
             JSON with:
@@ -1097,274 +802,52 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
-    async def validate_dataset_bag(
-        dataset_rid: str,
-        version: str | None = None,
-    ) -> str:
-        """Download a dataset bag and cross-validate its contents against the live catalog.
-
-        For each member element type in the dataset, queries the catalog to find
-        all records reachable from the dataset's members (via FK paths) and compares
-        them to what's in the bag. Returns a structured pass/fail report.
-
-        This is useful for verifying that a dataset bag contains all expected data
-        before using it for ML workflows.
-
-        Args:
-            dataset_rid: RID of the dataset to validate.
-            version: Semantic version to validate (e.g., "1.0.0").
-                If not specified, uses the dataset's current version.
-
-        Returns:
-            JSON with validation results per table: expected count, bag count,
-            missing RIDs, extra RIDs, and pass/fail status.
-        """
-        try:
-            from deriva_ml.dataset.aux_classes import DatasetSpec
-            from deriva_ml.model.deriva_ml_database import DerivaMLDatabase
-
-            ml = conn_manager.get_active_or_raise()
-            dataset = ml.lookup_dataset(dataset_rid)
-
-            if version is None:
-                version = str(dataset.current_version)
-
-            # Download the bag
-            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=False)
-            bag = ml.download_dataset_bag(spec)
-            db = DerivaMLDatabase(bag.model)
-
-            # Get dataset members from catalog
-            members = dataset.list_dataset_members()
-
-            # Build validation results
-            results = []
-            for table_name, member_records in members.items():
-                if not member_records:
-                    continue
-                catalog_rids = {m["RID"] for m in member_records}
-
-                try:
-                    bag_rows = list(db.get_table_as_dict(table_name))
-                    bag_rids = {r["RID"] for r in bag_rows}
-                except Exception:
-                    bag_rids = set()
-
-                missing = catalog_rids - bag_rids
-                extra = bag_rids - catalog_rids
-                status = "PASS" if not missing else "FAIL"
-
-                results.append({
-                    "table": table_name,
-                    "catalog_count": len(catalog_rids),
-                    "bag_count": len(bag_rids),
-                    "missing_count": len(missing),
-                    "extra_count": len(extra),
-                    "status": status,
-                    "missing_rids": list(missing)[:10] if missing else [],
-                })
-
-            # Full bag inventory
-            bag_inventory = {}
-            for table_name in bag.model.list_tables():
-                try:
-                    rows = list(db.get_table_as_dict(table_name))
-                    if rows:
-                        bag_inventory[table_name] = len(rows)
-                except Exception:
-                    bag_inventory[table_name] = -1
-
-            passed = sum(1 for r in results if r["status"] == "PASS")
-            failed = sum(1 for r in results if r["status"] == "FAIL")
-
-            return json.dumps({
-                "status": "success",
-                "dataset_rid": dataset_rid,
-                "version": version,
-                "checks": results,
-                "bag_inventory": bag_inventory,
-                "summary": f"{passed} passed, {failed} failed out of {len(results)} checks",
-            })
-        except Exception as e:
-            logger.error(f"Failed to validate dataset bag: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def denormalize_dataset(
+    async def preview_denormalized_dataset(
         dataset_rid: str,
         include_tables: list[str],
         version: str | None = None,
-        limit: int = 1000,
-        columns_only: bool = False,
+        limit: int = 25,
     ) -> str:
-        """Denormalize dataset tables into a wide table for ML.
+        """Preview a denormalized (wide table) view of dataset tables.
 
-        Denormalization transforms normalized relational data into a single "wide table"
-        (also called a "flat table" or "denormalized table") by joining related tables
-        together. This produces rows where each row contains all related information
-        from multiple source tables, with columns from each table combined side-by-side.
+        Joins related dataset tables into a single wide table and returns a sample
+        of rows. Useful for understanding data shape, column names, and relationships
+        before building ML pipelines. For bulk data access, use the DerivaML Python API.
 
-        Wide tables are the standard input format for most machine learning frameworks,
-        which expect all features for a single observation to be in one row. This method
-        bridges the gap between normalized database schemas and ML-ready tabular data.
-
-        **How it works:**
-
-        Tables are joined based on their foreign key relationships. The join follows
-        multi-hop FK chains automatically — tables in ``include_tables`` don't need to
-        be explicit dataset members, they just need to be FK-reachable from a member
-        table. For example, if Image has a FK to Observation, and Observation has a FK
-        to Subject, then denormalizing ["Image", "Subject"] joins through Observation
-        transparently.
-
-        If the schema has multiple FK paths between two requested tables (e.g.,
-        Image→Subject directly AND Image→Observation→Subject), a ``DerivaMLException``
-        is raised listing all paths and suggesting intermediate tables to add to
-        ``include_tables`` for disambiguation.
-
-        **Common use cases:**
-
-        - Creating training data with all features in one table
-        - Joining images with their labels/diagnoses for supervised learning
-        - Combining subject metadata with associated records for stratified splitting
-        - Preparing data for pandas, scikit-learn, or other ML tools
-
-        **Column naming:**
-
-        Column names are prefixed with the source table name using dots to avoid
-        collisions (e.g., "Image.Filename", "Subject.RID", "Diagnosis.Label").
-
-        **Columns-only mode:**
-
-        Set ``columns_only=True`` to preview the column schema without fetching any
-        data. This is fast and useful for:
-        - Discovering what columns a denormalization would produce
-        - Verifying FK paths resolve correctly before running expensive queries
-        - Finding the correct column name for stratify_by_column in split_dataset
-        - Debugging ambiguous FK path errors
+        Tables are joined based on their foreign key relationships. Column names are
+        prefixed with the source table name using dots (e.g., "Image.Filename",
+        "Subject.RID", "Diagnosis.Label").
 
         Args:
-            dataset_rid: RID of the dataset to denormalize.
+            dataset_rid: RID of the dataset to preview.
             include_tables: List of table names to include in the join.
-                Tables are joined via FK relationships, including multi-hop chains.
+                Tables are joined based on their foreign key relationships.
                 Order doesn't matter - the join order is determined automatically.
             version: Semantic version to query (e.g., "1.0.0"). If not specified,
                 uses the current version.
-            limit: Maximum rows to return (default: 1000). Ignored when columns_only=True.
-            columns_only: If True, return only the column schema (names and types)
-                without fetching any data. Fast preview of what denormalization
-                would produce.
+            limit: Maximum rows to return (default: 25, max: 100).
 
         Returns:
-            JSON with columns list, rows array, and source ("bag" or "catalog").
-            If a downloaded bag is cached locally, bag denormalization is used
-            automatically (faster, no catalog queries). The source field indicates
-            which was used.
-
-            When columns_only=True, returns JSON with columns list (name and type
-            for each), no rows, and no data fetching.
+            JSON with columns list and rows array.
 
         Example:
-            denormalize_dataset("1-ABC", ["Image", "Diagnosis"])
+            preview_denormalized_dataset("1-ABC", ["Image", "Diagnosis"])
             -> {"columns": ["Image.RID", "Image.Filename", "Diagnosis.Label"], "rows": [...]}
 
             # Include subject info for analysis by demographics
-            denormalize_dataset("1-ABC", ["Subject", "Image", "Diagnosis"])
+            preview_denormalized_dataset("1-ABC", ["Subject", "Image", "Diagnosis"])
             -> {"columns": ["Subject.Age", "Subject.Gender", "Image.RID", ...], "rows": [...]}
-
-            # Preview columns only (no data fetched)
-            denormalize_dataset("1-ABC", ["Image", "Diagnosis"], columns_only=True)
-            -> {"columns": [{"name": "Image.RID", "type": "ermrest_rid"}, ...], "rows": []}
         """
         try:
             ml = conn_manager.get_active_or_raise()
             dataset = ml.lookup_dataset(dataset_rid)
 
-            # Columns-only mode: return schema without fetching data
-            if columns_only:
-                # Use bag if cached locally, otherwise catalog
-                source = "catalog"
-                denorm_source = dataset
-                from deriva_ml.dataset.bag_cache import BagCache
-                bag_cache = BagCache(ml.cache_dir)
-                bag_cache_info = bag_cache.cache_status(dataset_rid)
-                if bag_cache_info["cache_path"] is not None:
-                    try:
-                        bag = dataset.download_dataset_bag(
-                            version=version or str(dataset.current_version),
-                            materialize=False,
-                        )
-                        denorm_source = bag
-                        source = "bag"
-                    except Exception:
-                        pass
-
-                col_tuples = denorm_source.denormalize_columns(include_tables)
-                columns_info = [
-                    {"name": name, "type": col_type}
-                    for name, col_type in col_tuples
-                ]
-                return json.dumps({
-                    "dataset_rid": dataset_rid,
-                    "include_tables": include_tables,
-                    "source": source,
-                    "columns": columns_info,
-                    "column_names": [c["name"] for c in columns_info],
-                    "rows": [],
-                    "count": 0,
-                    "columns_only": True,
-                })
-
-            # Check result cache
-            conn_info = conn_manager.get_active_connection_info()
-            from deriva_mcp.result_cache import ResultCache, CacheMeta
-            result_cache = getattr(conn_info, 'result_cache', None) if conn_info else None
-            cache_key = None
-            if isinstance(result_cache, ResultCache):
-                cache_key = result_cache.cache_key(
-                    "denormalize",
-                    dataset_rid=dataset_rid,
-                    tables=include_tables,
-                    version=version or str(dataset.current_version),
-                )
-                if result_cache.has(cache_key):
-                    cached = result_cache.query(cache_key, limit=limit)
-                    if cached:
-                        return json.dumps({
-                            "dataset_rid": dataset_rid,
-                            "include_tables": include_tables,
-                            "source": cached.source,
-                            "columns": cached.columns,
-                            "rows": cached.rows,
-                            "count": cached.count,
-                            "limit": limit,
-                            "from_cache": True,
-                            "cache_key": cache_key,
-                        }, default=_json_default)
-
-            # Prefer bag denormalization if a downloaded bag is cached locally.
-            # Bag denormalization uses SQLite (faster, no catalog queries) and
-            # supports multi-hop FK joins that may timeout on the live catalog.
-            source = "catalog"
-            from deriva_ml.dataset.bag_cache import BagCache
-            cache = BagCache(ml.cache_dir)
-            cache_info_bag = cache.cache_status(dataset_rid)
-            if cache_info_bag["cache_path"] is not None:
-                try:
-                    bag = dataset.download_dataset_bag(
-                        version=version or str(dataset.current_version),
-                        materialize=False,
-                    )
-                    denorm_source = bag
-                    source = "bag"
-                except Exception:
-                    denorm_source = dataset
-            else:
-                denorm_source = dataset
+            # Hard cap at 100 rows
+            limit = min(limit, 100)
 
             # Get denormalized data as dict
             rows = []
-            for i, row in enumerate(denorm_source.denormalize_as_dict(include_tables, version=version)):
+            for i, row in enumerate(dataset.denormalize_as_dict(include_tables, version=version)):
                 if i >= limit:
                     break
                 rows.append(dict(row))
@@ -1372,43 +855,17 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             # Get column names from first row
             columns = list(rows[0].keys()) if rows else []
 
-            # Store in result cache
-            if isinstance(result_cache, ResultCache) and cache_key and rows:
-                result_cache.store(cache_key, columns, rows, CacheMeta(
-                    cache_key=cache_key,
-                    tool_name="denormalize_dataset",
-                    params={"dataset_rid": dataset_rid, "include_tables": include_tables, "version": version},
-                    columns=columns,
-                    source=source,
-                    ttl_seconds=None if source == "bag" else 300,
-                ))
-
             return json.dumps({
                 "dataset_rid": dataset_rid,
                 "include_tables": include_tables,
-                "source": source,
                 "columns": columns,
                 "rows": rows,
                 "count": len(rows),
                 "limit": limit,
-                "from_cache": False,
-                "cache_key": cache_key,
-            }, default=_json_default)
+            })
         except Exception as e:
-            logger.error(f"Failed to denormalize dataset: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_record(dataset_rid, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
-
-            return json.dumps(result)
+            logger.error(f"Failed to preview denormalized dataset: {e}")
+            return json.dumps({"status": "error", "message": str(e)})
 
 
     # ========================================================================
@@ -1498,215 +955,6 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             })
         except Exception as e:
             logger.error(f"Failed to delete dataset type term: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
-
-    @mcp.tool()
-    async def restructure_assets(
-        dataset_rid: str,
-        asset_table: str,
-        output_dir: str,
-        group_by: list[str] | None = None,
-        use_symlinks: bool = True,
-        enforce_vocabulary: bool = True,
-        version: str | None = None,
-        materialize: bool = True,
-        value_selector: str | None = None,
-    ) -> str:
-        """Restructure dataset assets into a directory hierarchy for ML workflows.
-
-        Downloads a dataset and reorganizes its assets into a folder structure
-        suitable for ML frameworks like PyTorch ImageFolder. Assets are organized
-        first by dataset type (from nested dataset hierarchy), then by grouping values.
-
-        **Finding assets through foreign key relationships:**
-
-        Assets are found by traversing all foreign key paths from the dataset,
-        not just direct associations. For example, if a dataset contains Subjects,
-        and the schema has Subject -> Encounter -> Image relationships, this method
-        will find all Images reachable through those paths even though they are
-        not directly in a Dataset_Image association table.
-
-        **Handling datasets without types (prediction scenarios):**
-
-        If a dataset has no type defined, it is treated as Testing. This is common
-        for prediction/inference scenarios where you want to apply a trained model
-        to new unlabeled data.
-
-        **Handling missing labels:**
-
-        If an asset doesn't have a value for a group_by key (e.g., no label assigned),
-        it is placed in an "Unknown" directory. This allows restructure_assets to work
-        with unlabeled data for prediction.
-
-        The `group_by` parameter specifies how to create subdirectories. Each name
-        can be one of the following formats:
-
-        - **Column name**: A column on the asset table (e.g., "label", "modality").
-          The column's value becomes the subdirectory name.
-        - **Feature name**: A feature defined on the asset table (e.g., "Diagnosis").
-          Uses the first term column from the feature table. The feature's
-          controlled vocabulary term value becomes the subdirectory name.
-        - **Feature.column**: A specific column from a multi-term feature
-          (e.g., "Image_Diagnosis.Diagnosis_Image"). Use this format when a feature
-          has multiple term columns and you need to specify which column to use
-          for grouping. This is essential for features like Image_Diagnosis that
-          have columns like [Image_Quality, Diagnosis_Tag, Diagnosis_Status, Diagnosis_Image].
-
-        Column names are checked first, then feature names (with optional column specifier).
-
-        Args:
-            dataset_rid: RID of the dataset to restructure.
-            asset_table: Name of the asset table (e.g., "Image").
-            output_dir: Base directory for restructured assets.
-            group_by: Column names or feature names to group by. Creates nested
-                subdirectories in the order specified. Supports formats:
-                - "column_name" - direct column on asset table
-                - "FeatureName" - uses first term column from feature
-                - "FeatureName.column_name" - uses specific column from feature
-                Example: ["modality", "Image_Diagnosis.Diagnosis_Image"] creates
-                paths like "output/training/MRI/Normal/image.jpg".
-            use_symlinks: If True (default), create symlinks to downloaded files.
-                If False, copy files. Symlinks save disk space but require the
-                downloaded dataset to remain in place.
-            enforce_vocabulary: If True (default), only allow features with
-                controlled vocabulary terms for grouping, and raise an error if
-                an asset has multiple different values for the same feature.
-                If False, allow any feature type and use the first value found.
-            version: Specific dataset version to download (default: current).
-            materialize: If True (default), download all asset files. If False,
-                only download metadata (assets won't be available for restructuring).
-            value_selector: How to resolve conflicts when an asset has multiple
-                values for a feature. Supported: "newest", "first", "latest",
-                "majority_vote". If not provided, raises an error when multiple
-                different values exist (with enforce_vocabulary=True) or uses
-                the first value found (with enforce_vocabulary=False).
-
-        Returns:
-            JSON with status, output_dir path, and count of restructured assets.
-
-        Raises:
-            Error if enforce_vocabulary is True and a feature is not vocabulary-based
-            or has multiple values for an asset.
-
-        Examples:
-            Organize images by a simple "Diagnosis" feature::
-
-                restructure_assets(
-                    dataset_rid="1-ABC",
-                    asset_table="Image",
-                    output_dir="./ml_data",
-                    group_by=["Diagnosis"]
-                )
-                # Creates: ./ml_data/training/Normal/img1.jpg
-                #          ./ml_data/training/Abnormal/img2.jpg
-
-            Organize by a specific column from a multi-term feature::
-
-                restructure_assets(
-                    dataset_rid="1-ABC",
-                    asset_table="Image",
-                    output_dir="./ml_data",
-                    group_by=["Image_Diagnosis.Diagnosis_Image"]
-                )
-                # Creates: ./ml_data/training/No Glaucoma/img1.jpg
-                #          ./ml_data/training/Suspected Glaucoma/img2.jpg
-
-            Organize by column then feature::
-
-                restructure_assets(
-                    dataset_rid="1-ABC",
-                    asset_table="Image",
-                    output_dir="./ml_data",
-                    group_by=["modality", "Diagnosis"]
-                )
-                # Creates: ./ml_data/training/MRI/Normal/img1.jpg
-                #          ./ml_data/training/CT/Abnormal/img2.jpg
-
-            Prediction scenario with unlabeled data::
-
-                restructure_assets(
-                    dataset_rid="1-XYZ",  # Dataset with no type
-                    asset_table="Image",
-                    output_dir="./prediction_data",
-                    group_by=["Diagnosis"]  # Assets have no labels
-                )
-                # Creates: ./prediction_data/testing/Unknown/img1.jpg
-                #          ./prediction_data/testing/Unknown/img2.jpg
-        """
-        from pathlib import Path
-
-        try:
-            from deriva_ml.dataset.aux_classes import DatasetSpec
-
-            ml = conn_manager.get_active_or_raise()
-
-            # Resolve the version if not provided
-            if not version:
-                dataset = ml.lookup_dataset(dataset_rid)
-                version = str(dataset.current_version)
-
-            # Download the dataset as a bag using the correct API
-            spec = DatasetSpec(rid=dataset_rid, version=version, materialize=materialize)
-            bag = ml.download_dataset_bag(spec)
-
-            # Resolve value_selector string to callable
-            selector_fn = None
-            if value_selector:
-                from deriva_ml.feature import FeatureRecord
-
-                if value_selector == "newest":
-                    selector_fn = FeatureRecord.select_newest
-                elif value_selector == "first":
-                    selector_fn = FeatureRecord.select_first
-                elif value_selector == "latest":
-                    selector_fn = FeatureRecord.select_latest
-                elif value_selector == "majority_vote":
-                    # For restructure, majority_vote needs column info from the feature
-                    # Auto-detection will happen inside _load_feature_values_cache
-                    # We need to look up the feature to get the record class
-                    if group_by:
-                        feature_name = group_by[0].split(".")[0] if "." in group_by[0] else group_by[0]
-                        try:
-                            feat = bag.lookup_feature(asset_table, feature_name)
-                            RecordClass = feat.feature_record_class()
-                            selector_fn = RecordClass.select_majority_vote()
-                        except Exception:
-                            selector_fn = FeatureRecord.select_majority_vote(None)
-                    else:
-                        return json.dumps({
-                            "status": "error",
-                            "message": "value_selector='majority_vote' requires group_by to be specified.",
-                        })
-                else:
-                    return json.dumps({
-                        "status": "error",
-                        "message": f"Unknown value_selector '{value_selector}'. Supported: 'newest', 'first', 'latest', 'majority_vote'.",
-                    })
-
-            # Restructure the assets
-            file_map = bag.restructure_assets(
-                asset_table=asset_table,
-                output_dir=Path(output_dir),
-                group_by=group_by or [],
-                use_symlinks=use_symlinks,
-                enforce_vocabulary=enforce_vocabulary,
-                value_selector=selector_fn,
-            )
-
-            # file_map is a dict[Path, Path] mapping source -> dest
-            file_count = len(file_map)
-
-            return json.dumps({
-                "status": "success",
-                "dataset_rid": dataset_rid,
-                "version": version,
-                "output_dir": str(output_dir),
-                "asset_table": asset_table,
-                "group_by": group_by or [],
-                "file_count": file_count,
-            })
-        except Exception as e:
-            logger.error(f"Failed to restructure assets: {e}")
             return json.dumps({"status": "error", "message": str(e)})
 
     @mcp.tool()
@@ -1848,16 +1096,4 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
             return json.dumps({"status": "success", **result.model_dump()})
         except Exception as e:
             logger.error(f"Failed to split dataset: {e}")
-            error_msg = str(e)
-            result = {"status": "error", "message": error_msg}
-
-            # Layer 2: Suggest alternatives on entity-not-found errors
-            from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_record
-            if _is_not_found_error(error_msg):
-                conn_info = conn_manager.get_active_connection_info()
-                suggestions = rag_suggest_record(source_dataset_rid, conn_info)
-                if suggestions:
-                    result["suggestions"] = suggestions
-                    result["hint"] = f"Did you mean: {suggestions[0]['name']} ({suggestions[0]['rid']})?"
-
-            return json.dumps(result)
+            return json.dumps({"status": "error", "message": str(e)})
