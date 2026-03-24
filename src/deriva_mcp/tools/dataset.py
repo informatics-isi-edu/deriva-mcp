@@ -812,7 +812,11 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
         Joins related dataset tables into a single wide table and returns a sample
         of rows. Useful for understanding data shape, column names, and relationships
-        before building ML pipelines. For bulk data access, use the DerivaML Python API.
+        before building ML pipelines.
+
+        **This is a preview only** — results are not cached or stored. Use this to
+        understand the data shape and decide what you need, then use the DerivaML
+        Python API to access the full dataset for building subsets or ML pipelines.
 
         Tables are joined based on their foreign key relationships. Column names are
         prefixed with the source table name using dots (e.g., "Image.Filename",
