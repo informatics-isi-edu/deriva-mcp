@@ -39,22 +39,44 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
         include_schema: bool = True,
         include_data: bool = True,
     ) -> dict:
-        """Search Deriva documentation using semantic similarity.
+        """Search Deriva documentation, catalog schema, and catalog data using semantic similarity.
 
-        Searches across indexed documentation from Deriva ecosystem repositories
-        (deriva-ml, ermrest, chaise, deriva-py) using vector embeddings.
+        Searches across three categories of indexed content:
 
-        When connected to a catalog, also searches the catalog's indexed schema
-        (tables, columns, foreign keys, features) unless include_schema=False,
-        and the user's per-user data index (datasets and executions) unless
-        include_data=False.
+        1. **Catalog schema** (``doc_type="catalog-schema"``): The connected
+           catalog's structure, including:
+           - Tables with columns, types, nullability, and comments
+           - Foreign key relationships between tables
+           - Feature definitions with term columns, asset columns, and value columns
+           - Vocabulary terms with names, descriptions, and synonyms
+           Use this to understand what data exists, how tables relate, what
+           features are defined, and what vocabulary values are available.
+
+        2. **Catalog data** (``doc_type="catalog-data"``): User-specific records
+           from the connected catalog, including:
+           - Datasets with types, versions, and descriptions
+           - Executions with workflow names, status, and inputs
+           Use this to find specific datasets by purpose or trace experiment
+           provenance.
+
+        3. **Documentation** (``doc_type="user-guide"``, ``"api-reference"``,
+           ``"sdk-reference"``): Indexed docs from Deriva ecosystem repositories
+           (deriva-ml, ermrest, chaise, deriva-py). Use this for API usage
+           questions and how-to guidance.
+
+        **Prefer this tool over reading raw resources** for catalog exploration.
+        Use ``doc_type`` to focus results on the category you need.
 
         Args:
             query: Natural language search query (e.g., "how to create a dataset")
             limit: Maximum number of results to return (default 10)
             source: Filter by source name (e.g., "deriva-ml-docs", "ermrest-docs")
-            doc_type: Filter by document type (e.g., "api-reference", "user-guide",
-                     "sdk-reference", "catalog-schema")
+            doc_type: Filter by document type. Key values:
+                - ``"catalog-schema"``: Tables, columns, FKs, features, vocab terms
+                - ``"catalog-data"``: Datasets and executions in the catalog
+                - ``"user-guide"``: DerivaML and Chaise documentation
+                - ``"api-reference"``: ERMrest API documentation
+                - ``"sdk-reference"``: deriva-py SDK documentation
             include_schema: If True (default), include catalog schema results when
                           connected. Set to False to search only documentation.
             include_data: If True (default), include per-user data index results
@@ -64,6 +86,28 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
         Returns:
             Dict with search results including text snippets, relevance scores,
             source metadata, and GitHub URLs.
+
+        Examples:
+            # Explore catalog structure — tables, columns, relationships
+            rag_search("Image tables and features", doc_type="catalog-schema")
+
+            # Find vocabulary terms by meaning
+            rag_search("classification categories", doc_type="catalog-schema")
+
+            # Find feature definitions and their columns
+            rag_search("diagnosis label confidence", doc_type="catalog-schema")
+
+            # Find datasets by description, type, or purpose
+            rag_search("training split labeled", doc_type="catalog-data")
+
+            # Find executions by workflow or status
+            rag_search("training experiment results", doc_type="catalog-data")
+
+            # Search Deriva API documentation
+            rag_search("how to create a dataset", include_schema=False, include_data=False)
+
+            # Search everything (docs + schema + data) — the default
+            rag_search("how are images classified")
         """
         error = _get_rag_or_error()
         if error:

@@ -669,17 +669,31 @@ The `cite()` method:
 
 **Always verify required parameters before calling any tool.** Check the tool's description and parameter schema to understand which parameters are required vs optional. Never assume a parameter is optional - verify first.
 
-## Searching Documentation and Catalog Schema
+## Searching Documentation and Catalog Data
 
-Use `rag_search()` for natural language questions about Deriva APIs or the connected catalog's schema. The RAG index includes both static documentation (deriva-ml, ermrest, chaise, deriva-py) and the connected catalog's schema (tables, columns, foreign keys, features, vocabulary terms).
+Use `rag_search()` as the **primary tool** for exploring catalogs and finding information. It indexes three categories of content:
 
-**When to use `rag_search` vs structured resources:**
+| `doc_type` | What's indexed | When to use |
+|------------|----------------|-------------|
+| `"catalog-schema"` | Tables, columns, FKs, feature definitions (with term/asset/value columns), vocabulary terms (with synonyms) | Understanding catalog structure, finding features, discovering available vocabulary values |
+| `"catalog-data"` | Datasets (types, versions, descriptions), executions (workflow, status, inputs) | Finding datasets by purpose, tracing experiment provenance |
+| `"user-guide"` | DerivaML, Chaise docs | How-to questions |
+| `"api-reference"` | ERMrest API docs | REST API usage |
+| `"sdk-reference"` | deriva-py SDK docs | Python client usage |
 
-- `rag_search("how are subjects related to images?")` — discovery questions, fuzzy lookup, understanding relationships
-- `rag_search("what diagnosis types are available?")` — find vocabulary terms by meaning
-- `rag_search("how to create a dataset with train/test split")` — API usage questions
-- Read `deriva://catalog/schema` — get the complete schema as JSON for programmatic use
-- Read `deriva://table/{name}/schema` — get one table's full structure
+**Use `doc_type` to focus results on the category you need:**
+
+- `rag_search("Image tables and features", doc_type="catalog-schema")` — find tables, columns, FKs, and feature definitions
+- `rag_search("classification categories", doc_type="catalog-schema")` — find vocabulary terms by meaning
+- `rag_search("diagnosis label confidence", doc_type="catalog-schema")` — find feature columns and their types
+- `rag_search("training split labeled", doc_type="catalog-data")` — find datasets by description or type
+- `rag_search("training experiment results", doc_type="catalog-data")` — find executions by workflow or status
+- `rag_search("how to create a dataset", include_schema=False, include_data=False)` — search only Deriva docs
+- `rag_search("how are images classified")` — search everything (default)
+
+**When to use structured resources instead:**
+- Read `deriva://catalog/schema` — full schema as JSON (large; use only when you need the complete machine-readable output)
+- Read `deriva://table/{name}/schema` — one table's full structure
 
 After schema changes (creating tables, adding columns, creating features), call `rag_index_schema()` to update the search index.
 
