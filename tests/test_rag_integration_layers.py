@@ -24,7 +24,7 @@ class TestLayer2DataTools:
         return conn_manager
 
     @patch("deriva_mcp.rag.helpers.get_rag_manager")
-    def test_query_table_suggests_on_not_found(self, mock_get_rag):
+    def test_preview_table_suggests_on_not_found(self, mock_get_rag):
         mock_manager = MagicMock()
         mock_manager.search.return_value = [
             {"text": "## isa.Diagnosis (vocabulary)", "relevance": 0.92,
@@ -39,57 +39,10 @@ class TestLayer2DataTools:
         register_data_tools(mcp, conn_manager)
 
         import asyncio
-        result = json.loads(asyncio.run(tools["query_table"]("Diagnoiss")))
+        result = json.loads(asyncio.run(tools["preview_table"]("Diagnoiss")))
         assert result["status"] == "error"
         assert "suggestions" in result
         assert result["hint"].startswith("Did you mean:")
-
-    @patch("deriva_mcp.rag.helpers.get_rag_manager")
-    def test_count_table_suggests_on_not_found(self, mock_get_rag):
-        mock_manager = MagicMock()
-        mock_manager.search.return_value = [
-            {"text": "## isa.Diagnosis (vocabulary)", "relevance": 0.92,
-             "source": "schema:test:1:abc", "section_heading": "isa.Diagnosis",
-             "doc_type": "catalog-schema"}
-        ]
-        mock_get_rag.return_value = mock_manager
-
-        conn_manager = self._make_conn_manager_with_rag()
-        from deriva_mcp.tools.data import register_data_tools
-        mcp, tools = _create_tool_capture()
-        register_data_tools(mcp, conn_manager)
-
-        import asyncio
-        result = json.loads(asyncio.run(tools["count_table"]("Diagnoiss")))
-        assert result["status"] == "error"
-        assert "suggestions" in result
-
-    @patch("deriva_mcp.rag.helpers.get_rag_manager")
-    def test_get_table_suggests_on_not_found(self, mock_get_rag):
-        mock_manager = MagicMock()
-        mock_manager.search.return_value = [
-            {"text": "## isa.Diagnosis (vocabulary)", "relevance": 0.92,
-             "source": "schema:test:1:abc", "section_heading": "isa.Diagnosis",
-             "doc_type": "catalog-schema"}
-        ]
-        mock_get_rag.return_value = mock_manager
-
-        conn_manager = self._make_conn_manager_with_rag()
-        # get_table uses get_table_as_dict not name_to_table, need to adjust
-        conn_manager.get_active_or_raise.return_value.get_table_as_dict.side_effect = Exception(
-            "Table 'Diagnoiss' not found in schema 'isa'"
-        )
-        # Also mock model.name_to_table to succeed for get_table (it doesn't call it)
-        conn_manager.get_active_or_raise.return_value.model.name_to_table.side_effect = None
-
-        from deriva_mcp.tools.data import register_data_tools
-        mcp, tools = _create_tool_capture()
-        register_data_tools(mcp, conn_manager)
-
-        import asyncio
-        result = json.loads(asyncio.run(tools["get_table"]("Diagnoiss")))
-        assert result["status"] == "error"
-        assert "suggestions" in result
 
     @patch("deriva_mcp.rag.helpers.get_rag_manager")
     def test_no_suggestions_when_rag_not_initialized(self, mock_get_rag):
@@ -101,7 +54,7 @@ class TestLayer2DataTools:
         register_data_tools(mcp, conn_manager)
 
         import asyncio
-        result = json.loads(asyncio.run(tools["query_table"]("Diagnoiss")))
+        result = json.loads(asyncio.run(tools["preview_table"]("Diagnoiss")))
         assert result["status"] == "error"
         assert "suggestions" not in result
 
@@ -119,7 +72,7 @@ class TestLayer2DataTools:
         register_data_tools(mcp, conn_manager)
 
         import asyncio
-        result = json.loads(asyncio.run(tools["query_table"]("SomeTable")))
+        result = json.loads(asyncio.run(tools["preview_table"]("SomeTable")))
         assert result["status"] == "error"
         assert "suggestions" not in result
 
@@ -538,7 +491,7 @@ class TestEndToEndIntegration:
         mcp2, tools2 = _create_tool_capture()
         register_data_tools(mcp2, conn_manager)
 
-        result2 = json.loads(asyncio.run(tools2["query_table"]("Diagnoiss")))
+        result2 = json.loads(asyncio.run(tools2["preview_table"]("Diagnoiss")))
         assert result2["status"] == "error"
         assert "suggestions" in result2
         assert result2["hint"].startswith("Did you mean:")

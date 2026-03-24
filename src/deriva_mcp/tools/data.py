@@ -118,8 +118,23 @@ def register_data_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
                 "offset": offset,
             })
         except Exception as e:
-            logger.error(f"Failed to query table: {e}")
-            return json.dumps({"status": "error", "message": str(e)})
+            logger.error(f"Failed to preview table: {e}")
+            error_msg = str(e)
+            result = {"status": "error", "message": error_msg}
+
+            # Add RAG-based suggestions for "not found" errors
+            try:
+                from deriva_mcp.rag.helpers import _is_not_found_error, rag_suggest_entity
+                if _is_not_found_error(error_msg):
+                    conn_info = conn_manager.get_active_connection_info()
+                    suggestions = rag_suggest_entity(table_name, conn_info)
+                    if suggestions:
+                        result["suggestions"] = suggestions
+                        result["hint"] = f"Did you mean: {suggestions[0]['name']}?"
+            except ImportError:
+                pass
+
+            return json.dumps(result)
 
     @mcp.tool()
     async def insert_records(
