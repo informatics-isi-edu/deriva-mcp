@@ -789,6 +789,9 @@ def register_catalog_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
         Queries the server's ermrest registry to discover available catalogs
         and their aliases. Use this to find catalogs before connecting.
 
+        Note: Returns all non-deleted catalogs and aliases. Typically bounded
+        (servers have 10-50 catalogs), but could be larger on shared servers.
+
         Args:
             hostname: Server hostname (e.g., "www.eye-ai.org", "dev.facebase.org").
 
@@ -864,6 +867,7 @@ def _write_context_file(
     from datetime import datetime, timezone
 
     context = {
+        "version": 1,
         "hostname": hostname,
         "catalog_id": catalog_id,
         "default_schema": default_schema,
