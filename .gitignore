@@ -74,3 +74,6 @@ venv.bak/
 # uv
 .python-version
 .worktrees/
+
+# MCP connection context (written by connect_catalog, read by DerivaML.from_context())
+.deriva-context.json
