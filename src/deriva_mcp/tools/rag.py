@@ -117,9 +117,27 @@ def register_rag_tools(mcp_server: "FastMCP", conn_manager: "ConnectionManager")
 
         manager = get_rag_manager()
 
-        # If caller specified a source or doc_type filter, use it directly
+        # If caller specified a source or doc_type filter, use it directly.
+        # For catalog-specific doc_types, scope to the active catalog's source name
+        # to avoid mixing results from different catalogs.
         if source or doc_type:
-            results = manager.search(query=query, limit=limit, source=source, doc_type=doc_type)
+            effective_source = source
+            if not effective_source and doc_type in ("catalog-schema", "catalog-data"):
+                conn_info = conn_manager.get_active_connection_info()
+                if conn_info:
+                    if doc_type == "catalog-schema":
+                        schema_hash = getattr(conn_info, "schema_hash", None)
+                        if schema_hash:
+                            from deriva_mcp.rag.schema import schema_source_name
+                            effective_source = schema_source_name(
+                                conn_info.hostname, conn_info.catalog_id, schema_hash
+                            )
+                    elif doc_type == "catalog-data":
+                        from deriva_mcp.rag.data import data_source_name
+                        effective_source = data_source_name(
+                            conn_info.hostname, conn_info.catalog_id, conn_info.user_id
+                        )
+            results = manager.search(query=query, limit=limit, source=effective_source, doc_type=doc_type)
             return {
                 "query": query,
                 "result_count": len(results),
