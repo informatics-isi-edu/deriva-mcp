@@ -236,6 +236,100 @@ class TestRagSearch:
         )
         assert result["result_count"] == 0
 
+    def test_search_catalog_schema_scoped_to_active_catalog(self, rag_tools, mock_rag_manager):
+        """rag_search with doc_type='catalog-schema' scopes to the active catalog."""
+        mock_rag_manager.search.return_value = _make_schema_search_results(2)
+
+        with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
+            result = rag_tools["rag_search"](
+                query="Image features",
+                doc_type="catalog-schema",
+            )
+
+        # Should resolve source to active catalog's schema source name
+        mock_rag_manager.search.assert_called_once_with(
+            query="Image features",
+            limit=10,
+            source="schema:test.example.org:1:abc123",
+            doc_type="catalog-schema",
+        )
+        assert result["result_count"] == 2
+
+    def test_search_catalog_data_scoped_to_active_catalog(self, rag_tools, mock_rag_manager):
+        """rag_search with doc_type='catalog-data' scopes to the active catalog."""
+        mock_rag_manager.search.return_value = []
+
+        with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
+            result = rag_tools["rag_search"](
+                query="training datasets",
+                doc_type="catalog-data",
+            )
+
+        # Should resolve source to active catalog's data source name
+        mock_rag_manager.search.assert_called_once_with(
+            query="training datasets",
+            limit=10,
+            source="data:test.example.org:1:test_user",
+            doc_type="catalog-data",
+        )
+
+    def test_search_catalog_schema_not_scoped_when_disconnected(
+        self, rag_tools_disconnected, mock_rag_manager
+    ):
+        """rag_search with doc_type='catalog-schema' does not scope when disconnected."""
+        mock_rag_manager.search.return_value = []
+
+        with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
+            result = rag_tools_disconnected["rag_search"](
+                query="tables",
+                doc_type="catalog-schema",
+            )
+
+        # No active connection, so source stays None
+        mock_rag_manager.search.assert_called_once_with(
+            query="tables",
+            limit=10,
+            source=None,
+            doc_type="catalog-schema",
+        )
+
+    def test_search_non_catalog_doc_type_not_scoped(self, rag_tools, mock_rag_manager):
+        """rag_search with non-catalog doc_type (e.g. 'api-reference') is not scoped."""
+        mock_rag_manager.search.return_value = []
+
+        with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
+            result = rag_tools["rag_search"](
+                query="API reference",
+                doc_type="api-reference",
+            )
+
+        # api-reference is not catalog-specific, source stays None
+        mock_rag_manager.search.assert_called_once_with(
+            query="API reference",
+            limit=10,
+            source=None,
+            doc_type="api-reference",
+        )
+
+    def test_search_explicit_source_overrides_catalog_scoping(self, rag_tools, mock_rag_manager):
+        """rag_search with explicit source + catalog doc_type uses the explicit source."""
+        mock_rag_manager.search.return_value = []
+
+        with patch(RAG_MANAGER_PATCH, return_value=mock_rag_manager):
+            result = rag_tools["rag_search"](
+                query="tables",
+                source="schema:other.host:99:xyz",
+                doc_type="catalog-schema",
+            )
+
+        # Explicit source takes precedence over auto-resolution
+        mock_rag_manager.search.assert_called_once_with(
+            query="tables",
+            limit=10,
+            source="schema:other.host:99:xyz",
+            doc_type="catalog-schema",
+        )
+
     def test_search_with_custom_limit(self, rag_tools, mock_rag_manager):
         """rag_search respects the limit parameter."""
         mock_rag_manager.search.return_value = _make_search_results(5)
