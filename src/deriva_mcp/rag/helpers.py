@@ -72,26 +72,40 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
 
     conn_info._schema_reindex_at = now
 
+    # --- Synchronous phase: fetch schema and compute hash so that
+    # conn_info.schema_hash is available immediately for rag_search
+    # filtering.  Only the ChromaDB indexing runs in the background.
+    from deriva_mcp.rag.schema import compute_schema_hash
+
+    try:
+        ml = conn_info.ml_instance
+        schema_info = ml.model.get_schema_description()
+    except Exception as e:
+        logger.warning(f"Schema reindex failed (could not fetch schema): {e}")
+        return
+
+    vocab_terms: dict[str, list[dict[str, str]]] = {}
+    schemas = schema_info.get("schemas", {})
+    for schema_data in schemas.values():
+        tables = schema_data.get("tables", {})
+        for table_name, table_info in tables.items():
+            if table_info.get("is_vocabulary"):
+                try:
+                    terms = ml.list_vocabulary_terms(table_name)
+                    vocab_terms[table_name] = [
+                        {"Name": t.name, "Description": t.description or "",
+                         "Synonyms": list(t.synonyms) if t.synonyms else []}
+                        for t in terms
+                    ]
+                except Exception:
+                    pass
+
+    schema_hash = compute_schema_hash(schema_info, vocab_terms)
+    conn_info.schema_hash = schema_hash
+
+    # --- Background phase: gather feature details and index into ChromaDB.
     def _do_reindex():
         try:
-            from deriva_mcp.rag.schema import compute_schema_hash
-            ml = conn_info.ml_instance
-            schema_info = ml.model.get_schema_description()
-            vocab_terms: dict[str, list[dict[str, str]]] = {}
-            schemas = schema_info.get("schemas", {})
-            for schema_data in schemas.values():
-                tables = schema_data.get("tables", {})
-                for table_name, table_info in tables.items():
-                    if table_info.get("is_vocabulary"):
-                        try:
-                            terms = ml.list_vocabulary_terms(table_name)
-                            vocab_terms[table_name] = [
-                                {"Name": t.name, "Description": t.description or "",
-                                 "Synonyms": list(t.synonyms) if t.synonyms else []}
-                                for t in terms
-                            ]
-                        except Exception:
-                            pass
             # Gather feature details for each table that has features
             feature_details: dict[str, list[dict[str, Any]]] = {}
             for schema_data in schemas.values():
@@ -158,8 +172,6 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
                         except Exception as e:
                             logger.debug(f"Could not gather feature details for {table_name}: {e}")
 
-            schema_hash = compute_schema_hash(schema_info, vocab_terms)
-            conn_info.schema_hash = schema_hash
             result = manager.index_catalog_schema(
                 schema_info, conn_info.hostname, conn_info.catalog_id,
                 vocabulary_terms=vocab_terms,
