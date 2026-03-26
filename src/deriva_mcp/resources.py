@@ -2093,6 +2093,147 @@ multirun_config(
             return json.dumps({"error": str(e)})
 
     @mcp.resource(
+        "deriva://execution/{execution_rid}/outputs",
+        name="Execution Outputs",
+        description=(
+            "All output assets produced by an execution, grouped by asset table. "
+            "Returns Execution_Asset files (model weights, predictions, plots) and "
+            "Execution_Metadata files (configuration snapshots, environment info). "
+            "Each asset includes its RID, filename, URL, asset types, and source table. "
+            "Use this to discover what an execution produced — for example, to find "
+            "prediction CSVs for ROC analysis, or model weight files for downstream inference."
+        ),
+        mime_type="application/json",
+    )
+    def get_execution_outputs(execution_rid: str) -> str:
+        """Return all output assets from an execution, grouped by asset table."""
+        ml = conn_manager.get_active_or_raise()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            execution = ml.lookup_execution(execution_rid)
+            output_assets = execution.list_assets(asset_role="Output")
+
+            # Group assets by table
+            grouped: dict[str, list[dict]] = {}
+            for asset in output_assets:
+                table_name = asset.asset_table
+                if table_name not in grouped:
+                    grouped[table_name] = []
+                grouped[table_name].append(
+                    {
+                        "rid": asset.asset_rid,
+                        "filename": asset.filename,
+                        "url": asset.url,
+                        "asset_types": asset.asset_types,
+                        "description": asset.description,
+                    }
+                )
+
+            return json.dumps(
+                {
+                    "execution_rid": execution_rid,
+                    "total_output_assets": len(output_assets),
+                    "asset_tables": grouped,
+                },
+                indent=2,
+            )
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
+        "deriva://execution/{execution_rid}/metadata",
+        name="Execution Metadata",
+        description=(
+            "Auto-created metadata files for an execution — configuration snapshots and "
+            "environment information recorded for reproducibility. Returns assets from the "
+            "Execution_Metadata table linked to this execution as outputs. "
+            "Each metadata file has an asset type indicating what it contains:\n"
+            "- Deriva_Config: Full ExecutionConfiguration as JSON (datasets, assets, workflow settings)\n"
+            "- Hydra_Config: Hydra YAML configuration files (config.yaml, overrides.yaml, hydra.yaml)\n"
+            "- Execution_Config: Environment lock files (e.g., uv.lock) capturing exact dependency versions\n"
+            "- Runtime_Env: Runtime environment snapshot (Python version, installed packages, OS, GPU info)\n\n"
+            "Use this to inspect how an execution was configured, reproduce its environment, "
+            "or compare configurations between executions."
+        ),
+        mime_type="application/json",
+    )
+    def get_execution_metadata(execution_rid: str) -> str:
+        """Return auto-created metadata files for an execution."""
+        ml = conn_manager.get_active_or_raise()
+        if ml is None:
+            return json.dumps({"error": "No active catalog connection"})
+
+        try:
+            # Query Execution_Metadata_Execution for metadata assets linked to this execution
+            pb = ml.pathBuilder()
+            meta_exec = pb.schemas[ml.ml_schema].Execution_Metadata_Execution
+            metadata_table = pb.schemas[ml.ml_schema].Execution_Metadata
+
+            # Find metadata assets linked to this execution with role "Output"
+            query = meta_exec.filter(meta_exec.Execution == execution_rid)
+            query = query.filter(meta_exec.Asset_Role == "Output")
+            records = list(query.entities().fetch())
+
+            metadata_type_descriptions = {
+                "Deriva_Config": "Full ExecutionConfiguration as JSON (datasets, assets, workflow settings)",
+                "Hydra_Config": "Hydra YAML configuration files (config.yaml, overrides.yaml, hydra.yaml)",
+                "Execution_Config": "Environment lock files (e.g., uv.lock) capturing exact dependency versions",
+                "Runtime_Env": "Runtime environment snapshot (Python version, installed packages, OS, GPU info)",
+            }
+
+            metadata_assets = []
+            for record in records:
+                metadata_rid = record.get("Execution_Metadata")
+                if not metadata_rid:
+                    continue
+
+                meta_records = list(
+                    metadata_table.filter(metadata_table.RID == metadata_rid)
+                    .entities()
+                    .fetch()
+                )
+                if meta_records:
+                    meta = meta_records[0]
+                    # Look up asset to get types
+                    try:
+                        asset = ml.lookup_asset(metadata_rid)
+                        asset_types = asset.asset_types
+                    except Exception:
+                        asset_types = []
+
+                    # Add description for known metadata types
+                    type_description = None
+                    for t in asset_types:
+                        if t in metadata_type_descriptions:
+                            type_description = metadata_type_descriptions[t]
+                            break
+
+                    metadata_assets.append(
+                        {
+                            "rid": metadata_rid,
+                            "filename": meta.get("Filename", ""),
+                            "url": meta.get("URL", ""),
+                            "asset_types": asset_types,
+                            "type_description": type_description,
+                            "description": meta.get("Description", ""),
+                        }
+                    )
+
+            return json.dumps(
+                {
+                    "execution_rid": execution_rid,
+                    "metadata_count": len(metadata_assets),
+                    "metadata_assets": metadata_assets,
+                    "metadata_type_reference": metadata_type_descriptions,
+                },
+                indent=2,
+            )
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    @mcp.resource(
         "deriva://experiment/{execution_rid}",
         name="Experiment Details",
         description="Experiment analysis for an execution with Hydra configuration",
