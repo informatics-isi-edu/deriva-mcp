@@ -58,6 +58,13 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
     """Fire-and-forget background schema reindex.
     Debounces to at most once per DEBOUNCE_SECONDS.
     No-op if conn_info is None or RAG is not initialized.
+
+    The entire reindex (schema fetch, vocabulary term fetch, feature
+    detail gathering, and ChromaDB indexing) runs in a background thread
+    so that ``connect_catalog`` returns immediately.  A preliminary
+    schema hash (without vocabulary terms) is set synchronously so
+    ``rag_search`` has *some* index to query right away; the hash is
+    refined once vocabulary terms are fetched in the background.
     """
     if conn_info is None:
         return
@@ -72,9 +79,8 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
 
     conn_info._schema_reindex_at = now
 
-    # --- Synchronous phase: fetch schema and compute hash so that
-    # conn_info.schema_hash is available immediately for rag_search
-    # filtering.  Only the ChromaDB indexing runs in the background.
+    # --- Synchronous phase: only fetch schema structure (fast) and set a
+    # preliminary hash so rag_search can work immediately.
     from deriva_mcp.rag.schema import compute_schema_hash
 
     try:
@@ -84,28 +90,39 @@ def trigger_schema_reindex(conn_info: ConnectionInfo | None) -> None:
         logger.warning(f"Schema reindex failed (could not fetch schema): {e}")
         return
 
-    vocab_terms: dict[str, list[dict[str, str]]] = {}
+    # Set a preliminary schema hash (without vocab terms) so rag_search
+    # is usable immediately.  It will be refined in the background.
+    preliminary_hash = compute_schema_hash(schema_info, {})
+    conn_info.schema_hash = preliminary_hash
+
     schemas = schema_info.get("schemas", {})
-    for schema_data in schemas.values():
-        tables = schema_data.get("tables", {})
-        for table_name, table_info in tables.items():
-            if table_info.get("is_vocabulary"):
-                try:
-                    terms = ml.list_vocabulary_terms(table_name)
-                    vocab_terms[table_name] = [
-                        {"Name": t.name, "Description": t.description or "",
-                         "Synonyms": list(t.synonyms) if t.synonyms else []}
-                        for t in terms
-                    ]
-                except Exception:
-                    pass
 
-    schema_hash = compute_schema_hash(schema_info, vocab_terms)
-    conn_info.schema_hash = schema_hash
-
-    # --- Background phase: gather feature details and index into ChromaDB.
+    # --- Background phase: fetch vocab terms, gather feature details,
+    # then index into ChromaDB.
     def _do_reindex():
         try:
+            # Fetch vocabulary terms in the background so large tables
+            # (e.g. gene: 100K+ rows, strain: 70K rows) don't block
+            # connect_catalog.
+            vocab_terms: dict[str, list[dict[str, str]]] = {}
+            for schema_data in schemas.values():
+                tables = schema_data.get("tables", {})
+                for table_name, table_info in tables.items():
+                    if table_info.get("is_vocabulary"):
+                        try:
+                            terms = ml.list_vocabulary_terms(table_name)
+                            vocab_terms[table_name] = [
+                                {"Name": t.name, "Description": t.description or "",
+                                 "Synonyms": list(t.synonyms) if t.synonyms else []}
+                                for t in terms
+                            ]
+                        except Exception:
+                            pass
+
+            # Refine the schema hash now that we have vocab terms.
+            schema_hash = compute_schema_hash(schema_info, vocab_terms)
+            conn_info.schema_hash = schema_hash
+
             # Gather feature details for each table that has features
             feature_details: dict[str, list[dict[str, Any]]] = {}
             for schema_data in schemas.values():
