@@ -803,70 +803,91 @@ def register_dataset_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> Non
 
     @mcp.tool()
     async def preview_denormalized_dataset(
-        dataset_rid: str,
         include_tables: list[str],
+        dataset_rid: str | None = None,
         version: str | None = None,
-        limit: int = 25,
+        limit: int = 0,
     ) -> str:
         """Preview a denormalized (wide table) view of dataset tables.
 
-        Joins related dataset tables into a single wide table and returns a sample
-        of rows. Useful for understanding data shape, column names, and relationships
-        before building ML pipelines.
+        Joins related dataset tables into a single wide table. Returns schema
+        shape (columns, join path) and size estimates. Optionally returns
+        actual row data when a dataset and limit are provided.
 
-        **This is a preview only** — results are not cached or stored. Use this to
-        understand the data shape and decide what you need, then use the DerivaML
-        Python API to access the full dataset for building subsets or ML pipelines.
+        **Modes:**
+        - No dataset_rid: Returns schema shape + global size estimates.
+          Use this to explore what a denormalized join would look like.
+        - With dataset_rid, limit=0: Returns shape + dataset-scoped estimates.
+        - With dataset_rid, limit>0: Returns shape + estimates + row preview.
 
-        Tables are joined based on their foreign key relationships. Column names are
-        prefixed with the source table name using dots (e.g., "Image.Filename",
-        "Subject.RID", "Diagnosis.Label").
+        Tables are joined based on their foreign key relationships. Column names
+        are prefixed with the source table name using dots (e.g., "Image.Filename",
+        "Subject.RID"). Intermediate tables needed for the join are auto-discovered.
 
         Args:
-            dataset_rid: RID of the dataset to preview.
             include_tables: List of table names to include in the join.
                 Tables are joined based on their foreign key relationships.
                 Order doesn't matter - the join order is determined automatically.
+                Add more tables iteratively to expand the denormalized view.
+            dataset_rid: RID of the dataset to preview. If omitted, returns
+                schema shape with global (catalog-wide) row counts.
             version: Semantic version to query (e.g., "1.0.0"). If not specified,
-                uses the current version.
-            limit: Maximum rows to return (default: 25, max: 100).
+                uses the current version. Only used with dataset_rid.
+            limit: Maximum rows to return (default: 0, max: 100). Only used
+                with dataset_rid. Set to 0 for shape and estimates only.
 
         Returns:
-            JSON with columns list and rows array.
+            JSON with columns, join_path, tables (per-table size info),
+            total_rows, total_asset_bytes, total_asset_size.
+            When limit > 0 with a dataset_rid, also includes rows and count.
 
         Example:
-            preview_denormalized_dataset("1-ABC", ["Image", "Diagnosis"])
-            -> {"columns": ["Image.RID", "Image.Filename", "Diagnosis.Label"], "rows": [...]}
+            # Explore schema shape (no dataset needed)
+            preview_denormalized_dataset(["Subject", "Report_HVF"])
+            -> {"columns": [...], "join_path": ["Report_HVF", "Observation", "Subject"], ...}
 
-            # Include subject info for analysis by demographics
-            preview_denormalized_dataset("1-ABC", ["Subject", "Image", "Diagnosis"])
-            -> {"columns": ["Subject.Age", "Subject.Gender", "Image.RID", ...], "rows": [...]}
+            # Get dataset-scoped estimates
+            preview_denormalized_dataset(["Image", "Subject"], dataset_rid="1-ABC")
+            -> {"columns": [...], "tables": {"Image": {"row_count": 50}}, ...}
+
+            # Preview actual rows
+            preview_denormalized_dataset(["Image", "Subject"], dataset_rid="1-ABC", limit=10)
+            -> {"columns": [...], "tables": {...}, "rows": [...], "count": 10}
         """
         try:
             ml = conn_manager.get_active_or_raise()
+
+            if dataset_rid is None:
+                # Schema-only mode: global row counts, no dataset needed
+                info = ml.denormalize_info(include_tables)
+                return json.dumps({"status": "success"} | info)
+
+            # Dataset mode
             dataset = ml.lookup_dataset(dataset_rid)
+            info = dataset.denormalize_info(include_tables, version=version)
 
-            # Hard cap at 100 rows
+            if limit <= 0:
+                return json.dumps({
+                    "status": "success",
+                    "dataset_rid": dataset_rid,
+                } | info)
+
+            # Fetch actual rows
             limit = min(limit, 100)
-
-            # Get denormalized data as dict
             rows = []
             for i, row in enumerate(dataset.denormalize_as_dict(include_tables, version=version)):
                 if i >= limit:
                     break
                 rows.append(dict(row))
 
-            # Get column names from first row
-            columns = list(rows[0].keys()) if rows else []
-
             return json.dumps({
+                "status": "success",
                 "dataset_rid": dataset_rid,
-                "include_tables": include_tables,
-                "columns": columns,
                 "rows": rows,
                 "count": len(rows),
                 "limit": limit,
-            })
+            } | info)
+
         except Exception as e:
             logger.error(f"Failed to preview denormalized dataset: {e}")
             return json.dumps({"status": "error", "message": str(e)})

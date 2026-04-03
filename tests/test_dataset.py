@@ -999,59 +999,130 @@ class TestDenormalizeDataset:
     """Tests for the preview_denormalized_dataset tool."""
 
     @pytest.mark.asyncio
-    async def test_denormalize_success(self, dataset_tools, mock_ml):
-        """Denormalizing returns columns and rows."""
-        mock_dataset = _make_mock_dataset()
-        mock_dataset.denormalize_as_dict.return_value = iter([
-            {"Image.RID": "IMG-1", "Image.Filename": "a.jpg", "Diagnosis.Label": "Normal"},
-            {"Image.RID": "IMG-2", "Image.Filename": "b.jpg", "Diagnosis.Label": "Abnormal"},
-        ])
-        mock_ml.lookup_dataset.return_value = mock_dataset
+    async def test_schema_only_no_rid(self, dataset_tools, mock_ml):
+        """When no dataset_rid, returns schema shape and global size estimates."""
+        mock_ml.denormalize_info.return_value = {
+            "columns": [("Image.RID", "ermrest_rid"), ("Image.Filename", "text")],
+            "join_path": ["Image"],
+            "tables": {"Image": {"row_count": 100, "is_asset": True, "asset_bytes": 5000}},
+            "total_rows": 100,
+            "total_asset_bytes": 5000,
+            "total_asset_size": "4.9 KB",
+        }
 
         result = await dataset_tools["preview_denormalized_dataset"](
-            dataset_rid="DS-001",
-            include_tables=["Image", "Diagnosis"],
+            include_tables=["Image"],
         )
 
         data = parse_json_result(result)
-        assert data["dataset_rid"] == "DS-001"
-        assert data["include_tables"] == ["Image", "Diagnosis"]
-        assert data["columns"] == ["Image.RID", "Image.Filename", "Diagnosis.Label"]
-        assert data["count"] == 2
-        assert data["rows"][0]["Image.RID"] == "IMG-1"
-        assert data["rows"][1]["Diagnosis.Label"] == "Abnormal"
+        assert "columns" in data
+        assert "join_path" in data
+        assert "tables" in data
+        assert data["total_rows"] == 100
+        assert "rows" not in data
+        mock_ml.denormalize_info.assert_called_once_with(["Image"])
 
     @pytest.mark.asyncio
-    async def test_denormalize_with_version(self, dataset_tools, mock_ml):
-        """Version parameter is passed through."""
+    async def test_dataset_scoped_no_rows(self, dataset_tools, mock_ml):
+        """With dataset_rid but limit=0, returns scoped estimates without rows."""
         mock_dataset = _make_mock_dataset()
-        mock_dataset.denormalize_as_dict.return_value = iter([
-            {"col": "val"},
-        ])
+        mock_dataset.denormalize_info.return_value = {
+            "columns": [("Image.RID", "ermrest_rid")],
+            "join_path": ["Image"],
+            "tables": {"Image": {"row_count": 50, "is_asset": False, "asset_bytes": 0}},
+            "total_rows": 50,
+            "total_asset_bytes": 0,
+            "total_asset_size": "0 B",
+        }
         mock_ml.lookup_dataset.return_value = mock_dataset
 
-        await dataset_tools["preview_denormalized_dataset"](
-            dataset_rid="DS-001",
+        result = await dataset_tools["preview_denormalized_dataset"](
             include_tables=["Image"],
-            version="1.0.0",
+            dataset_rid="DS-001",
+            limit=0,
         )
 
-        mock_dataset.denormalize_as_dict.assert_called_once_with(
-            ["Image"], version="1.0.0",
-        )
+        data = parse_json_result(result)
+        assert data["total_rows"] == 50
+        assert data["dataset_rid"] == "DS-001"
+        assert "rows" not in data
+        mock_dataset.denormalize_info.assert_called_once_with(["Image"], version=None)
 
     @pytest.mark.asyncio
-    async def test_denormalize_respects_limit(self, dataset_tools, mock_ml):
-        """Limit parameter truncates rows."""
+    async def test_dataset_with_rows(self, dataset_tools, mock_ml):
+        """With dataset_rid and limit>0, returns estimates plus row preview."""
         mock_dataset = _make_mock_dataset()
+        mock_dataset.denormalize_info.return_value = {
+            "columns": [("Image.RID", "ermrest_rid"), ("Image.Filename", "text")],
+            "join_path": ["Image"],
+            "tables": {"Image": {"row_count": 50, "is_asset": False, "asset_bytes": 0}},
+            "total_rows": 50,
+            "total_asset_bytes": 0,
+            "total_asset_size": "0 B",
+        }
         mock_dataset.denormalize_as_dict.return_value = iter([
-            {"col": f"val{i}"} for i in range(100)
+            {"Image.RID": "IMG-1", "Image.Filename": "a.jpg"},
+            {"Image.RID": "IMG-2", "Image.Filename": "b.jpg"},
         ])
         mock_ml.lookup_dataset.return_value = mock_dataset
 
         result = await dataset_tools["preview_denormalized_dataset"](
-            dataset_rid="DS-001",
             include_tables=["Image"],
+            dataset_rid="DS-001",
+            limit=25,
+        )
+
+        data = parse_json_result(result)
+        assert data["total_rows"] == 50
+        assert "rows" in data
+        assert data["count"] == 2
+        assert data["rows"][0]["Image.RID"] == "IMG-1"
+
+    @pytest.mark.asyncio
+    async def test_dataset_with_version(self, dataset_tools, mock_ml):
+        """Version parameter is passed through to denormalize_info and denormalize_as_dict."""
+        mock_dataset = _make_mock_dataset()
+        mock_dataset.denormalize_info.return_value = {
+            "columns": [("col", "text")],
+            "join_path": ["Image"],
+            "tables": {"Image": {"row_count": 1, "is_asset": False, "asset_bytes": 0}},
+            "total_rows": 1,
+            "total_asset_bytes": 0,
+            "total_asset_size": "0 B",
+        }
+        mock_dataset.denormalize_as_dict.return_value = iter([{"col": "val"}])
+        mock_ml.lookup_dataset.return_value = mock_dataset
+
+        await dataset_tools["preview_denormalized_dataset"](
+            include_tables=["Image"],
+            dataset_rid="DS-001",
+            version="1.0.0",
+            limit=25,
+        )
+
+        mock_dataset.denormalize_info.assert_called_once_with(["Image"], version="1.0.0")
+        mock_dataset.denormalize_as_dict.assert_called_once_with(["Image"], version="1.0.0")
+
+    @pytest.mark.asyncio
+    async def test_respects_limit(self, dataset_tools, mock_ml):
+        """Limit parameter truncates rows."""
+        mock_dataset = _make_mock_dataset()
+        mock_dataset.denormalize_info.return_value = {
+            "columns": [("col", "text")],
+            "join_path": ["Image"],
+            "tables": {"Image": {"row_count": 100, "is_asset": False, "asset_bytes": 0}},
+            "total_rows": 100,
+            "total_asset_bytes": 0,
+            "total_asset_size": "0 B",
+        }
+        mock_dataset.denormalize_as_dict.return_value = iter(
+            [{"col": f"val{i}"} for i in range(100)]
+        )
+        mock_ml.lookup_dataset.return_value = mock_dataset
+
+        result = await dataset_tools["preview_denormalized_dataset"](
+            include_tables=["Image"],
+            dataset_rid="DS-001",
             limit=5,
         )
 
@@ -1060,39 +1131,21 @@ class TestDenormalizeDataset:
         assert data["limit"] == 5
 
     @pytest.mark.asyncio
-    async def test_denormalize_empty(self, dataset_tools, mock_ml):
-        """Empty dataset returns empty columns and rows."""
-        mock_dataset = _make_mock_dataset()
-        mock_dataset.denormalize_as_dict.return_value = iter([])
-        mock_ml.lookup_dataset.return_value = mock_dataset
-
-        result = await dataset_tools["preview_denormalized_dataset"](
-            dataset_rid="DS-001",
-            include_tables=["Image"],
-        )
-
-        data = parse_json_result(result)
-        assert data["columns"] == []
-        assert data["rows"] == []
-        assert data["count"] == 0
-
-    @pytest.mark.asyncio
-    async def test_denormalize_exception(self, dataset_tools, mock_ml):
-        """When denormalize_as_dict raises, return an error."""
+    async def test_exception(self, dataset_tools, mock_ml):
+        """When lookup_dataset raises, return an error."""
         mock_ml.lookup_dataset.side_effect = RuntimeError("Bad table")
 
         result = await dataset_tools["preview_denormalized_dataset"](
-            dataset_rid="DS-001",
             include_tables=["NonExistent"],
+            dataset_rid="DS-001",
         )
 
         assert_error(result, expected_message="Bad table")
 
     @pytest.mark.asyncio
-    async def test_denormalize_no_connection(self, dataset_tools_disconnected):
+    async def test_no_connection(self, dataset_tools_disconnected):
         """When not connected, return an error."""
         result = await dataset_tools_disconnected["preview_denormalized_dataset"](
-            dataset_rid="DS-001",
             include_tables=["Image"],
         )
 
