@@ -8,27 +8,23 @@ DerivaML MCP Server is a Model Context Protocol (MCP) server that exposes Deriva
 
 ## Build and Development Commands
 
+See [`../CLAUDE.md`](../CLAUDE.md) for shared `uv`, `pytest`, `ruff`,
+and `bump-version` conventions. Repo-specific commands:
+
+> **CWD:** every command below assumes you are in
+> `/Users/carl/GitHub/DerivaML/deriva-mcp`. The Bash tool's cwd is **not**
+> reliably persistent across turns — always chain `cd` into a single call,
+> e.g. `cd /Users/carl/GitHub/DerivaML/deriva-mcp && uv run deriva-mcp`.
+> See the workspace-level `CLAUDE.md` ("CWD discipline") for the rule.
+
 ```bash
-# Install dependencies
-uv sync
-
-# Run the MCP server directly (for testing)
-uv run deriva-mcp
-
-# Run tests
-uv run pytest
-
-# Lint and format
-uv run ruff check src/
-uv run ruff format src/
-
-# Bump version (requires clean working tree — commit first)
-uv run bump-version patch   # Bug fix (0.5.1 → 0.5.2)
-uv run bump-version minor   # New feature (0.5.1 → 0.6.0)
-uv run bump-version major   # Breaking change (0.5.1 → 1.0.0)
+uv run deriva-mcp   # Run the MCP server directly (for testing)
 ```
 
-**Version bumping:** Use `bump-version` from deriva-ml (not `bump-my-version` directly). It finds the latest git tag, increments the version, creates a new tag, and pushes both the tag and commits to remote. The working tree must be clean (all changes committed) before bumping. Version is derived dynamically from git tags via `setuptools_scm`.
+**Version mechanics:** Version is derived dynamically from git tags via
+`setuptools_scm` — no hardcoded version anywhere in source. The shared
+`bump-version` rules (clean tree, never call `bump-my-version` directly)
+apply.
 
 ## Architecture
 
@@ -180,12 +176,10 @@ if ml is None:
 
 ## Testing
 
-```bash
-uv run pytest                    # Run all tests
-uv run pytest tests/test_devtools.py  # Test devtools registration
-```
-
-Tests use a mock `ConnectionManager` — no live catalog needed. When adding new tools to a module, update the corresponding test file's tool registration assertions.
+Standard `uv run pytest` invocation (see [`../CLAUDE.md`](../CLAUDE.md)).
+Tests use a mock `ConnectionManager` — no live catalog needed. When
+adding new tools to a module, update the corresponding test file's tool
+registration assertions.
 
 ## Gotchas
 
