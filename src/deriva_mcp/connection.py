@@ -280,7 +280,6 @@ class ConnectionManager:
                 catalog_id=catalog_id,
                 domain_schemas=domain_schemas,
                 default_schema=default_schema,
-                check_auth=True,
             )
 
             # Derive user identity from the connection's credentials
