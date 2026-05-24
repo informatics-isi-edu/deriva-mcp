@@ -1322,7 +1322,7 @@ with ml.create_execution(config) as exe:
     ]
     exe.add_features(bulk_records)
 
-exe.upload_execution_outputs()
+exe.commit_output_assets()
 ```
 
 ## Step 5: Query Feature Values
@@ -2135,7 +2135,7 @@ with ml.create_execution(config) as exe:
         }
     )
 
-exe.upload_execution_outputs()
+exe.commit_output_assets()
 ```
 
 ### MCP Tools
@@ -2943,7 +2943,7 @@ For uploading outputs, downloading datasets, and registering asset files, use th
 
 1. **Every execution needs a workflow** — Create or find one with `create_workflow` first.
 2. **Use the context manager in Python** — `with ml.create_execution(config) as exe:` auto-starts and auto-stops.
-3. **Upload AFTER the with block** — `exe.upload_execution_outputs()` must be called after exiting the context manager, never inside it.
+3. **Commit AFTER the with block** — `exe.commit_output_assets()` must be called after exiting the context manager, never inside it.
 4. **Use `exe.asset_file_path()` for all outputs** — This both creates the path and registers the file as an output asset. Never manually place files in the working directory.
 5. **Failed executions are tracked** — If an exception occurs in the with block, status is set to "Failed" automatically.
 
@@ -2960,7 +2960,7 @@ with ml.create_execution(config) as exe:
     # ... do work ...
     path = exe.asset_file_path("results.csv", description="Model predictions")
     # ... write to path ...
-exe.upload_execution_outputs()
+exe.commit_output_assets()
 ```
 
 ## MCP Tools
@@ -3040,13 +3040,13 @@ with ml.create_execution(config) as exe:
     save_metrics(results, metrics_path)
 
 # 4. Upload AFTER exiting the context manager
-exe.upload_execution_outputs()
+exe.commit_output_assets()
 ```
 
 **Key points about the context manager:**
 - `with` block automatically calls `start_execution()` on entry and `stop_execution()` on exit.
 - If an exception occurs inside the block, the execution status is set to "Failed".
-- You MUST call `upload_execution_outputs()` AFTER exiting the `with` block, not inside it.
+- You MUST call `commit_output_assets()` AFTER exiting the `with` block, not inside it.
 - Use `asset_file_path()` to register output files -- this both creates the file path and registers it as an output asset.
 
 ## MCP Tools Workflow
@@ -3076,8 +3076,8 @@ Step 4: Do your work
 Step 5: Stop the execution
   -> stop_execution(execution_rid="2-YYYY")
 
-Step 6: Upload outputs
-  Use the DerivaML Python API: exe.upload_execution_outputs()
+Step 6: Commit output assets
+  Use the DerivaML Python API: exe.commit_output_assets()
 ```
 
 ## ExecutionConfiguration Details
@@ -3192,7 +3192,7 @@ This creates the table with standard asset columns (URL, Filename, Length, MD5, 
 ## Tips
 
 - Always wrap work in an execution for provenance tracking.
-- Upload outputs AFTER the `with` block exits, never inside it (Python API: `exe.upload_execution_outputs()`).
+- Commit output assets AFTER the `with` block exits, never inside it (Python API: `exe.commit_output_assets()`).
 - Use `exe.asset_file_path()` (Python API) for every output file -- do not manually place files in the working directory.
 - Set meaningful descriptions on workflows, executions, and output assets.
 - For long-running work, use `update_execution_status()` to track progress.
@@ -4517,7 +4517,7 @@ def main():
     with ml.create_execution(config, dry_run=args.dry_run) as execution:
         # Perform operations
         ...
-        execution.upload_execution_outputs()
+        execution.commit_output_assets()
 
 if __name__ == "__main__":
     main()
@@ -4527,7 +4527,7 @@ Key elements:
 - `argparse` for CLI arguments
 - `--dry-run` flag for testing without side effects
 - `ExecutionConfiguration` context manager for provenance tracking
-- `execution.upload_execution_outputs()` to record results
+- `execution.commit_output_assets()` to record results
 
 ### 2. Test with Dry Run
 
@@ -4571,7 +4571,7 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
         description="Training dataset with 10,000 balanced images.",
     )
     execution.add_dataset_members(dataset.rid, member_rids)
-    execution.upload_execution_outputs()
+    execution.commit_output_assets()
 ```
 
 ### Dataset Splitting
@@ -4584,7 +4584,7 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
         stratify_by="Diagnosis",
         group_by="Subject",
     )
-    execution.upload_execution_outputs()
+    execution.commit_output_assets()
 ```
 
 ### Feature Creation and Population
@@ -4607,7 +4607,7 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
         for rid, severity in annotations.items()
     ]
     execution.add_features(records)  # Execution RID set automatically
-execution.upload_execution_outputs()
+execution.commit_output_assets()
 ```
 
 ### ETL / Data Loading
@@ -4619,7 +4619,7 @@ with ml.create_execution(config, dry_run=args.dry_run) as execution:
     # Transform and insert
     for record in transform(data):
         execution.insert_record("TargetTable", record)
-    execution.upload_execution_outputs()
+    execution.commit_output_assets()
 ```
 
 ## When MCP Tools Are Still Appropriate
@@ -5836,10 +5836,10 @@ This guide covers common problems encountered when running DerivaML executions a
 
 **Symptom**: Execution completes but asset files are not visible in the catalog.
 
-**Cause**: `exe.upload_execution_outputs()` (Python API) was not called, or files were written to the wrong path.
+**Cause**: `exe.commit_output_assets()` (Python API) was not called, or files were written to the wrong path.
 
 **Solution**:
-1. Call `exe.upload_execution_outputs()` **after** the `with` block exits in Python.
+1. Call `exe.commit_output_assets()` **after** the `with` block exits in Python.
 2. Ensure files are written to the **exact path** returned by `exe.asset_file_path()`. Writing to any other directory will cause the upload to miss those files.
 3. Verify the file actually exists at the path before uploading:
    ```python
@@ -5924,7 +5924,7 @@ This guide covers common problems encountered when running DerivaML executions a
 
 ## Problem: "Upload Timeout"
 
-**Symptom**: `exe.upload_execution_outputs()` (Python API) hangs or times out.
+**Symptom**: `exe.commit_output_assets()` (Python API) hangs or times out.
 
 **Cause**: Large files, network issues, or server limits.
 
