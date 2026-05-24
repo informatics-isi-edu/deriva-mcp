@@ -367,7 +367,7 @@ class ConnectionManager:
                     # Upload outputs if requested
                     if upload_outputs:
                         try:
-                            conn_info.execution.upload_execution_outputs(clean_folder=True)
+                            conn_info.execution.commit_output_assets(clean_folder=True)
                             logger.info(f"Uploaded MCP execution outputs for {key}")
                         except Exception as e:
                             logger.warning(f"Failed to upload execution outputs: {e}")
