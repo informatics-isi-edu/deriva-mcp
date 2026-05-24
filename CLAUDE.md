@@ -84,7 +84,7 @@ def register_*_tools(mcp: FastMCP, conn_manager: ConnectionManager) -> None:
 | workflow.py | Workflow registration | create_workflow, find_workflows |
 | feature.py | Feature definitions | create_feature, find_features, list_feature_values |
 | schema.py | Schema management | create_table, create_asset_table |
-| execution.py | ML execution lifecycle | create_execution, start_execution, upload_execution_outputs |
+| execution.py | ML execution lifecycle | create_execution, start_execution, commit_output_assets |
 | data.py | Data queries | query_table, insert_records |
 | devtools.py | Dev utilities | bump_version, start_app, list_apps, stop_app, run_notebook |
 

@@ -624,7 +624,7 @@ Found configuration files in configs/:
 | `get_execution_info` | Get details about the active execution |
 | `restore_execution` | Restore a previous execution by RID |
 | `asset_file_path` | Register a file for upload as an execution output |
-| `upload_execution_outputs` | Upload all registered outputs to the catalog |
+| `commit_output_assets` | Commit all registered outputs to the catalog |
 | `list_executions` | List recent executions |
 | `create_execution_dataset` | Create a dataset within an execution |
 | `download_execution_dataset` | Download a dataset for processing |
@@ -640,8 +640,8 @@ with execution.execute() as exe:
     exe.asset_file_path(asset_name="Image", file_name="output.png")
     # ... more processing ...
 
-# After context exits, upload outputs
-execution.upload_execution_outputs()
+# After context exits, commit output assets
+execution.commit_output_assets()
 ```
 
 Using MCP tools, the equivalent workflow is:
@@ -650,10 +650,10 @@ Using MCP tools, the equivalent workflow is:
 2. `start_execution()` - Mark execution as running, begin timing
 3. `asset_file_path()` - Register output files (repeat as needed)
 4. `stop_execution()` - Mark execution as complete
-5. `upload_execution_outputs()` - **Required**: Upload all registered files to catalog
+5. `commit_output_assets()` - **Required**: Commit all registered files to catalog
 
-**Important**: You must call `upload_execution_outputs()` after completing your work
-to upload any registered assets to the catalog. This is not automatic.
+**Important**: You must call `commit_output_assets()` after completing your work
+to commit any registered assets to the catalog. This is not automatic.
 
 ## Available Resources
 
